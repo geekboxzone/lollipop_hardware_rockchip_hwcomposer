@@ -31,7 +31,7 @@
 #include <linux/fb.h>
 #include "hwc_ipp.h"
 #define hwcDEBUG 0
-#define hwcUseTime 1
+#define hwcUseTime 0
 #define hwcBlitUseTime 0
 #define hwcDumpSurface 0
 #define  ENABLE_HWC_WORMHOLE     1

@@ -341,6 +341,7 @@ static PFNEGLGETRENDERBUFFERANDROIDPROC _eglGetRenderBufferANDROID;
 #ifndef TARGET_BOARD_PLATFORM_RK30XXB
 static PFNEGLRENDERBUFFERMODIFYEDANDROIDPROC _eglRenderBufferModifiedANDROID;
 #endif
+static int skip_count = 0;
 static uint32_t
 _CheckLayer(
     hwcContext * Context,
@@ -398,12 +399,14 @@ _CheckLayer(
 #ifndef USE_LCDC_COMPOSER
         //||(IsRk3188 && !(videoflag && Count <=2))
         #endif
+        || skip_count<5
         )
     {
         /* We are forbidden to handle this layer. */
         LOGV("%s(%d):Will not handle layer %s: SKIP_LAYER,Layer->transform=%d,hfactor=%f,vfactor=%f,Layer->flags=%d",
              __FUNCTION__, __LINE__, Layer->LayerName,Layer->transform,hfactor,vfactor,Layer->flags);
         Layer->compositionType = HWC_FRAMEBUFFER;
+        skip_count++;
         return HWC_FRAMEBUFFER;
     }
 
@@ -1317,7 +1320,7 @@ hwc_prepare(
          * with FRAMEBUFFER in that case. */
         if (compositionType == HWC_FRAMEBUFFER)
         {
-            ALOGD("line=%d back to gpu", __LINE__);
+            ALOGV("line=%d back to gpu", __LINE__);
             LastUseGpuCompose = true;
             struct private_handle_t * handle = (struct private_handle_t *)list->hwLayers[i].handle;
             if (handle && handle->format==HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
@@ -1350,7 +1353,7 @@ hwc_prepare(
             _contextAnchor->fb1_cflag = true;
         }
 
-        ALOGD("line=%d back to gpu", __LINE__);
+        ALOGV("line=%d back to gpu", __LINE__);
 
     }
     #ifdef USE_LCDC_COMPOSER
@@ -1479,7 +1482,7 @@ static int display_commit( int dpy, private_handle_t*  handle)
         unsigned int offset = handle->offset;
         info.yoffset = offset/context->fbStride;
        
-        ALOGD(" display_commit set ioctl handle=%x offset =%d,adr=%x",handle,offset,handle->base);      
+        ALOGV(" display_commit set ioctl handle=%x offset =%d,adr=%x",handle,offset,handle->base);      
         if (ioctl(context->dpyAttr[dpy].fd, FBIOPUT_VSCREENINFO, &info) == -1)
         {
             ALOGE("FBIOPAN_DISPLAY display error, displayid=%d,fd=%d,yoffset=%x,offset=%x,finfo.line_length=%d,err=%s",\
@@ -1594,7 +1597,6 @@ hwc_set(
 
             /* Get gc buffer handle. */
             fbhandle = (struct private_handle_t *) fbBuffer->handle;
-            ALOGD("draw handle =%x",fbBuffer->handle);
             if (fbhandle == NULL)
             {
                 LOGE("%s(%d):Get back buffer handle =NULL.", __FUNCTION__, __LINE__);
@@ -1700,7 +1702,7 @@ hwc_set(
         switch (list->hwLayers[i].compositionType)
         {
         case HWC_BLITTER:
-            LOGD("%s(%d):Layer %d is BLIITER", __FUNCTION__, __LINE__, i);
+            LOGV("%s(%d):Layer %d is BLIITER", __FUNCTION__, __LINE__, i);
             /* Do the blit. */
 #if hwcBlitUseTime
             gettimeofday(&tpendblit1,NULL);
@@ -1918,7 +1920,7 @@ hwc_set(
 	}
 #endif
 
-    ALOGD("context->fb1_cflag=%d,context->fbFd1=%d",context->fb1_cflag,context->fbFd1);
+    ALOGV("context->fb1_cflag=%d,context->fbFd1=%d",context->fb1_cflag,context->fbFd1);
     if(context->fb1_cflag == true && context->fbFd1 > 0  )
     {
         //close(Context->fbFd1);
@@ -1985,7 +1987,7 @@ OnError:
      *         callings failed, so we call swap buffers to post backBuffer. */
     if (fbBuffer != NULL)
     {
-        eglSwapBuffers((EGLDisplay) dpy, (EGLSurface) surf);
+        //eglSwapBuffers((EGLDisplay) dpy, (EGLSurface) surf);
     }
 
     LOGE("%s(%d):Failed!", __FUNCTION__, __LINE__);
