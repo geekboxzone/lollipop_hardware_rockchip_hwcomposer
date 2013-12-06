@@ -395,7 +395,7 @@ _CheckLayer(
         ||((hfactor <1.0f || vfactor <1.0f) && handle->format == HAL_PIXEL_FORMAT_RGBA_8888) // because rga scale up RGBA foramt not support
         #endif
         ||((Layer->transform != 0)/*&&(!videoflag)*/)
-        //||(strstr(Context->cupcore_string,"0-3") && !(videoflag && Count <=2))
+        ||(strstr(Context->cupcore_string,"0-3") && !(videoflag && Count <=2))
 #ifndef USE_LCDC_COMPOSER
         //||(IsRk3188 && !(videoflag && Count <=2))
         #endif
