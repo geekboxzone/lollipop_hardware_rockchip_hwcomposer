@@ -406,7 +406,10 @@ _CheckLayer(
         LOGV("%s(%d):Will not handle layer %s: SKIP_LAYER,Layer->transform=%d,hfactor=%f,vfactor=%f,Layer->flags=%d",
              __FUNCTION__, __LINE__, Layer->LayerName,Layer->transform,hfactor,vfactor,Layer->flags);
         Layer->compositionType = HWC_FRAMEBUFFER;
-        skip_count++;
+        if (skip_count<5)
+        {
+         skip_count++;
+        }
         return HWC_FRAMEBUFFER;
     }
 
