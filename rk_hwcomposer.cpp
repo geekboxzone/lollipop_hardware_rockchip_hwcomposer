@@ -395,7 +395,6 @@ _CheckLayer(
         ||((hfactor <1.0f || vfactor <1.0f) && handle->format == HAL_PIXEL_FORMAT_RGBA_8888) // because rga scale up RGBA foramt not support
         #endif
         ||((Layer->transform != 0)/*&&(!videoflag)*/)
-        ||(strstr(Context->cupcore_string,"0-3") && !(videoflag && Count <=2))
 #ifndef USE_LCDC_COMPOSER
         //||(IsRk3188 && !(videoflag && Count <=2))
         #endif
@@ -468,6 +467,7 @@ _CheckLayer(
             )    // layer <=3,do special processing
 
         {
+
             int SrcHeight = Layer->sourceCrop.bottom - Layer->sourceCrop.top;
             int SrcWidth = Layer->sourceCrop.right - Layer->sourceCrop.left;
             bool isLandScape = ( (0==Layer->realtransform) \
@@ -782,14 +782,17 @@ hwcDumpArea(
 }
 #include <ui/PixelFormat.h>
 
-extern "C" void *blend(uint8_t *dst, uint8_t *src, int dst_w, int src_w, int src_h);
+ 
+extern "C" void *blend(uint8_t *dst, uint8_t *src, int dst_w, int src_w, int src_h,uint8_t *bak_wr, uint8_t *bak_rd);
+//extern "C" void *blend(uint8_t *dst, uint8_t *src, int dst_w, int src_w, int src_h);
 static int do_alpha_byneon(struct rga_req *msg,uint8_t *bak_wr,uint8_t *bak_rd)
 {
 #if 1
     int *src_adr_s,*dst_adr_s;
     src_adr_s = (int *)(msg->src.yrgb_addr + (msg->src.y_offset *  msg->src.vir_w + msg->src.x_offset )*4);
     dst_adr_s = (int *)(msg->dst.yrgb_addr + (msg->dst.y_offset *  msg->dst.vir_w + msg->dst.x_offset )*4);
-    blend((uint8_t *)dst_adr_s, (uint8_t *)src_adr_s, msg->dst.vir_w, msg->src.act_w, msg->src.act_h);
+   // blend((uint8_t *)dst_adr_s, (uint8_t *)src_adr_s, msg->dst.vir_w, msg->src.act_w, msg->src.act_h);
+    blend((uint8_t *)dst_adr_s, (uint8_t *)src_adr_s, msg->dst.vir_w, msg->src.act_w, msg->src.act_h,bak_wr,bak_rd);
     return 0; 
 #else
     int *src_adr_s,*dst_adr_s;
@@ -1339,11 +1342,16 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
                 bkupmanage.bkupinfo[i].w_act = Rga_Request[i].dst.act_w;
                 bkupmanage.bkupinfo[i].h_act = Rga_Request[i].dst.act_h;            
                 backcout ++;
+                //backupbuffer(&bkupmanage.bkupinfo[i]);
+                do_alpha_byneon( &Rga_Request[i],(uint8_t *)bkupmanage.bkupinfo[i].pmem_bk,NULL);
+                
             }
             else if(i<bkupmanage.count) // restore the dstbuff
             {
+                //restorebuffer(&bkupmanage.bkupinfo[i]);
+                do_alpha_byneon( &Rga_Request[i],NULL,(uint8_t *)bkupmanage.bkupinfo[i].pmem_bk);
+            
             }
-             do_alpha_byneon( &Rga_Request[i],(uint8_t *)bkupmanage.bkupinfo[i].pmem_bk,NULL);
         }
         else
         {
@@ -1497,14 +1505,14 @@ hwc_prepare(
     #ifdef USE_LCDC_COMPOSER
     else if( (list->numHwLayers - 1) <= MAX_DO_SPECIAL_COUNT && getHdmiMode()==0)
     {
-       // struct timeval tpend1, tpend2;
-        //long usec1 = 0;
+        //struct timeval tpend1, tpend2;
+       //long usec1 = 0;
         //gettimeofday(&tpend1,NULL);    
         hwc_do_special_composer(list);
-       // gettimeofday(&tpend2,NULL);
+        //gettimeofday(&tpend2,NULL);
        // usec1 = 1000*(tpend2.tv_sec - tpend1.tv_sec) + (tpend2.tv_usec- tpend1.tv_usec)/1000;
-       // if((int)usec1 > 6)
-          //  ALOGD(" RK_FBIOSET_CONFIG_DONE 3  time=%ld ms",usec1);
+       // if((int)usec1 > 5)
+           // ALOGD(" hwc_do_special_composer 3  time=%ld ms",usec1);
         
     }
 
@@ -2657,21 +2665,6 @@ hwc_device_open(
    // context->fbStride     = 0;
 
 
-
-#ifndef USE_LCDC_COMPOSER
-    cpu_fd = open("/sys/devices/system/cpu/present",O_RDONLY,0);
-    if(cpu_fd > 0 )
-    {
-        char buf[16];
-        memset(buf, 0, sizeof(buf));
-        int ret = read(cpu_fd, buf, sizeof(buf));
-        if(ret >=0 )
-        {
-            memcpy(context->cupcore_string,buf,sizeof(context->cupcore_string));
-        }
-        close(cpu_fd);
-    }
-#endif
 
     if ( info.pixclock > 0 )
     {
