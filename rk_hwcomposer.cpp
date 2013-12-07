@@ -1118,6 +1118,19 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
                 break;
             }
 
+            act_dstwidth = srcWidth;
+            act_dstheight = srcHeight;
+            x_off = list->hwLayers[ComposerIndex].displayFrame.left;
+            y_off = list->hwLayers[ComposerIndex].displayFrame.top;
+
+            if((x_off + act_dstwidth) > dstStride 
+                || (y_off + act_dstheight ) > dstHeight ) // overflow zone
+            {
+                DstBuferIndex = -1;
+                break;
+ 
+            }
+
             // if the srcLayer inside the dstLayer, then get DstBuferIndex and break.
             if( (srcLayer->displayFrame.left >= (dstVR->left - dstLayer->exLeft))
              && (srcLayer->displayFrame.top >= (dstVR->top - dstLayer->exTop))
@@ -1130,7 +1143,7 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
             }
         }
 
-        if(ComposerIndex == 2)
+        if(ComposerIndex == 2) // first find ,store
             dst_indexfid = DstBuferIndex;
         else if( DstBuferIndex != dst_indexfid )
             DstBuferIndex = -1;
@@ -1145,11 +1158,6 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
         {
             bool IsSblend = srcFormat == RK_FORMAT_RGBA_8888 || srcFormat == RK_FORMAT_BGRA_8888;
             bool IsDblend = dstFormat == RK_FORMAT_RGBA_8888 ||dstFormat == RK_FORMAT_BGRA_8888;
-            act_dstwidth = srcWidth;
-            act_dstheight = srcHeight;
-            x_off = list->hwLayers[ComposerIndex].displayFrame.left;
-            y_off = list->hwLayers[ComposerIndex].displayFrame.top;
-
             dstPhysical += list->hwLayers[DstBuferIndex].exAddrOffset;
 
             clip.xmin = 0;
@@ -1163,7 +1171,7 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
             LOGV("    src info f[%d] w_h[%d(%d),%d]",srcFormat,srcWidth,srcStride,srcHeight);
             LOGV("    dst info f[%d] w_h[%d(%d),%d] rect[%d,%d,%d,%d]",dstFormat,dstWidth,dstStride,dstHeight,x_off,y_off,act_dstwidth,act_dstheight);
             if(IsSblend)   
-           // if(0)
+            //if(0)
             {
                 RGA_set_src_vir_info(&Rga_Request[RgaCnt], (int)srcLogical, 0, 0,srcStride, srcHeight, srcFormat, 0);
                 RGA_set_dst_vir_info(&Rga_Request[RgaCnt], (int)dstLogical, 0, 0,dstStride, dstHeight, &clip, dstFormat, 0);
@@ -1344,21 +1352,23 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
                 backcout ++;
                 //backupbuffer(&bkupmanage.bkupinfo[i]);
                 do_alpha_byneon( &Rga_Request[i],(uint8_t *)bkupmanage.bkupinfo[i].pmem_bk,NULL);
+                //do_alpha_byneon( &Rga_Request[i],NULL,NULL);               
                 
             }
             else if(i<bkupmanage.count) // restore the dstbuff
             {
                 //restorebuffer(&bkupmanage.bkupinfo[i]);
                 do_alpha_byneon( &Rga_Request[i],NULL,(uint8_t *)bkupmanage.bkupinfo[i].pmem_bk);
+               // do_alpha_byneon( &Rga_Request[i],NULL,NULL);               
             
             }
         }
         else
         {
-        uint32_t RgaFlag = (i==(RgaCnt-1)) ? RGA_BLIT_SYNC : RGA_BLIT_ASYNC;
-        if(ioctl(_contextAnchor->engine_fd, RgaFlag, &Rga_Request[i]) != 0) {
-            LOGE(" %s(%d) RGA_BLIT fail",__FUNCTION__, __LINE__);
-        }
+            uint32_t RgaFlag = (i==(RgaCnt-1)) ? RGA_BLIT_SYNC : RGA_BLIT_ASYNC;
+            if(ioctl(_contextAnchor->engine_fd, RgaFlag, &Rga_Request[i]) != 0) {
+                LOGE(" %s(%d) RGA_BLIT fail",__FUNCTION__, __LINE__);
+            }
         }    
     }
 
