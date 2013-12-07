@@ -52,9 +52,9 @@
 //#define ENABLE_HDMI_APP_LANDSCAP_TO_PORTRAIT
 static int SkipFrameCount = 0;
 
-static bool LastUseGpuCompose = false;
 static hwcContext * _contextAnchor = NULL;
 static int bootanimFinish = 0;
+static hwbkupmanage bkupmanage;
 #undef LOGV
 #define LOGV(...)
 
@@ -782,6 +782,124 @@ hwcDumpArea(
 }
 #include <ui/PixelFormat.h>
 
+extern "C" void *blend(uint8_t *dst, uint8_t *src, int dst_w, int src_w, int src_h);
+static int do_alpha_byneon(struct rga_req *msg,uint8_t *bak_wr,uint8_t *bak_rd)
+{
+#if 1
+    int *src_adr_s,*dst_adr_s;
+    src_adr_s = (int *)(msg->src.yrgb_addr + (msg->src.y_offset *  msg->src.vir_w + msg->src.x_offset )*4);
+    dst_adr_s = (int *)(msg->dst.yrgb_addr + (msg->dst.y_offset *  msg->dst.vir_w + msg->dst.x_offset )*4);
+    blend((uint8_t *)dst_adr_s, (uint8_t *)src_adr_s, msg->dst.vir_w, msg->src.act_w, msg->src.act_h);
+    return 0; 
+#else
+    int *src_adr_s,*dst_adr_s;
+    int *src_adr_s2,*dst_adr_s2;
+    int *src_adr_s3,*dst_adr_s3;
+    int *src_adr_s4,*dst_adr_s4;
+    int *src_cur,*dst_cur;
+    char *sa,*sr,*sg,*sb;
+    char *da,*dr,*dg,*db;
+    unsigned sa_bak,da_bak;
+    int ret;
+    int bpp;
+    bpp = msg->dst.format == RK_FORMAT_RGB_565 ? 2:4;
+    src_adr_s = (int *)(msg->src.yrgb_addr + (msg->src.y_offset *  msg->src.vir_w + msg->src.x_offset )*4);
+    dst_adr_s = (int *)(msg->dst.yrgb_addr + (msg->dst.y_offset *  msg->dst.vir_w + msg->dst.x_offset )*bpp);
+    #if 0
+    for(int i= 0; i<msg->src.act_h;i++ )  
+    {
+        src_cur = src_adr_s;
+        dst_cur = dst_adr_s;
+        for(int j= 0; j<msg->src.act_w  ;j++)
+        {
+            #if 1
+            sr = (char *)src_cur;
+            sg = sr + 1;
+            sb = sr + 2;
+            sa = sr + 3;
+            dr = (char *)dst_cur;
+            dg = dr + 1;
+            db = dr + 2;
+            da = dr + 3;
+            *dr = *sr + (((*dr)*(256 - *sa ))>>8);            
+            *dg = *sg + (((*dg)*(256 - *sa ))>>8);
+            *db = *sb + (((*db)*(256 - *sa ))>>8);            
+            *da = (*sa + *da ) - (((*sa) * (*da)) >> 8);
+            src_cur ++;
+            dst_cur ++;
+            #endif
+        }
+        src_adr_s += msg->src.vir_w ;
+        dst_adr_s += msg->dst.vir_w;
+    }
+    #else
+    memcpy((void *)dst_adr_s,(void*)src_adr_s,msg->src.act_w*msg->src.act_h*bpp);
+    #endif
+    return 0;
+#endif
+}
+static int backupbuffer(hwbkupinfo *pbkupinfo)
+{
+    int i,j;
+    char *src_adr_s;
+    int bpp;
+    int *ps1;
+    short *ps2;
+    ALOGD("backupbuffer addr=%x,bkmem=%x,[%d,%d,%d(%d),%d][f=%d]",
+        pbkupinfo->buf_addr, pbkupinfo->pmem_bk,pbkupinfo->xoffset,
+        pbkupinfo->yoffset,pbkupinfo->w_act,pbkupinfo->wstride,pbkupinfo->h_act,pbkupinfo->format);
+    bpp = pbkupinfo->format == RK_FORMAT_RGB_565 ? 2:4;
+    src_adr_s = (char *)pbkupinfo->buf_addr + \
+                (pbkupinfo->xoffset + pbkupinfo->yoffset*pbkupinfo->wstride)*bpp;
+    if(pbkupinfo->wstride == pbkupinfo->w_act)
+    {
+        memcpy(pbkupinfo->pmem_bk,(void*)src_adr_s,pbkupinfo->w_act*pbkupinfo->h_act*bpp);
+    }
+    else
+    {
+        for( i = 0;i<pbkupinfo->h_act;i++)
+        {
+            pbkupinfo->pmem_bk = (char *)pbkupinfo->pmem_bk + pbkupinfo->w_act*bpp;
+            src_adr_s += pbkupinfo->wstride*bpp;          
+        }
+    }
+    return 0; 
+}
+static int restorebuffer(hwbkupinfo *pbkupinfo)
+{
+    int i,j;
+    char *dst_adr_s;
+    int bpp;
+    int *ps1;
+    short *ps2;
+    ALOGD("restorebuffer addr=%x,bkmem=%x,[%d,%d,%d(%d),%d][f=%d]",
+        pbkupinfo->buf_addr, pbkupinfo->pmem_bk,pbkupinfo->xoffset,
+        pbkupinfo->yoffset,pbkupinfo->w_act,pbkupinfo->wstride,pbkupinfo->h_act,pbkupinfo->format);
+    if(!pbkupinfo->buf_addr)
+    {
+        ALOGW("restorebuffer addr=%x,bkmem=%x,[%d,%d,%d(%d),%d][f=%d]",
+        pbkupinfo->buf_addr, pbkupinfo->pmem_bk,pbkupinfo->xoffset,
+        pbkupinfo->yoffset,pbkupinfo->w_act,pbkupinfo->wstride,pbkupinfo->h_act,pbkupinfo->format);
+        return -1;
+    }
+    bpp = pbkupinfo->format == RK_FORMAT_RGB_565 ? 2:4;
+    dst_adr_s = (char *)pbkupinfo->buf_addr + \
+                (pbkupinfo->xoffset + pbkupinfo->yoffset*pbkupinfo->wstride)*bpp;
+    if(pbkupinfo->wstride == pbkupinfo->w_act)
+    {
+        memcpy((void*)dst_adr_s,pbkupinfo->pmem_bk,pbkupinfo->w_act*pbkupinfo->h_act*bpp);
+    }
+    else
+    {
+        for( i = 0;i<pbkupinfo->h_act;i++)
+        {
+            memcpy((void*)dst_adr_s,pbkupinfo->pmem_bk,pbkupinfo->w_act*bpp);
+            pbkupinfo->pmem_bk = (char *)pbkupinfo->pmem_bk + pbkupinfo->w_act*bpp;
+            dst_adr_s += pbkupinfo->wstride*bpp;          
+        }
+    }
+    return 0;
+}
 
 int hwc_do_special_composer( hwc_display_contents_1_t  * list)
 {
@@ -811,10 +929,14 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
     int LcdCont;
     unsigned char       planeAlpha;
     int                 perpixelAlpha;
+    int                 currentDstAddr = 0;
 
     struct rga_req  Rga_Request[MAX_DO_SPECIAL_COUNT];
     int             RgaCnt = 0;
-
+    int     dst_indexfid = 0;
+    struct private_handle_t *handle_cur;  
+    static int backcout = 0;
+   
     for(  int i= 0; i < 2 ; i++)
     {
         list->hwLayers[i].exLeft= 0;
@@ -845,7 +967,6 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
 
     memset(&Rga_Request, 0x0, sizeof(Rga_Request));
 
-    ALOGD(" do special");
     for( ComposerIndex = 2 ;ComposerIndex < (list->numHwLayers - 1); ComposerIndex++)
     {
         bool IsBottom = !strcmp(BOTTOM_LAYER_NAME,list->hwLayers[ComposerIndex].LayerName);
@@ -951,14 +1072,14 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
             hwc_rect_t const * srcVR = srcLayer->visibleRegionScreen.rects;
             hwc_rect_t const * dstVR = dstLayer->visibleRegionScreen.rects;
 
-            LOGD("  %d->%d:  src= rot[%d] fmt[%d] wh[%d(%d),%d] dis[%d,%d,%d,%d] vis[%d,%d,%d,%d]",
+            LOGV("  %d->%d:  src= rot[%d] fmt[%d] wh[%d(%d),%d] dis[%d,%d,%d,%d] vis[%d,%d,%d,%d]",
                 ComposerIndex, DstBuferIndex,
                 srcLayer->realtransform, srcFormat, srcWidth, srcStride, srcHeight,
                 srcLayer->displayFrame.left, srcLayer->displayFrame.top,
                 srcLayer->displayFrame.right, srcLayer->displayFrame.bottom,
                 srcVR->left, srcVR->top, srcVR->right, srcVR->bottom
                 );
-            LOGD("         dst= rot[%d] fmt[%d] wh[%d(%d),%d] dis[%d,%d,%d,%d] vis[%d,%d,%d,%d] ex[%d,%d,%d,%d-%d]",
+            LOGV("         dst= rot[%d] fmt[%d] wh[%d(%d),%d] dis[%d,%d,%d,%d] vis[%d,%d,%d,%d] ex[%d,%d,%d,%d-%d]",
                 dstLayer->realtransform, dstFormat, dstWidth, dstStride, dstHeight,
                 dstLayer->displayFrame.left, dstLayer->displayFrame.top,
                 dstLayer->displayFrame.right, dstLayer->displayFrame.bottom,
@@ -1001,48 +1122,26 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
              && (srcLayer->displayFrame.bottom <= (dstVR->bottom + dstLayer->exBottom))
             )
             {
+                handle_cur = (struct private_handle_t *)dstLayer->handle;
                 break;
             }
         }
 
+        if(ComposerIndex == 2)
+            dst_indexfid = DstBuferIndex;
+        else if( DstBuferIndex != dst_indexfid )
+            DstBuferIndex = -1;
         // there isn't suitable dstLayer to copy, use gpu compose.
         if (DstBuferIndex < 0)      goto BackToGPU;
 
         // Remove the duplicate copies of bottom bar.
-        #if 0
-        if (IsBottom) {
-            static int CopyCnt = 64;
-            static int LastTransform = -1;
-            static void * LastAddr = 0;
-            int BufferCount = list->hwLayers[DstBuferIndex].bufferCount;
-            if (list->hwLayers[ComposerIndex].bufferUpdate) {
-                list->hwLayers[ComposerIndex].bufferUpdate = 0;
-                if (CopyCnt < BufferCount)   CopyCnt = BufferCount;
-            }
 
-            if ( list->hwLayers[ComposerIndex].realtransform != LastTransform ||
-                 list->hwLayers[DstBuferIndex].bufferChange ||
-                 LastUseGpuCompose
-            ) {
-                LastTransform = list->hwLayers[ComposerIndex].realtransform;
-                list->hwLayers[DstBuferIndex].bufferChange = 0;
-                LastUseGpuCompose = false;
-                if (CopyCnt < (BufferCount*2))   CopyCnt = BufferCount * 2;
-            }
 
-            if (CopyCnt > 0) {
-                if (LastAddr != dstLogical) {
-                    LastAddr = dstLogical;
-                    CopyCnt --;
-                }
-            } else {
-                NeedBlit = false;
-            }
-        }
-        #endif
 
         if (NeedBlit)
         {
+            bool IsSblend = srcFormat == RK_FORMAT_RGBA_8888 || srcFormat == RK_FORMAT_BGRA_8888;
+            bool IsDblend = dstFormat == RK_FORMAT_RGBA_8888 ||dstFormat == RK_FORMAT_BGRA_8888;
             act_dstwidth = srcWidth;
             act_dstheight = srcHeight;
             x_off = list->hwLayers[ComposerIndex].displayFrame.left;
@@ -1057,12 +1156,20 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
             //x_off  = x_off < 0 ? 0:x_off;
 
 
-            LOGD("    src[%d]=%s,  dst[%d]=%s",ComposerIndex,list->hwLayers[ComposerIndex].LayerName,DstBuferIndex,list->hwLayers[DstBuferIndex].LayerName);
-            LOGD("    src info f[%d] w_h[%d(%d),%d]",srcFormat,srcWidth,srcStride,srcHeight);
-            LOGD("    dst info f[%d] w_h[%d(%d),%d] rect[%d,%d,%d,%d]",dstFormat,dstWidth,dstStride,dstHeight,x_off,y_off,act_dstwidth,act_dstheight);
+            LOGV("    src[%d]=%s,  dst[%d]=%s",ComposerIndex,list->hwLayers[ComposerIndex].LayerName,DstBuferIndex,list->hwLayers[DstBuferIndex].LayerName);
+            LOGV("    src info f[%d] w_h[%d(%d),%d]",srcFormat,srcWidth,srcStride,srcHeight);
+            LOGV("    dst info f[%d] w_h[%d(%d),%d] rect[%d,%d,%d,%d]",dstFormat,dstWidth,dstStride,dstHeight,x_off,y_off,act_dstwidth,act_dstheight);
+            if(IsSblend)   
+           // if(0)
+            {
+                RGA_set_src_vir_info(&Rga_Request[RgaCnt], (int)srcLogical, 0, 0,srcStride, srcHeight, srcFormat, 0);
+                RGA_set_dst_vir_info(&Rga_Request[RgaCnt], (int)dstLogical, 0, 0,dstStride, dstHeight, &clip, dstFormat, 0);
+            }
+            else
+            {
             RGA_set_src_vir_info(&Rga_Request[RgaCnt], (int)srcPhysical, 0, 0,srcStride, srcHeight, srcFormat, 0);
             RGA_set_dst_vir_info(&Rga_Request[RgaCnt], (int)dstPhysical, 0, 0,dstStride, dstHeight, &clip, dstFormat, 0);
-
+            }
             /* Get plane alpha. */
             planeAlpha = list->hwLayers[ComposerIndex].blending >> 16;
             /* Setup blending. */
@@ -1212,24 +1319,53 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
 
     // Realy Blit
    // ALOGD("RgaCnt=%d",RgaCnt);
+    if(handle_cur != bkupmanage.handle_bk) 
+    {
+        backcout = 0;
+    }
     for(int i=0; i<RgaCnt; i++) {
+        bool IsSrcblend = Rga_Request[i].src.format == RK_FORMAT_RGBA_8888 || Rga_Request[i].src.format == RK_FORMAT_BGRA_8888;
+        bool IsDstblend = Rga_Request[i].dst.format == RK_FORMAT_RGBA_8888 || Rga_Request[i].dst.format == RK_FORMAT_BGRA_8888;
+        if(IsSrcblend )
+        //if(0)
+        {
+            if(handle_cur != bkupmanage.handle_bk) // backup the dstbuff
+            {
+                bkupmanage.bkupinfo[i].format = Rga_Request[i].dst.format;
+                bkupmanage.bkupinfo[i].buf_addr = Rga_Request[i].dst.yrgb_addr;
+                bkupmanage.bkupinfo[i].xoffset = Rga_Request[i].dst.x_offset;
+                bkupmanage.bkupinfo[i].yoffset = Rga_Request[i].dst.y_offset;
+                bkupmanage.bkupinfo[i].wstride = Rga_Request[i].dst.vir_w;
+                bkupmanage.bkupinfo[i].w_act = Rga_Request[i].dst.act_w;
+                bkupmanage.bkupinfo[i].h_act = Rga_Request[i].dst.act_h;            
+                backcout ++;
+            }
+            else if(i<bkupmanage.count) // restore the dstbuff
+            {
+            }
+             do_alpha_byneon( &Rga_Request[i],(uint8_t *)bkupmanage.bkupinfo[i].pmem_bk,NULL);
+        }
+        else
+        {
         uint32_t RgaFlag = (i==(RgaCnt-1)) ? RGA_BLIT_SYNC : RGA_BLIT_ASYNC;
         if(ioctl(_contextAnchor->engine_fd, RgaFlag, &Rga_Request[i]) != 0) {
             LOGE(" %s(%d) RGA_BLIT fail",__FUNCTION__, __LINE__);
         }
+        }    
     }
 
+    bkupmanage.handle_bk = handle_cur;
+    bkupmanage.count = backcout;
     return 0;
 
 BackToGPU:
-    ALOGD(" go brack to GPU");
+   // ALOGD(" go brack to GPU");
     for (size_t j = 0; j <(list->numHwLayers - 1); j++) {
         list->hwLayers[j].compositionType = HWC_FRAMEBUFFER;
     }
     if(_contextAnchor->fbFd1 > 0) {
         _contextAnchor->fb1_cflag = true;
     }
-    LastUseGpuCompose = true;
     return 0;
 }
 int
@@ -1323,8 +1459,7 @@ hwc_prepare(
          * with FRAMEBUFFER in that case. */
         if (compositionType == HWC_FRAMEBUFFER)
         {
-            ALOGV("line=%d back to gpu", __LINE__);
-            LastUseGpuCompose = true;
+            ALOGV("line=%d back to gpu", __LINE__);           
             struct private_handle_t * handle = (struct private_handle_t *)list->hwLayers[i].handle;
             if (handle && handle->format==HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
             {
@@ -1362,7 +1497,15 @@ hwc_prepare(
     #ifdef USE_LCDC_COMPOSER
     else if( (list->numHwLayers - 1) <= MAX_DO_SPECIAL_COUNT && getHdmiMode()==0)
     {
+       // struct timeval tpend1, tpend2;
+        //long usec1 = 0;
+        //gettimeofday(&tpend1,NULL);    
         hwc_do_special_composer(list);
+       // gettimeofday(&tpend2,NULL);
+       // usec1 = 1000*(tpend2.tv_sec - tpend1.tv_sec) + (tpend2.tv_usec- tpend1.tv_usec)/1000;
+       // if((int)usec1 > 6)
+          //  ALOGD(" RK_FBIOSET_CONFIG_DONE 3  time=%ld ms",usec1);
+        
     }
 
 
@@ -1874,9 +2017,8 @@ hwc_set(
             }
             if((list->numHwLayers == 1) || i == 1)
             {
+                sync = 2; 
                 ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &sync);
-
-
 
                 /*
                 for (int layerid = 0; layerid < list->numHwLayers; layerid++) {
@@ -1897,7 +2039,10 @@ hwc_set(
     if (fbBuffer != NULL)
     {
         if(ioctl(context->engine_fd, RGA_FLUSH, NULL) != 0)
+        {
             LOGE("%s(%d):RGA_FLUSH Failed!", __FUNCTION__, __LINE__);
+        }
+        else
         success =  EGL_TRUE ;
         display_commit(0,(struct private_handle_t *) fbBuffer->handle);
              
@@ -1923,7 +2068,7 @@ hwc_set(
 	}
 #endif
 
-    ALOGV("context->fb1_cflag=%d,context->fbFd1=%d",context->fb1_cflag,context->fbFd1);
+
     if(context->fb1_cflag == true && context->fbFd1 > 0  )
     {
         //close(Context->fbFd1);
@@ -1976,10 +2121,10 @@ hwc_set(
      * Case 2: blitter layers, backBuffer is not NULL, call eglSwapBuffers
      *         to post backBuffer.
      * Do NOT need swap if no framebuffer layers and no blitter layers. */
-    if (needSwap)
-    {
+   // if (needSwap)
+    //{
        // success = eglSwapBuffers((EGLDisplay) dpy, (EGLSurface) surf); 
-    }
+
     rga_video_reset();
     return success; //? 0 : HWC_EGL_ERROR;
 OnError:
@@ -2214,6 +2359,13 @@ hwc_device_close(
       ipp_close(context->ippDev);
 	}
 
+#ifdef USE_LCDC_COMPOSER
+    for(int i=0;i<bakupbufsize;i++)
+    {
+        if(  bkupmanage.bkupinfo[i].pmem_bk!= NULL)
+            free( bkupmanage.bkupinfo[i].pmem_bk );                                  
+    }
+#endif
     pthread_mutex_destroy(&context->lock);
     free(context);
 
@@ -2486,12 +2638,15 @@ hwc_device_open(
     }
 
 
-//#ifdef USE_LCDC_COMPOSER
-#if 0
-    context->fbFd1 = open("/dev/graphics/fb1", O_RDWR, 0);
-    if(context->fbFd1 < 0)
+#ifdef USE_LCDC_COMPOSER
+    memset(&bkupmanage,0,sizeof(hwbkupmanage));
+    for(int i=0;i<bakupbufsize;i++)
     {
-         hwcONERROR(hwcSTATUS_IO_ERR);
+        bkupmanage.bkupinfo[i].pmem_bk = malloc(info.xres*info.yres);
+        if(!bkupmanage.bkupinfo[i].pmem_bk)
+            hwcONERROR(hwcSTATUS_INVALID_ARGUMENT);      
+        else
+            ALOGD("bkupmanage malloc size=%d ok [%d*%d]",info.xres*info.yres,info.xres,info.yres);
     }
 #endif
 
@@ -2637,6 +2792,13 @@ OnError:
         close(context->fbFd1 );
     }
 
+#ifdef USE_LCDC_COMPOSER
+    for(int i=0;i<bakupbufsize;i++)
+    {
+        if( bkupmanage.bkupinfo[i].pmem_bk != NULL)
+            free( bkupmanage.bkupinfo[i].pmem_bk );                          
+    }
+#endif
     pthread_mutex_destroy(&context->lock);
 
     /* Error roll back. */

@@ -29,7 +29,8 @@ LOCAL_SRC_FILES := \
 	rk_hwcomposer_buffer.cpp \
 	rga_api.cpp \
 	rk_hwcomposer_hdmi.cpp \
-	hwc_ipp.cpp
+	hwc_ipp.cpp \
+	blend.S
 
 LOCAL_CFLAGS := \
 	$(CFLAGS) \
@@ -67,9 +68,9 @@ endif
 #LOCAL_CFLAGS += -DUSE_LCDC_COMPOSER
 
 ifeq ($(strip $(BOARD_USE_LCDC_COMPOSER)),true)	
-#LOCAL_CFLAGS += -DUSE_LCDC_COMPOSER
+LOCAL_CFLAGS += -DUSE_LCDC_COMPOSER
 ifeq ($(strip $(BOARD_LCDC_COMPOSER_LANDSCAPE_ONLY)),false)
-#LOCAL_CFLAGS += -DLCDC_COMPOSER_FULL_ANGLE
+LOCAL_CFLAGS += -DLCDC_COMPOSER_FULL_ANGLE
 endif
 endif
 

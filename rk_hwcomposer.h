@@ -41,6 +41,7 @@
 //#define USE_LCDC_COMPOSER
 #define USE_HW_VSYNC        1
 #define FBIOSET_OVERLAY_STATE     	0x5018
+#define bakupbufsize 4
 /* Set it to 1 to enable swap rectangle optimization;
  * Set it to 0 to disable. */
 /* Set it to 1 to enable pmem cache flush.
@@ -100,6 +101,25 @@ typedef struct _hwcRECT
 }
 hwcRECT;
 
+typedef struct _hwbkupinfo
+{
+    void *pmem_bk;
+    unsigned int buf_addr;
+    int xoffset;
+    int yoffset;
+    int wstride;
+    int w_act;
+    int h_act;
+    int format;
+}
+hwbkupinfo;
+typedef struct _hwbkupmanage
+{
+    int count;
+    hwbkupinfo bkupinfo[bakupbufsize];
+    struct private_handle_t *handle_bk;
+}
+hwbkupmanage;
 #define IN
 #define OUT
 
@@ -202,6 +222,7 @@ typedef struct _hwcContext
     unsigned int pmemPhysical;
     unsigned int pmemLength;
 	vpu_frame_t  video_frame;
+	char *pbakupbuf[bakupbufsize];
 #if ENABLE_HWC_WORMHOLE
     /* Splited composition area queue. */
     hwcArea *                        compositionArea;

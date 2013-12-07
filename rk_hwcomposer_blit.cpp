@@ -1281,7 +1281,7 @@ hwcLayerToWin(
             LOGE("%s(%d):  fd[%d] Failed,DataAddr=%x", __FUNCTION__, __LINE__,fbFd,videodata[0]);
             return hwcSTATUS_IO_ERR;
         }
-        _DumpFbInfo(&info, Win);
+       // _DumpFbInfo(&info, Win);
 
         if (ioctl(fbFd, FBIOPUT_VSCREENINFO, &info) == -1)
         {
