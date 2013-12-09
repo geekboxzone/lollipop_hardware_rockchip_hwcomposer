@@ -396,7 +396,7 @@ _CheckLayer(
         #endif
         ||((Layer->transform != 0)/*&&(!videoflag)*/)
 #ifndef USE_LCDC_COMPOSER
-        //||(IsRk3188 && !(videoflag && Count <=2))
+        ||(IsRk3188 && !(videoflag && Count <=2))
         #endif
         || skip_count<5
         )
@@ -783,23 +783,25 @@ hwcDumpArea(
 #include <ui/PixelFormat.h>
 
  
-extern "C" void *blend(uint8_t *dst, uint8_t *src, int dst_w, int src_w, int src_h,uint8_t *bak_wr, uint8_t *bak_rd);
+extern "C" void *blend(uint8_t *dst, uint8_t *src, unsigned int stride, int src_w, int src_h,uint8_t *bak_wr, uint8_t *bak_rd);
 //extern "C" void *blend(uint8_t *dst, uint8_t *src, int dst_w, int src_w, int src_h);
 static int do_alpha_byneon(struct rga_req *msg,uint8_t *bak_wr,uint8_t *bak_rd)
 {
 #if 1
     int *src_adr_s,*dst_adr_s;
+
+    unsigned int stride;
     
     src_adr_s = (int *)(msg->src.yrgb_addr + (msg->src.y_offset *  msg->src.vir_w + msg->src.x_offset )*4);
     dst_adr_s = (int *)(msg->dst.yrgb_addr + (msg->dst.y_offset *  msg->dst.vir_w + msg->dst.x_offset )*4);
-   // blend((uint8_t *)dst_adr_s, (uint8_t *)src_adr_s, msg->dst.vir_w, msg->src.act_w, msg->src.act_h);
     ALOGV("msg->src.yrgb_addr =%x,src_adr_s=%x,[%d,%d,%d,%d]",
             msg->src.yrgb_addr,src_adr_s,msg->src.x_offset,msg->src.y_offset,msg->src.act_w,msg->src.act_h);
 
-    ALOGV("msg->dst.yrgb_addr =%x,dst_adr_s=%x,[%d,%d,%d]",
-            msg->dst.yrgb_addr,dst_adr_s,msg->dst.x_offset,msg->dst.y_offset,msg->dst.vir_w);
-            
-    blend((uint8_t *)dst_adr_s, (uint8_t *)src_adr_s, msg->dst.vir_w, msg->src.act_w, msg->src.act_h,bak_wr,bak_rd);
+    ALOGV("msg->dst.yrgb_addr =%x,dst_adr_s=%x,[%d,%d,%d],bak_wr=%x,bak_rd=%x",
+            msg->dst.yrgb_addr,dst_adr_s,msg->dst.x_offset,msg->dst.y_offset,msg->dst.vir_w,bak_wr,bak_rd);
+    stride =   msg->dst.vir_w;
+    stride  = (stride << 16) | msg->src.vir_w ;
+    blend((uint8_t *)dst_adr_s, (uint8_t *)src_adr_s, stride , msg->src.act_w, msg->src.act_h,bak_wr,bak_rd);
     return 0; 
 #else
     int *src_adr_s,*dst_adr_s;
@@ -1348,6 +1350,9 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
         //if(0)
         {
             if(handle_cur != bkupmanage.handle_bk) // backup the dstbuff
+           // ALOGD("handle_cur->reference_count=%d,bkupmanage.handle_bk->reference_count=%d",handle_cur->reference_count,bkupmanage.handle_bk->reference_count);
+            //if(handle_cur->reference_count != bkupmanage.handle_bk->reference_count)
+            
             {
                 bkupmanage.bkupinfo[i].format = Rga_Request[i].dst.format;
                 bkupmanage.bkupinfo[i].buf_addr = Rga_Request[i].dst.yrgb_addr;
@@ -1523,13 +1528,13 @@ hwc_prepare(
     else if( (list->numHwLayers - 1) <= MAX_DO_SPECIAL_COUNT && getHdmiMode()==0)
     {
         //struct timeval tpend1, tpend2;
-       //long usec1 = 0;
-        //gettimeofday(&tpend1,NULL);    
+        //long usec1 = 0;
+       // gettimeofday(&tpend1,NULL);    
         hwc_do_special_composer(list);
-        //gettimeofday(&tpend2,NULL);
+       // gettimeofday(&tpend2,NULL);
        // usec1 = 1000*(tpend2.tv_sec - tpend1.tv_sec) + (tpend2.tv_usec- tpend1.tv_usec)/1000;
-       // if((int)usec1 > 5)
-           // ALOGD(" hwc_do_special_composer 3  time=%ld ms",usec1);
+      //  if((int)usec1 > 5)
+         //   ALOGD(" hwc_do_special_composer  time=%ld ms",usec1);
         
     }
 
