@@ -463,7 +463,7 @@ _CheckLayer(
               &&(Count <= MAX_DO_SPECIAL_COUNT)
               && (getHdmiMode()==0)
               && strcmp(pro_value,"true")
-
+              && handle->phy_addr != 0
             )    // layer <=3,do special processing
 
         {
@@ -789,9 +789,16 @@ static int do_alpha_byneon(struct rga_req *msg,uint8_t *bak_wr,uint8_t *bak_rd)
 {
 #if 1
     int *src_adr_s,*dst_adr_s;
+    
     src_adr_s = (int *)(msg->src.yrgb_addr + (msg->src.y_offset *  msg->src.vir_w + msg->src.x_offset )*4);
     dst_adr_s = (int *)(msg->dst.yrgb_addr + (msg->dst.y_offset *  msg->dst.vir_w + msg->dst.x_offset )*4);
    // blend((uint8_t *)dst_adr_s, (uint8_t *)src_adr_s, msg->dst.vir_w, msg->src.act_w, msg->src.act_h);
+    ALOGV("msg->src.yrgb_addr =%x,src_adr_s=%x,[%d,%d,%d,%d]",
+            msg->src.yrgb_addr,src_adr_s,msg->src.x_offset,msg->src.y_offset,msg->src.act_w,msg->src.act_h);
+
+    ALOGV("msg->dst.yrgb_addr =%x,dst_adr_s=%x,[%d,%d,%d]",
+            msg->dst.yrgb_addr,dst_adr_s,msg->dst.x_offset,msg->dst.y_offset,msg->dst.vir_w);
+            
     blend((uint8_t *)dst_adr_s, (uint8_t *)src_adr_s, msg->dst.vir_w, msg->src.act_w, msg->src.act_h,bak_wr,bak_rd);
     return 0; 
 #else
@@ -808,7 +815,7 @@ static int do_alpha_byneon(struct rga_req *msg,uint8_t *bak_wr,uint8_t *bak_rd)
     bpp = msg->dst.format == RK_FORMAT_RGB_565 ? 2:4;
     src_adr_s = (int *)(msg->src.yrgb_addr + (msg->src.y_offset *  msg->src.vir_w + msg->src.x_offset )*4);
     dst_adr_s = (int *)(msg->dst.yrgb_addr + (msg->dst.y_offset *  msg->dst.vir_w + msg->dst.x_offset )*bpp);
-    #if 0
+    #if 1
     for(int i= 0; i<msg->src.act_h;i++ )  
     {
         src_cur = src_adr_s;
