@@ -383,7 +383,6 @@ _CheckLayer(
 /* ----------------------end--------------------------------*/
 
     }
-
     /* Check whether this layer is forced skipped. */
 
     if ((Layer->flags & HWC_SKIP_LAYER)
@@ -396,7 +395,7 @@ _CheckLayer(
         #endif
         ||((Layer->transform != 0)/*&&(!videoflag)*/)
 #ifndef USE_LCDC_COMPOSER
-        //||(IsRk3188 && !(videoflag && Count <=2))
+        ||(IsRk3188 && !(videoflag && Count <=2))
         #endif
         || skip_count<5
         )
@@ -1488,14 +1487,14 @@ hwc_prepare(
             struct private_handle_t * handle = (struct private_handle_t *)list->hwLayers[i].handle;
             if (handle && handle->format==HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
             {
-               ALOGD("enqiu rga_video_copybit,%x,w=%d,h=%d",\
+               ALOGV("enqiu rga_video_copybit,%x,w=%d,h=%d",\
                       handle->base,handle->width,handle->height);
                if (!_contextAnchor->video_frame.vpu_handle)
                {
                   rga_video_copybit(handle,handle);
                }
             }
-            break;
+           // break;
         }
     }
 
