@@ -1489,17 +1489,7 @@ hwc_prepare(
         if (compositionType == HWC_FRAMEBUFFER)
         {
             ALOGV("line=%d back to gpu", __LINE__);           
-            struct private_handle_t * handle = (struct private_handle_t *)list->hwLayers[i].handle;
-            if (handle && handle->format==HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
-            {
-               ALOGV("enqiu rga_video_copybit,%x,w=%d,h=%d",\
-                      handle->base,handle->width,handle->height);
-               if (!_contextAnchor->video_frame.vpu_handle)
-               {
-                  rga_video_copybit(handle,handle);
-               }
-            }
-           // break;
+            break;
         }
     }
 
@@ -1513,6 +1503,16 @@ hwc_prepare(
         for (j = 0; j <(list->numHwLayers - 1); j++)
         {
             list->hwLayers[j].compositionType = HWC_FRAMEBUFFER;
+            struct private_handle_t * handle = (struct private_handle_t *)list->hwLayers[j].handle;
+            if (handle && handle->format==HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
+            {
+               ALOGV("rga_video_copybit,%x,w=%d,h=%d",\
+                      handle->base,handle->width,handle->height);
+               if (!_contextAnchor->video_frame.vpu_handle)
+               {
+                  rga_video_copybit(handle,handle);
+               }
+            }
         }
 
         if(_contextAnchor->fbFd1 > 0  )
