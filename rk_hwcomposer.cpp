@@ -2168,7 +2168,7 @@ OnError:
     }
 
     LOGE("%s(%d):Failed!", __FUNCTION__, __LINE__);
-
+    rga_video_reset();
     return HWC_EGL_ERROR;
 }
 
