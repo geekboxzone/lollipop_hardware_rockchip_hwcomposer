@@ -103,11 +103,14 @@ hwcRECT;
 
 typedef struct _hwbkupinfo
 {
-    void *pmem_bk;
+    unsigned int pmem_bk;
     unsigned int buf_addr;
+    void* pmem_bk_log;
+    void* buf_addr_log;
     int xoffset;
     int yoffset;
-    int wstride;
+    int w_vir;
+    int h_vir;
     int w_act;
     int h_act;
     int format;
@@ -218,6 +221,8 @@ typedef struct _hwcContext
     float           fb_fps;
     unsigned int fbPhysical;
     unsigned int fbStride;
+    ion_device_t *rk_ion_device;
+    ion_buffer_t *pion;
     /* PMEM stuff. */
     unsigned int pmemPhysical;
     unsigned int pmemLength;

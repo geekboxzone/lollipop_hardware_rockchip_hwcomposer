@@ -671,12 +671,12 @@ _DumpSurface(
     size_t i;
     static int DumpSurfaceCount = 0;
 
-    char pro_value[16];
+    char pro_value[PROPERTY_VALUE_MAX];
     property_get("sys.dump",pro_value,0);
     //LOGI(" sys.dump value :%s",pro_value);
     if(!strcmp(pro_value,"true"))
     {
-        for (i = 0; list && (i < list->(numHwLayers - 1)); i++)
+        for (i = 0; list && (i < (list->numHwLayers - 1)); i++)
         {
             hwc_layer_1_t const * l = &list->hwLayers[i];
 
@@ -782,134 +782,111 @@ hwcDumpArea(
 #include <ui/PixelFormat.h>
 
  
-extern "C" void *blend(uint8_t *dst, uint8_t *src, unsigned int stride, int src_w, int src_h,uint8_t *bak_wr, uint8_t *bak_rd);
 //extern "C" void *blend(uint8_t *dst, uint8_t *src, int dst_w, int src_w, int src_h);
-static int do_alpha_byneon(struct rga_req *msg,uint8_t *bak_wr,uint8_t *bak_rd)
-{
-#if 1
-    int *src_adr_s,*dst_adr_s;
 
-    unsigned int stride;
     
-    src_adr_s = (int *)(msg->src.yrgb_addr + (msg->src.y_offset *  msg->src.vir_w + msg->src.x_offset )*4);
-    dst_adr_s = (int *)(msg->dst.yrgb_addr + (msg->dst.y_offset *  msg->dst.vir_w + msg->dst.x_offset )*4);
-    ALOGV("msg->src.yrgb_addr =%x,src_adr_s=%x,[%d,%d,%d,%d]",
-            msg->src.yrgb_addr,src_adr_s,msg->src.x_offset,msg->src.y_offset,msg->src.act_w,msg->src.act_h);
 
-    ALOGV("msg->dst.yrgb_addr =%x,dst_adr_s=%x,[%d,%d,%d],bak_wr=%x,bak_rd=%x",
-            msg->dst.yrgb_addr,dst_adr_s,msg->dst.x_offset,msg->dst.y_offset,msg->dst.vir_w,bak_wr,bak_rd);
-    stride =   msg->dst.vir_w;
-    stride  = (stride << 16) | msg->src.vir_w ;
-    blend((uint8_t *)dst_adr_s, (uint8_t *)src_adr_s, stride , msg->src.act_w, msg->src.act_h,bak_wr,bak_rd);
-    return 0; 
-#else
-    int *src_adr_s,*dst_adr_s;
-    int *src_adr_s2,*dst_adr_s2;
-    int *src_adr_s3,*dst_adr_s3;
-    int *src_adr_s4,*dst_adr_s4;
-    int *src_cur,*dst_cur;
-    char *sa,*sr,*sg,*sb;
-    char *da,*dr,*dg,*db;
-    unsigned sa_bak,da_bak;
-    int ret;
-    int bpp;
-    bpp = msg->dst.format == RK_FORMAT_RGB_565 ? 2:4;
-    src_adr_s = (int *)(msg->src.yrgb_addr + (msg->src.y_offset *  msg->src.vir_w + msg->src.x_offset )*4);
-    dst_adr_s = (int *)(msg->dst.yrgb_addr + (msg->dst.y_offset *  msg->dst.vir_w + msg->dst.x_offset )*bpp);
-    #if 1
-    for(int i= 0; i<msg->src.act_h;i++ )  
-    {
-        src_cur = src_adr_s;
-        dst_cur = dst_adr_s;
-        for(int j= 0; j<msg->src.act_w  ;j++)
-        {
-            #if 1
-            sr = (char *)src_cur;
-            sg = sr + 1;
-            sb = sr + 2;
-            sa = sr + 3;
-            dr = (char *)dst_cur;
-            dg = dr + 1;
-            db = dr + 2;
-            da = dr + 3;
-            *dr = *sr + (((*dr)*(256 - *sa ))>>8);            
-            *dg = *sg + (((*dg)*(256 - *sa ))>>8);
-            *db = *sb + (((*db)*(256 - *sa ))>>8);            
-            *da = (*sa + *da ) - (((*sa) * (*da)) >> 8);
-            src_cur ++;
-            dst_cur ++;
-            #endif
-        }
-        src_adr_s += msg->src.vir_w ;
-        dst_adr_s += msg->dst.vir_w;
-    }
-    #else
-    memcpy((void *)dst_adr_s,(void*)src_adr_s,msg->src.act_w*msg->src.act_h*bpp);
-    #endif
-    return 0;
-#endif
-}
 static int backupbuffer(hwbkupinfo *pbkupinfo)
 {
+    struct rga_req  Rga_Request;
+    RECT clip;
     int i,j;
-    char *src_adr_s;
+    char *src_adr_s1;
+    char *src_adr_s2;
+    char *src_adr_s3;
+    char *dst_adr_s1;
+    char *dst_adr_s2;
+    char *dst_adr_s3;
     int bpp;
-    int *ps1;
-    short *ps2;
-    ALOGD("backupbuffer addr=%x,bkmem=%x,[%d,%d,%d(%d),%d][f=%d]",
-        pbkupinfo->buf_addr, pbkupinfo->pmem_bk,pbkupinfo->xoffset,
-        pbkupinfo->yoffset,pbkupinfo->w_act,pbkupinfo->wstride,pbkupinfo->h_act,pbkupinfo->format);
+    int ret;
+
+    ALOGV("backupbuffer addr=[%x,%x],bkmem=[%x,%x],w-h[%d,%d][%d,%d,%d,%d][f=%d]",
+        pbkupinfo->buf_addr, pbkupinfo->buf_addr_log, pbkupinfo->pmem_bk, pbkupinfo->pmem_bk_log,pbkupinfo->w_vir,
+        pbkupinfo->h_vir,pbkupinfo->xoffset,pbkupinfo->yoffset,pbkupinfo->w_act,pbkupinfo->h_act,pbkupinfo->format);
+
     bpp = pbkupinfo->format == RK_FORMAT_RGB_565 ? 2:4;
-    src_adr_s = (char *)pbkupinfo->buf_addr + \
-                (pbkupinfo->xoffset + pbkupinfo->yoffset*pbkupinfo->wstride)*bpp;
-    if(pbkupinfo->wstride == pbkupinfo->w_act)
+
+#if 0
+    src_adr_s1 = (char *)pbkupinfo->buf_addr_log + \
+                (pbkupinfo->xoffset + pbkupinfo->yoffset*pbkupinfo->w_vir)*bpp;
+    src_adr_s2 = src_adr_s1  + ( pbkupinfo->w_vir*pbkupinfo->h_act/2)*bpp;      
+    src_adr_s3 = src_adr_s1 + ( pbkupinfo->w_vir*(pbkupinfo->h_act - 1))*bpp;               
+    dst_adr_s1 = (char *)pbkupinfo->pmem_bk_log ;
+    dst_adr_s2 = dst_adr_s1 + ( pbkupinfo->w_act*pbkupinfo->h_act/2)*bpp;      
+    dst_adr_s3 = dst_adr_s1 + ( pbkupinfo->w_act*(pbkupinfo->h_act - 1))*bpp;  
+
+    ALOGV("src[%x,%x,%x],dst[%x,%x,%x]",src_adr_s1,src_adr_s2,src_adr_s3,dst_adr_s1,dst_adr_s2,dst_adr_s3);
+    ret = memcmp((void*)src_adr_s1,(void*)dst_adr_s1,pbkupinfo->w_act* 1 *bpp);       
+    if(!ret )
     {
-        memcpy(pbkupinfo->pmem_bk,(void*)src_adr_s,pbkupinfo->w_act*pbkupinfo->h_act*bpp);
-    }
-    else
-    {
-        for( i = 0;i<pbkupinfo->h_act;i++)
+        ret = memcmp((void*)src_adr_s2,(void*)dst_adr_s2,pbkupinfo->w_act* 1 *bpp);       
+        if(!ret)
         {
-            pbkupinfo->pmem_bk = (char *)pbkupinfo->pmem_bk + pbkupinfo->w_act*bpp;
-            src_adr_s += pbkupinfo->wstride*bpp;          
+            ret = memcmp((void*)src_adr_s3,(void*)dst_adr_s3,pbkupinfo->w_act* 1 *bpp);   
+            if(!ret)
+            {
+                return 0; //the smae do not backup
+            }
         }
     }
+#endif    
+    clip.xmin = 0;
+    clip.xmax = pbkupinfo->w_act - 1;
+    clip.ymin = 0;
+    clip.ymax = pbkupinfo->h_act - 1;
+
+    memset(&Rga_Request, 0x0, sizeof(Rga_Request));
+
+    
+    RGA_set_src_vir_info(&Rga_Request, pbkupinfo->buf_addr, 0, 0,pbkupinfo->w_vir, pbkupinfo->h_vir, pbkupinfo->format, 0);
+    RGA_set_dst_vir_info(&Rga_Request, pbkupinfo->pmem_bk, 0, 0,pbkupinfo->w_act, pbkupinfo->h_act, &clip, pbkupinfo->format, 0);
+    //RGA_set_src_vir_info(&Rga_Request, (int)pbkupinfo->buf_addr_log, 0, 0,pbkupinfo->w_vir, pbkupinfo->h_vir, pbkupinfo->format, 0);
+    //RGA_set_dst_vir_info(&Rga_Request, (int)pbkupinfo->pmem_bk_log, 0, 0,pbkupinfo->w_act, pbkupinfo->h_act, &clip, pbkupinfo->format, 0);
+    //RGA_set_mmu_info(&Rga_Request, 1, 0, 0, 0, 0, 2);
+
+    RGA_set_bitblt_mode(&Rga_Request, 0, 0,0,0,0,0);
+    RGA_set_src_act_info(&Rga_Request,pbkupinfo->w_act,  pbkupinfo->h_act,  pbkupinfo->xoffset, pbkupinfo->yoffset);
+    RGA_set_dst_act_info(&Rga_Request, pbkupinfo->w_act,  pbkupinfo->h_act, 0, 0);
+
+   // uint32_t RgaFlag = (i==(RgaCnt-1)) ? RGA_BLIT_SYNC : RGA_BLIT_ASYNC;
+    if(ioctl(_contextAnchor->engine_fd, RGA_BLIT_ASYNC, &Rga_Request) != 0) {
+        LOGE(" %s(%d) RGA_BLIT fail",__FUNCTION__, __LINE__);
+    }
+// #endif       
     return 0; 
 }
 static int restorebuffer(hwbkupinfo *pbkupinfo)
 {
-    int i,j;
-    char *dst_adr_s;
-    int bpp;
-    int *ps1;
-    short *ps2;
-    ALOGD("restorebuffer addr=%x,bkmem=%x,[%d,%d,%d(%d),%d][f=%d]",
-        pbkupinfo->buf_addr, pbkupinfo->pmem_bk,pbkupinfo->xoffset,
-        pbkupinfo->yoffset,pbkupinfo->w_act,pbkupinfo->wstride,pbkupinfo->h_act,pbkupinfo->format);
-    if(!pbkupinfo->buf_addr)
-    {
-        ALOGW("restorebuffer addr=%x,bkmem=%x,[%d,%d,%d(%d),%d][f=%d]",
-        pbkupinfo->buf_addr, pbkupinfo->pmem_bk,pbkupinfo->xoffset,
-        pbkupinfo->yoffset,pbkupinfo->w_act,pbkupinfo->wstride,pbkupinfo->h_act,pbkupinfo->format);
-        return -1;
+    struct rga_req  Rga_Request;
+    RECT clip;
+    memset(&Rga_Request, 0x0, sizeof(Rga_Request));
+
+    clip.xmin = 0;
+    clip.xmax = pbkupinfo->w_vir - 1;
+    clip.ymin = 0;
+    clip.ymax = pbkupinfo->h_vir - 1;
+
+
+    ALOGV("restorebuffer addr=[%x,%x],bkmem=[%x,%x],w-h[%d,%d][%d,%d,%d,%d][f=%d]",
+        pbkupinfo->buf_addr, pbkupinfo->buf_addr_log, pbkupinfo->pmem_bk, pbkupinfo->pmem_bk_log,pbkupinfo->w_vir,
+        pbkupinfo->h_vir,pbkupinfo->xoffset,pbkupinfo->yoffset,pbkupinfo->w_act,pbkupinfo->h_act,pbkupinfo->format);
+
+    //RGA_set_src_vir_info(&Rga_Request, (int)pbkupinfo->pmem_bk_log, 0, 0,pbkupinfo->w_act, pbkupinfo->h_act, pbkupinfo->format, 0);
+   // RGA_set_dst_vir_info(&Rga_Request, (int)pbkupinfo->buf_addr_log, 0, 0,pbkupinfo->w_vir, pbkupinfo->h_vir, &clip, pbkupinfo->format, 0);
+   // RGA_set_mmu_info(&Rga_Request, 1, 0, 0, 0, 0, 2);
+      
+    RGA_set_src_vir_info(&Rga_Request,  pbkupinfo->pmem_bk, 0, 0,pbkupinfo->w_act, pbkupinfo->h_act, pbkupinfo->format, 0);
+    RGA_set_dst_vir_info(&Rga_Request, pbkupinfo->buf_addr, 0, 0,pbkupinfo->w_vir, pbkupinfo->h_vir, &clip, pbkupinfo->format, 0);
+    RGA_set_bitblt_mode(&Rga_Request, 0, 0,0,0,0,0);
+    RGA_set_src_act_info(&Rga_Request,pbkupinfo->w_act,  pbkupinfo->h_act, 0, 0);
+    RGA_set_dst_act_info(&Rga_Request,pbkupinfo->w_act,  pbkupinfo->h_act,  pbkupinfo->xoffset, pbkupinfo->yoffset);
+
+   // uint32_t RgaFlag = (i==(RgaCnt-1)) ? RGA_BLIT_SYNC : RGA_BLIT_ASYNC;
+    if(ioctl(_contextAnchor->engine_fd, RGA_BLIT_ASYNC, &Rga_Request) != 0) {
+        LOGE(" %s(%d) RGA_BLIT fail",__FUNCTION__, __LINE__);
     }
-    bpp = pbkupinfo->format == RK_FORMAT_RGB_565 ? 2:4;
-    dst_adr_s = (char *)pbkupinfo->buf_addr + \
-                (pbkupinfo->xoffset + pbkupinfo->yoffset*pbkupinfo->wstride)*bpp;
-    if(pbkupinfo->wstride == pbkupinfo->w_act)
-    {
-        memcpy((void*)dst_adr_s,pbkupinfo->pmem_bk,pbkupinfo->w_act*pbkupinfo->h_act*bpp);
-    }
-    else
-    {
-        for( i = 0;i<pbkupinfo->h_act;i++)
-        {
-            memcpy((void*)dst_adr_s,pbkupinfo->pmem_bk,pbkupinfo->w_act*bpp);
-            pbkupinfo->pmem_bk = (char *)pbkupinfo->pmem_bk + pbkupinfo->w_act*bpp;
-            dst_adr_s += pbkupinfo->wstride*bpp;          
-        }
-    }
-    return 0;
+        
+    return 0; 
 }
 
 int hwc_do_special_composer( hwc_display_contents_1_t  * list)
@@ -1134,8 +1111,9 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
             if((x_off + act_dstwidth) > dstStride 
                 || (y_off + act_dstheight ) > dstHeight ) // overflow zone
             {
-                DstBuferIndex = -1;
-                break;
+               // DstBuferIndex = -1;
+                ALOGV("[%d,%d,%d,%d],[%d,%d]",x_off,y_off,act_dstwidth,act_dstheight,dstStride,dstHeight);
+                continue;
  
             }
 
@@ -1178,17 +1156,8 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
             LOGV("    src[%d]=%s,  dst[%d]=%s",ComposerIndex,list->hwLayers[ComposerIndex].LayerName,DstBuferIndex,list->hwLayers[DstBuferIndex].LayerName);
             LOGV("    src info f[%d] w_h[%d(%d),%d]",srcFormat,srcWidth,srcStride,srcHeight);
             LOGV("    dst info f[%d] w_h[%d(%d),%d] rect[%d,%d,%d,%d]",dstFormat,dstWidth,dstStride,dstHeight,x_off,y_off,act_dstwidth,act_dstheight);
-            if(IsSblend)   
-            //if(0)
-            {
-                RGA_set_src_vir_info(&Rga_Request[RgaCnt], (int)srcLogical, 0, 0,srcStride, srcHeight, srcFormat, 0);
-                RGA_set_dst_vir_info(&Rga_Request[RgaCnt], (int)dstLogical, 0, 0,dstStride, dstHeight, &clip, dstFormat, 0);
-            }
-            else
-            {
-            RGA_set_src_vir_info(&Rga_Request[RgaCnt], (int)srcPhysical, 0, 0,srcStride, srcHeight, srcFormat, 0);
-            RGA_set_dst_vir_info(&Rga_Request[RgaCnt], (int)dstPhysical, 0, 0,dstStride, dstHeight, &clip, dstFormat, 0);
-            }
+            RGA_set_src_vir_info(&Rga_Request[RgaCnt], (int)srcPhysical, (int)srcLogical, 0,srcStride, srcHeight, srcFormat, 0);
+            RGA_set_dst_vir_info(&Rga_Request[RgaCnt], (int)dstPhysical, (int)dstLogical, 0,dstStride, dstHeight, &clip, dstFormat, 0);
             /* Get plane alpha. */
             planeAlpha = list->hwLayers[ComposerIndex].blending >> 16;
             /* Setup blending. */
@@ -1338,49 +1307,35 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
 
     // Realy Blit
    // ALOGD("RgaCnt=%d",RgaCnt);
-    if(handle_cur != bkupmanage.handle_bk) 
-    {
-        backcout = 0;
-    }
     for(int i=0; i<RgaCnt; i++) {
-        bool IsSrcblend = Rga_Request[i].src.format == RK_FORMAT_RGBA_8888 || Rga_Request[i].src.format == RK_FORMAT_BGRA_8888;
-        bool IsDstblend = Rga_Request[i].dst.format == RK_FORMAT_RGBA_8888 || Rga_Request[i].dst.format == RK_FORMAT_BGRA_8888;
-        if(IsSrcblend )
-        //if(0)
+
+        if(handle_cur != bkupmanage.handle_bk 
+            && handle_cur->phy_addr != bkupmanage.bkupinfo[i].buf_addr ) // backup the dstbuff        
         {
-            if(handle_cur != bkupmanage.handle_bk) // backup the dstbuff
-           // ALOGD("handle_cur->reference_count=%d,bkupmanage.handle_bk->reference_count=%d",handle_cur->reference_count,bkupmanage.handle_bk->reference_count);
-            //if(handle_cur->reference_count != bkupmanage.handle_bk->reference_count)
-            
-            {
-                bkupmanage.bkupinfo[i].format = Rga_Request[i].dst.format;
-                bkupmanage.bkupinfo[i].buf_addr = Rga_Request[i].dst.yrgb_addr;
-                bkupmanage.bkupinfo[i].xoffset = Rga_Request[i].dst.x_offset;
-                bkupmanage.bkupinfo[i].yoffset = Rga_Request[i].dst.y_offset;
-                bkupmanage.bkupinfo[i].wstride = Rga_Request[i].dst.vir_w;
-                bkupmanage.bkupinfo[i].w_act = Rga_Request[i].dst.act_w;
-                bkupmanage.bkupinfo[i].h_act = Rga_Request[i].dst.act_h;            
-                backcout ++;
-                //backupbuffer(&bkupmanage.bkupinfo[i]);
-                do_alpha_byneon( &Rga_Request[i],(uint8_t *)bkupmanage.bkupinfo[i].pmem_bk,NULL);
-                //do_alpha_byneon( &Rga_Request[i],NULL,NULL);               
-                
-            }
-            else if(i<bkupmanage.count) // restore the dstbuff
-            {
-                //restorebuffer(&bkupmanage.bkupinfo[i]);
-                do_alpha_byneon( &Rga_Request[i],NULL,(uint8_t *)bkupmanage.bkupinfo[i].pmem_bk);
-               // do_alpha_byneon( &Rga_Request[i],NULL,NULL);               
-            
-            }
+            bkupmanage.bkupinfo[i].format = Rga_Request[i].dst.format;
+            bkupmanage.bkupinfo[i].buf_addr = Rga_Request[i].dst.yrgb_addr;
+            bkupmanage.bkupinfo[i].buf_addr_log = (void*)Rga_Request[i].dst.uv_addr;            
+            bkupmanage.bkupinfo[i].xoffset = Rga_Request[i].dst.x_offset;
+            bkupmanage.bkupinfo[i].yoffset = Rga_Request[i].dst.y_offset;
+            bkupmanage.bkupinfo[i].w_vir = Rga_Request[i].dst.vir_w;
+            bkupmanage.bkupinfo[i].h_vir = Rga_Request[i].dst.vir_h;            
+            bkupmanage.bkupinfo[i].w_act = Rga_Request[i].dst.act_w;
+            bkupmanage.bkupinfo[i].h_act = Rga_Request[i].dst.act_h;  
+            if(i ==0)
+                backcout = 0;
+            backcout ++;
+            backupbuffer(&bkupmanage.bkupinfo[i]);
+
         }
-        else
+        else if(i<bkupmanage.count) // restore the dstbuff
         {
-            uint32_t RgaFlag = (i==(RgaCnt-1)) ? RGA_BLIT_SYNC : RGA_BLIT_ASYNC;
-            if(ioctl(_contextAnchor->engine_fd, RgaFlag, &Rga_Request[i]) != 0) {
-                LOGE(" %s(%d) RGA_BLIT fail",__FUNCTION__, __LINE__);
-            }
-        }    
+            restorebuffer(&bkupmanage.bkupinfo[i]);
+        }
+        uint32_t RgaFlag = (i==(RgaCnt-1)) ? RGA_BLIT_SYNC : RGA_BLIT_ASYNC;
+        if(ioctl(_contextAnchor->engine_fd, RgaFlag, &Rga_Request[i]) != 0) {
+            LOGE(" %s(%d) RGA_BLIT fail",__FUNCTION__, __LINE__);
+        }
+
     }
 
     bkupmanage.handle_bk = handle_cur;
@@ -2389,10 +2344,10 @@ hwc_device_close(
 	}
 
 #ifdef USE_LCDC_COMPOSER
-    for(int i=0;i<bakupbufsize;i++)
+    if(context->rk_ion_device)
     {
-        if(  bkupmanage.bkupinfo[i].pmem_bk!= NULL)
-            free( bkupmanage.bkupinfo[i].pmem_bk );                                  
+        context->rk_ion_device->free(context->rk_ion_device, context->pion);
+        ion_close(context->rk_ion_device);
     }
 #endif
     pthread_mutex_destroy(&context->lock);
@@ -2523,6 +2478,7 @@ hwc_device_open(
     float xdpi;
     float ydpi;
     uint32_t vsync_period; 
+    unsigned int fbPhy_end;
     LOGD("%s(%d):Open hwc device in thread=%d",
          __FUNCTION__, __LINE__, gettid());
 
@@ -2667,17 +2623,6 @@ hwc_device_open(
     }
 
 
-#ifdef USE_LCDC_COMPOSER
-    memset(&bkupmanage,0,sizeof(hwbkupmanage));
-    for(int i=0;i<bakupbufsize;i++)
-    {
-        bkupmanage.bkupinfo[i].pmem_bk = malloc(info.xres*info.yres);
-        if(!bkupmanage.bkupinfo[i].pmem_bk)
-            hwcONERROR(hwcSTATUS_INVALID_ARGUMENT);      
-        else
-            ALOGD("bkupmanage malloc size=%d ok [%d*%d]",info.xres*info.yres,info.xres,info.yres);
-    }
-#endif
 
 
     /* Initialize pmem and frameubffer stuff. */
@@ -2726,6 +2671,23 @@ hwc_device_open(
     {
       property_set("sys.display.oritation","2");
     }
+#ifdef USE_LCDC_COMPOSER
+    memset(&bkupmanage,0,sizeof(hwbkupmanage));
+    ion_open(fixInfo.line_length * context->fbHeight, ION_MODULE_UI, &context->rk_ion_device);
+	rel = context->rk_ion_device->alloc(context->rk_ion_device, fixInfo.line_length * context->fbHeight ,_ION_HEAP_RESERVE, &context->pion);
+	if (!rel)
+	{
+        for(int i=0;i<bakupbufsize;i++)
+        {
+            bkupmanage.bkupinfo[i].pmem_bk = context->pion->phys + (fixInfo.line_length * context->fbHeight/4)*i;
+            bkupmanage.bkupinfo[i].pmem_bk_log = (void*)((int)context->pion->virt + (fixInfo.line_length * context->fbHeight/4)*i);
+        }
+	}
+	else
+	{
+	    ALOGE(" ion_device->alloc failed");
+	}
+#endif
 
 #if USE_HW_VSYNC
 
@@ -2807,10 +2769,10 @@ OnError:
     }
 
 #ifdef USE_LCDC_COMPOSER
-    for(int i=0;i<bakupbufsize;i++)
+    if(context->rk_ion_device)
     {
-        if( bkupmanage.bkupinfo[i].pmem_bk != NULL)
-            free( bkupmanage.bkupinfo[i].pmem_bk );                          
+        context->rk_ion_device->free(context->rk_ion_device, context->pion);
+        ion_close(context->rk_ion_device);
     }
 #endif
     pthread_mutex_destroy(&context->lock);
