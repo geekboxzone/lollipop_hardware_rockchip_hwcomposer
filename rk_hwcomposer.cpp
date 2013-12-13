@@ -454,7 +454,7 @@ _CheckLayer(
              return HWC_FRAMEBUFFER;
         }
 
-        LOGV("name[%d]=%s",Index,list->hwLayers[Index].LayerName);
+        LOGV("name[%d]=%s,phy_addr=%x",Index,list->hwLayers[Index].LayerName,handle->phy_addr);
 
         #ifdef USE_LCDC_COMPOSER
         property_get("sys.SD2HD",pro_value,0);
@@ -925,7 +925,7 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
     struct private_handle_t *handle_cur;  
     static int backcout = 0;
    
-    for(  int i= 0; i < 2 ; i++)
+    for(  int i= 0; i < 2 && i<list->numHwLayers ; i++)
     {
         list->hwLayers[i].exLeft= 0;
         list->hwLayers[i].exTop = 0;
@@ -1475,7 +1475,6 @@ hwc_prepare(
             _contextAnchor->fb1_cflag = true;
         }
 
-        ALOGV("line=%d back to gpu", __LINE__);
 
     }
     #ifdef USE_LCDC_COMPOSER
@@ -2001,7 +2000,7 @@ hwc_set(
             }
             if((list->numHwLayers == 1) || i == 1)
             {
-                sync = 2; 
+                sync = 1; 
                 ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &sync);
 
                 /*
