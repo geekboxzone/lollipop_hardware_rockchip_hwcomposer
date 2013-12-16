@@ -168,10 +168,11 @@ void hwc_sync(hwc_display_contents_1_t  *list)
 
 }
 
-void hwc_sync_fence(hwc_display_contents_1_t  *list)
+void hwc_sync_release(hwc_display_contents_1_t  *list)
 {
   for (int i=0; i<list->numHwLayers-1; i++)
   {
+    ALOGD("close acquireFenceFd:%d",list->hwLayers[i].acquireFenceFd);
     close(list->hwLayers[i].acquireFenceFd);
     list->hwLayers[i].acquireFenceFd = -1;
   }
@@ -1697,6 +1698,71 @@ static int display_commit( int dpy, private_handle_t*  handle)
     return 0;
 }
 
+static int hwc_fbPost(hwc_composer_device_1_t * dev, size_t numDisplays, hwc_display_contents_1_t** displays)
+{
+  hwcContext * context = _contextAnchor;
+  unsigned int videodata[2];
+  int ret = 0;
+  for (size_t i=0; i<numDisplays-1; i++)
+  {
+   if (context->dpyAttr[i].connected && context->dpyAttr[i].fd>0)
+   {
+    hwc_display_contents_1_t *list = displays[i];
+    if (list == NULL)
+    {
+       return -1;
+    }
+
+    struct fb_var_screeninfo info;
+    int numLayers = list->numHwLayers;
+    hwc_layer_1_t *fbLayer = &list->hwLayers[numLayers - 1];
+    hwc_sync(list);
+    if (fbLayer == NULL)
+    {
+        return -1;
+    }
+    info = context->info;
+    struct private_handle_t*  handle = (struct private_handle_t*)fbLayer->handle;
+    if (!handle)
+    {
+      return -1;
+    }
+    void * vaddr = NULL;
+    videodata[0] = videodata[1] = context->fbPhysical;
+
+    if (ioctl(context->dpyAttr[i].fd, FB1_IOCTL_SET_YUV_ADDR, videodata) == -1)
+    {
+        //ALOGE("%s(%d):  fd[%d] Failed,DataAddr=%x", __FUNCTION__, __LINE__,pdev->dpyAttr[i].fd,videodata[0]);
+        return -1;
+    }
+
+   // ioctl(pdev->dpyAttr[i].fd, FBIOPUT_VSCREENINFO, &info);    
+   // ioctl(pdev->dpyAttr[i].fd, RK_FBIOSET_CONFIG_DONE, &sync);
+
+    if (handle != NULL)
+    {
+
+        unsigned int offset = handle->offset;
+        info.yoffset = offset/context->fbStride;
+        if (ioctl(context->dpyAttr[i].fd, FBIOPUT_VSCREENINFO, &info) == -1)
+        {
+
+        }
+        else
+        {
+            int sync = 0;
+            ioctl(context->dpyAttr[i].fd, RK_FBIOSET_CONFIG_DONE, &sync);
+            hwc_sync_release(list);
+        }
+    }
+    else
+    {
+        //ALOGE("hwc12:fb handle is null.");
+    }
+   }
+ }
+  return 0;
+}
 int
 hwc_set(
     hwc_composer_device_1_t * dev,
@@ -2006,7 +2072,7 @@ hwc_set(
                             context->fb1_cflag = false;
                         }
                     }
-                    hwc_sync_fence(list);
+                    hwc_sync_release(list);
                     return hwcSTATUS_OK;
                 }
 
@@ -2095,9 +2161,16 @@ hwc_set(
             LOGE("%s(%d):RGA_FLUSH Failed!", __FUNCTION__, __LINE__);
         }
         else
-        success =  EGL_TRUE ;
-        display_commit(0,(struct private_handle_t *) fbBuffer->handle);
-             
+        {
+         success =  EGL_TRUE ;
+        }
+#ifndef USE_LCDC_COMPOSER
+        display_commit(0,(struct private_handle_t *) fbBuffer->handle); 
+#endif
+    }
+    else
+    {
+       hwc_fbPost(dev,numDisplays,displays);
     }
 
 #if hwcUseTime
@@ -2178,6 +2251,8 @@ hwc_set(
        // success = eglSwapBuffers((EGLDisplay) dpy, (EGLSurface) surf); 
 
     rga_video_reset();
+    hwc_sync_release(list);
+
     return 0; //? 0 : HWC_EGL_ERROR;
 OnError:
     /* Error rollback */
@@ -2511,12 +2586,6 @@ static int hwc_getDisplayAttributes(struct hwc_composer_device_1* dev, int disp,
     }
 
    return 0;
-}
-
-static int hwc_fbPost(hwc_composer_device_1_t * dev, size_t numDisplays, hwc_display_contents_1_t** displays)
-{
-  
-  return 0;
 }
 
 int hwc_copybit(struct hwc_composer_device_1 *dev,
