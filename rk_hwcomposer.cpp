@@ -29,7 +29,7 @@
 #include <errno.h>
 #include <cutils/properties.h>
 #include <fcntl.h>
-
+#include <sync/sync.h>
 #ifdef TARGET_BOARD_PLATFORM_RK30XXB
 #include  <hardware/hal_public.h>
 #include  <linux/fb.h>
@@ -144,6 +144,51 @@ static int LayerZoneCheck( hwc_layer_1_t * Layer)
     return 0;
 }
 
+void hwc_sync(hwc_display_contents_1_t  *list)
+{
+  for (int i=0; i<list->numHwLayers-1; i++)
+  {
+    sync_wait(list->hwLayers[i].acquireFenceFd,-1);
+    ALOGV("fenceFd=%d,name=%s",list->hwLayers[i].acquireFenceFd,list->hwLayers[i].layerName);
+  }
+ #if 1
+  hwc_layer_1_t* layer = &list->hwLayers[list->numHwLayers-1];
+  if (layer == NULL)
+  {
+    return ;
+  }
+  if (layer->acquireFenceFd>0)
+  {
+    //int fbFenceFd = dup(layer.acquireFenceFd);
+    list->retireFenceFd = -1;//layer->acquireFenceFd;
+    close(layer->acquireFenceFd);
+    layer->acquireFenceFd = -1;
+  }
+  #endif
+
+}
+
+void hwc_sync_fence(hwc_display_contents_1_t  *list)
+{
+  for (int i=0; i<list->numHwLayers-1; i++)
+  {
+    close(list->hwLayers[i].acquireFenceFd);
+    list->hwLayers[i].acquireFenceFd = -1;
+  }
+#if 1
+  hwc_layer_1_t* layer = &list->hwLayers[list->numHwLayers-1];
+  if (layer == NULL)
+  {
+    return ;
+  }
+  if (layer->acquireFenceFd>0)
+  {
+    //int fbFenceFd = dup(layer.acquireFenceFd);
+    close(layer->acquireFenceFd);
+    layer->acquireFenceFd = -1;
+  }
+#endif
+}
 #if 1
 static int layer_seq = 0;
 
@@ -1599,6 +1644,27 @@ static int display_commit( int dpy, private_handle_t*  handle)
     {
       return -1;
     }
+    info.activate |= FB_ACTIVATE_FORCE;
+    videodata[0] = videodata[1] = context->hwc_ion.pion->phys + context->hwc_ion.offset;
+    ALOGV("hwc fbPost:%x,offset=%x,fd=%d,videodata=%x",\
+           videodata[0],context->hwc_ion.offset,context->dpyAttr[0].fd,videodata[0]);
+    if (ioctl(context->dpyAttr[0].fd, FB1_IOCTL_SET_YUV_ADDR, videodata) == -1)
+    {
+        ALOGE("%s(%d):  fd[%d] Failed,DataAddr=%x", __FUNCTION__, __LINE__,context->dpyAttr[dpy].fd,videodata[0]);
+        return -1;
+    } 
+    int sync = 1;
+    ioctl(context->dpyAttr[0].fd, FBIOPUT_VSCREENINFO, &info);
+    ioctl(context->dpyAttr[0].fd, RK_FBIOSET_CONFIG_DONE, &sync);
+    if ((context->hwc_ion.offset+context->lcdSize) > context->fbSize)
+    {
+     context->hwc_ion.offset = 0; 
+    }
+    else
+    {
+     context->hwc_ion.offset = context->hwc_ion.offset+context->lcdSize;
+    }  
+#if 0
     videodata[0] = videodata[1] = context->fbPhysical;
     if (ioctl(context->dpyAttr[dpy].fd, FB1_IOCTL_SET_YUV_ADDR, videodata) == -1)
     {
@@ -1627,6 +1693,7 @@ static int display_commit( int dpy, private_handle_t*  handle)
     {
         //ALOGE("hwc12:fb handle is null.");
     }
+#endif
     return 0;
 }
 
@@ -1661,6 +1728,7 @@ hwc_set(
     struct private_handle_t * fbhandle = NULL;
 
     hwc_display_contents_1_t* list = displays[0];  // ignore displays beyond the first
+    hwc_sync(list);
     if (list != NULL) {
         //dpy = list->dpy;
         //surf = list->sur;
@@ -1701,7 +1769,7 @@ hwc_set(
 
 
     /* Prepare. */
-    for (i = 0; i < list->numHwLayers; i++)
+    for (i = 0; i < list->numHwLayers-1; i++)
     {
         /* Check whether this composition can be handled by hwcomposer. */
         if (list->hwLayers[i].compositionType >= HWC_BLITTER)
@@ -1938,6 +2006,7 @@ hwc_set(
                             context->fb1_cflag = false;
                         }
                     }
+                    hwc_sync_fence(list);
                     return hwcSTATUS_OK;
                 }
 
@@ -2109,7 +2178,7 @@ hwc_set(
        // success = eglSwapBuffers((EGLDisplay) dpy, (EGLSurface) surf); 
 
     rga_video_reset();
-    return success; //? 0 : HWC_EGL_ERROR;
+    return 0; //? 0 : HWC_EGL_ERROR;
 OnError:
     /* Error rollback */
     /* Case 1: get back buffer failed, backBuffer is NULL in this case, so we
@@ -2341,7 +2410,12 @@ hwc_device_close(
     {
       ipp_close(context->ippDev);
 	}
-
+    if (context->hwc_ion.ion_device)
+    {
+      context->hwc_ion.ion_device->free(context->hwc_ion.ion_device, context->hwc_ion.pion);
+      ion_close(context->hwc_ion.ion_device);
+      context->hwc_ion.ion_device = NULL;
+    }
 #ifdef USE_LCDC_COMPOSER
     if(context->rk_ion_device)
     {
@@ -2658,6 +2732,23 @@ hwc_device_open(
 	context->fbHeight = info.yres;
     context->pmemPhysical = ~0U;
     context->pmemLength   = 0;
+    context->fbSize = info.xres*info.yres*4*3;
+    context->lcdSize = info.xres*info.yres*4; 
+    {
+#ifndef USE_LCDC_COMPOSER
+     ion_open(context->fbSize, ION_MODULE_UI, &context->hwc_ion.ion_device);
+     int err = context->hwc_ion.ion_device->alloc(context->hwc_ion.ion_device, context->fbSize,\
+                                              _ION_HEAP_RESERVE, &context->hwc_ion.pion); 
+     if (!err)
+     {
+        ALOGD("Ion alloc succ.");  
+     }
+     else
+     {
+        ALOGE("Ion alloc fail.");  
+     }
+#endif
+    }
 
     /* Increment reference count. */
     context->reference++;

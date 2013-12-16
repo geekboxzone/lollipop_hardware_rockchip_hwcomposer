@@ -54,7 +54,8 @@ LOCAL_SHARED_LIBRARIES := \
 	libEGL \
 	libcutils \
 	libion \
-	libhardware_legacy
+	libhardware_legacy \
+	libsync
 
 
 

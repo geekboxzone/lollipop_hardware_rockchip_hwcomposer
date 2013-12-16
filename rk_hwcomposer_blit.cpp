@@ -229,6 +229,8 @@ hwcBlit(
     clip.xmax = dstWidth - 1;
     clip.ymin = 0;
     clip.ymax = dstHeight -1;
+    
+    dstPhysical = Context->hwc_ion.pion->phys+Context->hwc_ion.offset;
 
     if(srchnd->format ==  HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
     {

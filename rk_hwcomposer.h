@@ -186,6 +186,13 @@ typedef struct
    void*      vpu_handle;
 } vpu_frame_t;
 
+typedef struct
+{
+  ion_buffer_t *pion;
+  ion_device_t *ion_device; 
+  unsigned int  offset;
+  unsigned int  last_offset;
+} hwc_ion_t;
 typedef struct _hwcContext
 {
     hwc_composer_device_1_t device;
@@ -209,7 +216,7 @@ typedef struct _hwcContext
     int       fbHeight;
     bool      fb1_cflag;
     char      cupcore_string[16];
-
+    hwc_ion_t      hwc_ion;
     DisplayAttributes              dpyAttr[HWC_NUM_DISPLAY_TYPES];
      struct                         fb_var_screeninfo info;
 
@@ -227,6 +234,8 @@ typedef struct _hwcContext
     unsigned int pmemPhysical;
     unsigned int pmemLength;
 	vpu_frame_t  video_frame;
+	unsigned int fbSize;
+	unsigned int lcdSize;
 	char *pbakupbuf[bakupbufsize];
 #if ENABLE_HWC_WORMHOLE
     /* Splited composition area queue. */
