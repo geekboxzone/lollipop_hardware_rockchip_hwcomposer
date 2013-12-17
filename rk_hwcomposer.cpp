@@ -46,7 +46,6 @@
 #define RK_FBIOSET_ROTATE            0x5003 
 #define FPS_NAME                    "com.aatt.fpsm"
 #define BOTTOM_LAYER_NAME           "NavigationBar"
-#define BOTTOM_LAYER_NAME1          "SystemBar"
 #define TOP_LAYER_NAME              "StatusBar"
 #define WALLPAPER                   "ImageWallpaper"
 //#define ENABLE_HDMI_APP_LANDSCAP_TO_PORTRAIT
@@ -547,7 +546,6 @@ _CheckLayer(
             if( Index >= 2 )
             {
                 bool IsBottom = !strcmp(BOTTOM_LAYER_NAME,list->hwLayers[Index].LayerName);
-                IsBottom |= (!strcmp(BOTTOM_LAYER_NAME1,list->hwLayers[Index].LayerName));
                 bool IsTop = !strcmp(TOP_LAYER_NAME,list->hwLayers[Index].LayerName);
                 bool IsFps = !strcmp(FPS_NAME,list->hwLayers[Index].LayerName);
 
@@ -577,7 +575,7 @@ _CheckLayer(
             }
 
             /* return GPU for temp*/
-            if(IsRk3188)
+            //if(IsRk3188)
             {
                 Layer->compositionType = HWC_FRAMEBUFFER;
                 return HWC_FRAMEBUFFER;
@@ -902,7 +900,7 @@ static int backupbuffer(hwbkupinfo *pbkupinfo)
 // #endif       
     return 0; 
 }
-static int restorebuffer(hwbkupinfo *pbkupinfo)
+static int restorebuffer(hwbkupinfo *pbkupinfo,unsigned int direct_addr)
 {
     struct rga_req  Rga_Request;
     RECT clip;
@@ -914,8 +912,8 @@ static int restorebuffer(hwbkupinfo *pbkupinfo)
     clip.ymax = pbkupinfo->h_vir - 1;
 
 
-    ALOGV("restorebuffer addr=[%x,%x],bkmem=[%x,%x],w-h[%d,%d][%d,%d,%d,%d][f=%d]",
-        pbkupinfo->buf_addr, pbkupinfo->buf_addr_log, pbkupinfo->pmem_bk, pbkupinfo->pmem_bk_log,pbkupinfo->w_vir,
+    ALOGV("restorebuffer addr=[%x,%x],bkmem=[%x,%x],direct_addr=%x,w-h[%d,%d][%d,%d,%d,%d][f=%d]",
+        pbkupinfo->buf_addr, pbkupinfo->buf_addr_log, pbkupinfo->pmem_bk, pbkupinfo->pmem_bk_log,direct_addr,pbkupinfo->w_vir,
         pbkupinfo->h_vir,pbkupinfo->xoffset,pbkupinfo->yoffset,pbkupinfo->w_act,pbkupinfo->h_act,pbkupinfo->format);
 
     //RGA_set_src_vir_info(&Rga_Request, (int)pbkupinfo->pmem_bk_log, 0, 0,pbkupinfo->w_act, pbkupinfo->h_act, pbkupinfo->format, 0);
@@ -923,10 +921,35 @@ static int restorebuffer(hwbkupinfo *pbkupinfo)
    // RGA_set_mmu_info(&Rga_Request, 1, 0, 0, 0, 0, 2);
       
     RGA_set_src_vir_info(&Rga_Request,  pbkupinfo->pmem_bk, 0, 0,pbkupinfo->w_act, pbkupinfo->h_act, pbkupinfo->format, 0);
+    if(direct_addr)
+        RGA_set_dst_vir_info(&Rga_Request, direct_addr, 0, 0,pbkupinfo->w_vir, pbkupinfo->h_vir, &clip, pbkupinfo->format, 0);    
+    else
     RGA_set_dst_vir_info(&Rga_Request, pbkupinfo->buf_addr, 0, 0,pbkupinfo->w_vir, pbkupinfo->h_vir, &clip, pbkupinfo->format, 0);
     RGA_set_bitblt_mode(&Rga_Request, 0, 0,0,0,0,0);
     RGA_set_src_act_info(&Rga_Request,pbkupinfo->w_act,  pbkupinfo->h_act, 0, 0);
     RGA_set_dst_act_info(&Rga_Request,pbkupinfo->w_act,  pbkupinfo->h_act,  pbkupinfo->xoffset, pbkupinfo->yoffset);
+    if(ioctl(_contextAnchor->engine_fd, RGA_BLIT_ASYNC, &Rga_Request) != 0) {
+        LOGE(" %s(%d) RGA_BLIT fail",__FUNCTION__, __LINE__);
+    }
+    return 0; 
+}
+static int  CopyBuffByRGA (hwbkupinfo *pcpyinfo)
+{
+    struct rga_req  Rga_Request;
+    RECT clip;
+    memset(&Rga_Request, 0x0, sizeof(Rga_Request));
+    clip.xmin = 0;
+    clip.xmax = pcpyinfo->w_vir - 1;
+    clip.ymin = 0;
+    clip.ymax = pcpyinfo->h_vir - 1;
+    ALOGV("CopyBuffByRGA addr=[%x,%x],bkmem=[%x,%x],w-h[%d,%d][%d,%d,%d,%d][f=%d]",
+        pcpyinfo->buf_addr, pcpyinfo->buf_addr_log, pcpyinfo->pmem_bk, pcpyinfo->pmem_bk_log,pcpyinfo->w_vir,
+        pcpyinfo->h_vir,pcpyinfo->xoffset,pcpyinfo->yoffset,pcpyinfo->w_act,pcpyinfo->h_act,pcpyinfo->format);
+    RGA_set_src_vir_info(&Rga_Request,  pcpyinfo->pmem_bk, 0, 0,pcpyinfo->w_vir, pcpyinfo->h_vir, pcpyinfo->format, 0);
+    RGA_set_dst_vir_info(&Rga_Request, pcpyinfo->buf_addr, 0, 0,pcpyinfo->w_vir, pcpyinfo->h_vir, &clip, pcpyinfo->format, 0);    
+    RGA_set_bitblt_mode(&Rga_Request, 0, 0,0,0,0,0);
+    RGA_set_src_act_info(&Rga_Request,pcpyinfo->w_act,  pcpyinfo->h_act, pcpyinfo->xoffset,pcpyinfo->yoffset);
+    RGA_set_dst_act_info(&Rga_Request,pcpyinfo->w_act,  pcpyinfo->h_act,  pcpyinfo->xoffset, pcpyinfo->yoffset);
 
    // uint32_t RgaFlag = (i==(RgaCnt-1)) ? RGA_BLIT_SYNC : RGA_BLIT_ASYNC;
     if(ioctl(_contextAnchor->engine_fd, RGA_BLIT_ASYNC, &Rga_Request) != 0) {
@@ -971,6 +994,8 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
     int     dst_indexfid = 0;
     struct private_handle_t *handle_cur;  
     static int backcout = 0;
+    bool IsDiff = 0;
+    unsigned int dst_bk_ddr = 0;
    
     for(  int i= 0; i < 2 && i<list->numHwLayers ; i++)
     {
@@ -979,6 +1004,7 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
         list->hwLayers[i].exRight = 0;
         list->hwLayers[i].exBottom = 0;
         list->hwLayers[i].exAddrOffset = 0;
+        list->hwLayers[i].direct_addr = 0;
     }
 
     if( (list->numHwLayers - 1) <= 2)
@@ -1005,7 +1031,6 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
     for( ComposerIndex = 2 ;ComposerIndex < (list->numHwLayers - 1); ComposerIndex++)
     {
         bool IsBottom = !strcmp(BOTTOM_LAYER_NAME,list->hwLayers[ComposerIndex].LayerName);
-        IsBottom |= (!strcmp(BOTTOM_LAYER_NAME1,list->hwLayers[ComposerIndex].LayerName));
         bool IsTop = !strcmp(TOP_LAYER_NAME,list->hwLayers[ComposerIndex].LayerName);
         bool IsFps = !strcmp(FPS_NAME,list->hwLayers[ComposerIndex].LayerName);
 
@@ -1059,6 +1084,8 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
                 continue;   // RGA donot support destination vir_h > 2048
             }
 
+            if(IsBottom)  // the Navigation 
+            {
             int dstBpp = android::bytesPerPixel(((struct private_handle_t *)dstLayer->handle)->format);
 
             bool isLandscape = (dstLayer->realtransform != HAL_TRANSFORM_ROT_90) &&
@@ -1068,13 +1095,8 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
 
             // Calculate the ex* value of dstLayer.
             if(isLandscape) {
-                bar = dstHeight - (dstLayer->displayFrame.bottom - dstLayer->displayFrame.top);
-                if(bar > 0) {
-                    if(!isReverse)
-                        dstLayer->exTop = bar;
-                    else
-                        dstLayer->exBottom = bar;
-                }
+                  
+
                 bar = _contextAnchor->fbHeight - dstHeight;
                 if((dstWidth==_contextAnchor->fbWidth) && (bar>0) && (bar<100)) {
                     if (!isReverse) {
@@ -1085,14 +1107,9 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
                     }
                     dstHeight += bar;
                 }
-            } else {
-               bar = dstWidth - (dstLayer->displayFrame.right - dstLayer->displayFrame.left);
-                if(bar > 0) {
-                    if (!isReverse)
-                        dstLayer->exRight= bar;
+                } 
                     else
-                        dstLayer->exLeft = bar;
-                }
+                {                        
                 bar = _contextAnchor->fbWidth - dstWidth;
                 if((dstHeight==_contextAnchor->fbHeight) && (bar>0) && (bar<100)) {
                     if (!isReverse) {
@@ -1103,7 +1120,7 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
                     }
                 }
             }
-
+            }
             hwc_rect_t const * srcVR = srcLayer->visibleRegionScreen.rects;
             hwc_rect_t const * dstVR = dstLayer->visibleRegionScreen.rects;
 
@@ -1160,6 +1177,12 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
             {
                // DstBuferIndex = -1;
                 ALOGV("[%d,%d,%d,%d],[%d,%d]",x_off,y_off,act_dstwidth,act_dstheight,dstStride,dstHeight);
+                list->hwLayers[DstBuferIndex].exLeft= 0;
+                list->hwLayers[DstBuferIndex].exTop = 0;
+                list->hwLayers[DstBuferIndex].exRight = 0;
+                list->hwLayers[DstBuferIndex].exBottom = 0;
+                list->hwLayers[DstBuferIndex].exAddrOffset = 0;
+                list->hwLayers[DstBuferIndex].direct_addr = 0;
                 continue;
  
             }
@@ -1174,6 +1197,12 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
                 handle_cur = (struct private_handle_t *)dstLayer->handle;
                 break;
             }
+            list->hwLayers[DstBuferIndex].exLeft= 0;
+            list->hwLayers[DstBuferIndex].exTop = 0;
+            list->hwLayers[DstBuferIndex].exRight = 0;
+            list->hwLayers[DstBuferIndex].exBottom = 0;
+            list->hwLayers[DstBuferIndex].exAddrOffset = 0;
+            list->hwLayers[DstBuferIndex].direct_addr = 0;
         }
 
         if(ComposerIndex == 2) // first find ,store
@@ -1279,13 +1308,13 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
         }
     }
 
-#if 0
+#if 1
     // Check Aligned
     {
         int TotalSize = 0;
         int32_t bpp ;
         bool  IsLarge = false;
-
+        int DstLayerIndex;
         for(int i = 0; i < 2; i++)
         {
             hwc_layer_1_t *dstLayer = &(list->hwLayers[i]);
@@ -1302,9 +1331,9 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
         {
             IsLarge = true;
         }
-        for(DstBuferIndex = 1; DstBuferIndex >=0; DstBuferIndex--)
+        for(DstLayerIndex = 1; DstLayerIndex >=0; DstLayerIndex--)
         {
-            hwc_layer_1_t *dstLayer = &(list->hwLayers[DstBuferIndex]);
+            hwc_layer_1_t *dstLayer = &(list->hwLayers[DstLayerIndex]);
 
             hwc_rect_t * DstRect = &(dstLayer->displayFrame);
             hwc_rect_t * SrcRect = &(dstLayer->sourceCrop);
@@ -1335,7 +1364,7 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
 
 
             LOGV("[%d]=%s,IsLarge=%d,dstStride=%d,xoffset=%d,exAddrOffset=%d,bpp=%d,dstPhysical=%x",
-                DstBuferIndex,list->hwLayers[DstBuferIndex].LayerName,
+                DstLayerIndex,list->hwLayers[DstLayerIndex].LayerName,
                 IsLarge, dstStride,xoffset,dstLayer->exAddrOffset,bpp,dstPhysical);
             if( IsLarge &&
                 ((dstStride * bpp) % 128 || (xoffset * bpp + dstLayer->exAddrOffset) % 128)
@@ -1347,17 +1376,43 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
 
 
         }
+        if (DstLayerIndex >= 0)     goto BackToGPU;        
     }
     // there isn't suitable dstLayer to copy, use gpu compose.
-    if (DstBuferIndex >= 0)     goto BackToGPU;
 #endif
 
     // Realy Blit
    // ALOGD("RgaCnt=%d",RgaCnt);
+    IsDiff = handle_cur != bkupmanage.handle_bk \
+            || handle_cur->phy_addr != bkupmanage.bkupinfo[0].buf_addr ; 
+    if(!IsDiff && bkupmanage.crrent_dis_addr != bkupmanage.direct_addr)  // restore from current display buffer         
+    {
+        hwbkupinfo cpyinfo;
+        ALOGV("bkupmanage.invalid=%d",bkupmanage.invalid);
+        if(bkupmanage.invalid)
+        {
+            cpyinfo.pmem_bk = bkupmanage.bkupinfo[0].buf_addr;
+            cpyinfo.buf_addr = bkupmanage.direct_addr;
+            cpyinfo.xoffset = 0;
+            cpyinfo.yoffset = 0;
+            cpyinfo.w_vir = bkupmanage.bkupinfo[0].w_vir;        
+            cpyinfo.h_vir = bkupmanage.bkupinfo[0].h_vir;
+            cpyinfo.w_act = bkupmanage.bkupinfo[0].w_vir;        
+            cpyinfo.h_act = bkupmanage.bkupinfo[0].h_vir;
+            cpyinfo.format = bkupmanage.bkupinfo[0].format;
+            CopyBuffByRGA(&cpyinfo);
+            bkupmanage.invalid = 0;
+        }    
+        list->hwLayers[DstBuferIndex].direct_addr = bkupmanage.direct_addr;
+        dst_bk_ddr = bkupmanage.crrent_dis_addr = bkupmanage.direct_addr;
+        for(int i=0; i<RgaCnt; i++)
+        {
+            Rga_Request[i].dst.yrgb_addr = bkupmanage.direct_addr;
+        }
+    }
     for(int i=0; i<RgaCnt; i++) {
 
-        if(handle_cur != bkupmanage.handle_bk 
-            && handle_cur->phy_addr != bkupmanage.bkupinfo[i].buf_addr ) // backup the dstbuff        
+        if(IsDiff) // backup the dstbuff        
         {
             bkupmanage.bkupinfo[i].format = Rga_Request[i].dst.format;
             bkupmanage.bkupinfo[i].buf_addr = Rga_Request[i].dst.yrgb_addr;
@@ -1368,15 +1423,21 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
             bkupmanage.bkupinfo[i].h_vir = Rga_Request[i].dst.vir_h;            
             bkupmanage.bkupinfo[i].w_act = Rga_Request[i].dst.act_w;
             bkupmanage.bkupinfo[i].h_act = Rga_Request[i].dst.act_h;  
-            if(i ==0)
+            if(!i)
+            {
                 backcout = 0;
+                bkupmanage.crrent_dis_addr =  bkupmanage.bkupinfo[i].buf_addr;
+                bkupmanage.invalid = 1;
+            }    
             backcout ++;
             backupbuffer(&bkupmanage.bkupinfo[i]);
 
         }
         else if(i<bkupmanage.count) // restore the dstbuff
         {
-            restorebuffer(&bkupmanage.bkupinfo[i]);
+            restorebuffer(&bkupmanage.bkupinfo[i],dst_bk_ddr);
+            if(!dst_bk_ddr && !i )
+                bkupmanage.crrent_dis_addr =  bkupmanage.bkupinfo[i].buf_addr;
         }
         uint32_t RgaFlag = (i==(RgaCnt-1)) ? RGA_BLIT_SYNC : RGA_BLIT_ASYNC;
         if(ioctl(_contextAnchor->engine_fd, RgaFlag, &Rga_Request[i]) != 0) {
@@ -1837,7 +1898,7 @@ hwc_set(
 
 
     /* Prepare. */
-    for (i = 0; i < list->numHwLayers-1; i++)
+    for (i = 0; i < (list->numHwLayers-1); i++)
     {
         /* Check whether this composition can be handled by hwcomposer. */
         if (list->hwLayers[i].compositionType >= HWC_BLITTER)
@@ -2146,7 +2207,7 @@ hwc_set(
                         eglSwapBuffers((EGLDisplay) dpy, (EGLSurface) surf);
                     }
                 }*/
-
+ 			 	hwc_sync_release(list);
                 return hwcSTATUS_OK;
             }
 
@@ -2833,15 +2894,17 @@ hwc_device_open(
     }
 #ifdef USE_LCDC_COMPOSER
     memset(&bkupmanage,0,sizeof(hwbkupmanage));
-    ion_open(fixInfo.line_length * context->fbHeight, ION_MODULE_UI, &context->rk_ion_device);
-	rel = context->rk_ion_device->alloc(context->rk_ion_device, fixInfo.line_length * context->fbHeight ,_ION_HEAP_RESERVE, &context->pion);
+    ion_open(fixInfo.line_length * context->fbHeight * 2, ION_MODULE_UI, &context->rk_ion_device);
+	rel = context->rk_ion_device->alloc(context->rk_ion_device, fixInfo.line_length * context->fbHeight*2 ,_ION_HEAP_RESERVE, &context->pion);
 	if (!rel)
 	{
-        for(int i=0;i<bakupbufsize;i++)
+	    int i;
+        for(i=0;i<bakupbufsize;i++)
         {
             bkupmanage.bkupinfo[i].pmem_bk = context->pion->phys + (fixInfo.line_length * context->fbHeight/4)*i;
             bkupmanage.bkupinfo[i].pmem_bk_log = (void*)((int)context->pion->virt + (fixInfo.line_length * context->fbHeight/4)*i);
         }
+        bkupmanage.direct_addr = context->pion->phys + (fixInfo.line_length * context->fbHeight/4)*i;
 	}
 	else
 	{

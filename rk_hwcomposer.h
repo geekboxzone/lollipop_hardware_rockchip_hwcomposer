@@ -119,6 +119,9 @@ hwbkupinfo;
 typedef struct _hwbkupmanage
 {
     int count;
+    unsigned int direct_addr;
+    int invalid;
+    unsigned int crrent_dis_addr;
     hwbkupinfo bkupinfo[bakupbufsize];
     struct private_handle_t *handle_bk;
 }

@@ -1079,6 +1079,11 @@ hwcLayerToWin(
     {
         Context->ippDev->ipp_rotate_and_scale(srchnd,Src->transform,videodata);
 	}
+    else if( Src->direct_addr)
+    {
+	    videodata[0]= Src->direct_addr;
+	    videodata[1]=  Src->direct_addr + srcHeight * srcStride;
+    }
     else
     {
 	    videodata[0]= srcPhysical;
