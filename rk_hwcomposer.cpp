@@ -172,7 +172,7 @@ void hwc_sync_release(hwc_display_contents_1_t  *list)
 {
   for (int i=0; i<list->numHwLayers-1; i++)
   {
-    ALOGD("close acquireFenceFd:%d",list->hwLayers[i].acquireFenceFd);
+    ALOGV("close acquireFenceFd:%d",list->hwLayers[i].acquireFenceFd);
     close(list->hwLayers[i].acquireFenceFd);
     list->hwLayers[i].acquireFenceFd = -1;
   }
@@ -439,9 +439,9 @@ _CheckLayer(
         ||(vfactor >1.0f)  // because rga scale down too slowly,so return to opengl ,huangds modify
         ||((hfactor <1.0f || vfactor <1.0f) && handle->format == HAL_PIXEL_FORMAT_RGBA_8888) // because rga scale up RGBA foramt not support
         #endif
-        ||((Layer->transform != 0)/*&&(!videoflag)*/)
+        ||((Layer->transform != 0)&&(!videoflag))
 #ifndef USE_LCDC_COMPOSER
-        ||(IsRk3188 && !(videoflag && Count <=2))
+        //||(IsRk3188 && !(videoflag && Count <=2))
         #endif
         || skip_count<5
         )
@@ -1410,7 +1410,6 @@ hwc_prepare(
     int new_value = 0;
     int videoflag = 0;
 
-
     hwc_display_contents_1_t* list = displays[0];  // ignore displays beyond the first
     /* Check device handle. */
     if (_contextAnchor == NULL
@@ -1746,7 +1745,7 @@ static int hwc_fbPost(hwc_composer_device_1_t * dev, size_t numDisplays, hwc_dis
         info.yoffset = offset/context->fbStride;
         if (ioctl(context->dpyAttr[i].fd, FBIOPUT_VSCREENINFO, &info) == -1)
         {
-
+             ALOGD("FBIOPUT_VSCREENINFO error.");
         }
         else
         {
