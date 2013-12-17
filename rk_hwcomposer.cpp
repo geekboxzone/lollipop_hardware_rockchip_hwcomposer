@@ -373,13 +373,14 @@ int rga_video_reset()
 {
   if (_contextAnchor->video_frame.vpu_handle)
   {
-    ALOGV(" rga_video_reset,%x",_contextAnchor->video_frame.vpu_handle);
+    ALOGD(" rga_video_reset,%x",_contextAnchor->video_frame.vpu_handle);
     memcpy((void*)_contextAnchor->video_frame.vpu_handle, 
-            (void*)&_contextAnchor->video_frame.vpu_frame,sizeof(tVPU_FRAME));     
-  }
-  tVPU_FRAME* p = (tVPU_FRAME*)_contextAnchor->video_frame.vpu_handle;
+            (void*)&_contextAnchor->video_frame.vpu_frame,sizeof(tVPU_FRAME));
+    tVPU_FRAME* p = (tVPU_FRAME*)_contextAnchor->video_frame.vpu_handle;
  // ALOGD("vpu,w=%d,h=%d",p->FrameWidth,p->FrameHeight);
-  _contextAnchor->video_frame.vpu_handle = 0;
+    _contextAnchor->video_frame.vpu_handle = 0;
+  }
+
   return 0;
 }
 #endif
@@ -1795,6 +1796,7 @@ hwc_set(
 
     hwc_display_contents_1_t* list = displays[0];  // ignore displays beyond the first
     hwc_sync(list);
+    rga_video_reset();
     if (list != NULL) {
         //dpy = list->dpy;
         //surf = list->sur;
@@ -2250,7 +2252,6 @@ hwc_set(
     //{
        // success = eglSwapBuffers((EGLDisplay) dpy, (EGLSurface) surf); 
 
-    rga_video_reset();
     hwc_sync_release(list);
 
     return 0; //? 0 : HWC_EGL_ERROR;
