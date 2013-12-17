@@ -172,7 +172,7 @@ void hwc_sync_release(hwc_display_contents_1_t  *list)
 {
   for (int i=0; i<list->numHwLayers-1; i++)
   {
-    ALOGD("close acquireFenceFd:%d",list->hwLayers[i].acquireFenceFd);
+    ALOGV("close acquireFenceFd:%d",list->hwLayers[i].acquireFenceFd);
     close(list->hwLayers[i].acquireFenceFd);
     list->hwLayers[i].acquireFenceFd = -1;
   }
