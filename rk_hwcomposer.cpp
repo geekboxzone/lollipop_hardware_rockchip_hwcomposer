@@ -373,7 +373,7 @@ int rga_video_reset()
 {
   if (_contextAnchor->video_frame.vpu_handle)
   {
-    ALOGD(" rga_video_reset,%x",_contextAnchor->video_frame.vpu_handle);
+    ALOGV(" rga_video_reset,%x",_contextAnchor->video_frame.vpu_handle);
     memcpy((void*)_contextAnchor->video_frame.vpu_handle, 
             (void*)&_contextAnchor->video_frame.vpu_frame,sizeof(tVPU_FRAME));
     tVPU_FRAME* p = (tVPU_FRAME*)_contextAnchor->video_frame.vpu_handle;
