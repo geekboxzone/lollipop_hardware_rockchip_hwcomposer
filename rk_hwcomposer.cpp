@@ -1875,9 +1875,16 @@ hwc_set(
     }
 
     /* Check layer list. */
-    if (list == NULL || list->numHwLayers == 0)
+    if (list == NULL 
+        || list->numHwLayers == 0)
     {
         /* Reset swap rectangles. */
+        return 0;
+    }
+
+    if(list->skipflag)
+    {
+        hwc_sync_release(list);
         return 0;
     }
 
@@ -2228,12 +2235,12 @@ hwc_set(
          success =  EGL_TRUE ;
         }
 #ifndef USE_LCDC_COMPOSER
-        display_commit(0,(struct private_handle_t *) fbBuffer->handle); 
+         display_commit(0,(struct private_handle_t *) fbBuffer->handle); 
 #endif
     }
     else
     {
-       hwc_fbPost(dev,numDisplays,displays);
+        hwc_fbPost(dev,numDisplays,displays);
     }
 
 #if hwcUseTime
