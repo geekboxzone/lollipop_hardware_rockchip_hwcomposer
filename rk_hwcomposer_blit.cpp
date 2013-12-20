@@ -1087,7 +1087,7 @@ hwcLayerToWin(
     else
     {
 	    videodata[0]= srcPhysical;
-	    videodata[1]= srcPhysical + srcHeight * srcStride;
+	    videodata[1]= srcPhysical + (srcHeight+SrcRect->top) * srcStride + SrcRect->left;
     }
 
     LOGV(" Src->transform=%d,SrcRect[%d,%d,%d,%d],DstRect[%d,%d,%d,%d]",Src->transform ,
