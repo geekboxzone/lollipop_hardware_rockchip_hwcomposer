@@ -1719,7 +1719,7 @@ static int display_commit( int dpy, private_handle_t*  handle)
     int sync = 1;
     ioctl(context->dpyAttr[0].fd, FBIOPUT_VSCREENINFO, &info);
     ioctl(context->dpyAttr[0].fd, RK_FBIOSET_CONFIG_DONE, &sync);
-    if ((context->hwc_ion.offset+context->lcdSize) > context->fbSize)
+    if ((context->hwc_ion.offset+context->lcdSize) >= context->fbSize)
     {
      context->hwc_ion.offset = 0; 
     }
@@ -2885,6 +2885,7 @@ hwc_device_open(
      {
         ALOGE("Ion alloc fail.");  
      }
+    context->hwc_ion.offset=0;
 #endif
     }
 
