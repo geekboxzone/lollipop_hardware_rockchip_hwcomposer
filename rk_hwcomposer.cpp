@@ -145,49 +145,42 @@ static int LayerZoneCheck( hwc_layer_1_t * Layer)
 
 void hwc_sync(hwc_display_contents_1_t  *list)
 {
-  for (int i=0; i<list->numHwLayers-1; i++)
+  if (list == NULL)
+  {
+    return ;
+  }
+  
+  for (int i=0; i<list->numHwLayers; i++)
   {
     sync_wait(list->hwLayers[i].acquireFenceFd,-1);
     ALOGV("fenceFd=%d,name=%s",list->hwLayers[i].acquireFenceFd,list->hwLayers[i].layerName);
   }
- #if 1
-  hwc_layer_1_t* layer = &list->hwLayers[list->numHwLayers-1];
-  if (layer == NULL)
-  {
-    return ;
-  }
-  if (layer->acquireFenceFd>0)
-  {
-    //int fbFenceFd = dup(layer.acquireFenceFd);
-    list->retireFenceFd = -1;//layer->acquireFenceFd;
-    close(layer->acquireFenceFd);
-    layer->acquireFenceFd = -1;
-  }
-  #endif
-
 }
 
 void hwc_sync_release(hwc_display_contents_1_t  *list)
 {
-  for (int i=0; i<list->numHwLayers-1; i++)
+  for (int i=0; i<list->numHwLayers; i++)
   {
-    ALOGV("close acquireFenceFd:%d",list->hwLayers[i].acquireFenceFd);
-    close(list->hwLayers[i].acquireFenceFd);
-    list->hwLayers[i].acquireFenceFd = -1;
+    hwc_layer_1_t* layer = &list->hwLayers[list->numHwLayers-1];
+    if (layer == NULL)
+    {
+      return ;
+    }
+    if (layer->acquireFenceFd>0)
+    {
+      ALOGV(">>>close acquireFenceFd:%d,layername=%s",layer->acquireFenceFd,layer->LayerName);
+      close(layer->acquireFenceFd);
+      list->hwLayers[i].acquireFenceFd = -1;
+    }
   }
-#if 1
-  hwc_layer_1_t* layer = &list->hwLayers[list->numHwLayers-1];
-  if (layer == NULL)
+
+  if (list->outbufAcquireFenceFd>0)
   {
-    return ;
+    ALOGD(">>>close outbufAcquireFenceFd:%d",list->outbufAcquireFenceFd);
+    close(list->outbufAcquireFenceFd);
+    list->outbufAcquireFenceFd = -1;
   }
-  if (layer->acquireFenceFd>0)
-  {
-    //int fbFenceFd = dup(layer.acquireFenceFd);
-    close(layer->acquireFenceFd);
-    layer->acquireFenceFd = -1;
-  }
-#endif
+  
 }
 #if 1
 static int layer_seq = 0;
@@ -2321,7 +2314,13 @@ hwc_set(
        // success = eglSwapBuffers((EGLDisplay) dpy, (EGLSurface) surf); 
 
     hwc_sync_release(list);
-
+    {
+     hwc_display_contents_1_t* list_wfd = displays[HWC_DISPLAY_VIRTUAL];
+     if (list_wfd)
+     {
+       hwc_sync_release(list_wfd);
+     }
+    }
     return 0; //? 0 : HWC_EGL_ERROR;
 OnError:
     /* Error rollback */
