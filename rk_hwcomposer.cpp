@@ -199,17 +199,13 @@ int rga_video_copybit(struct private_handle_t *src_handle,
     {
       return -1;
     }
-        
-#ifdef TARGET_BOARD_PLATFORM_RK30XXB
-	pFrame = (tVPU_FRAME *)src_handle->iBase;
-#else
-	pFrame = (tVPU_FRAME *)src_handle->base;
-#endif
+    struct private_handle_t *handle = src_handle;
+    pFrame = (tVPU_FRAME *)GPU_BASE;
 
     //backup video
     memset(&_contextAnchor->video_frame, 0, sizeof(_contextAnchor->video_frame));
-    _contextAnchor->video_frame.vpu_handle = (void*)src_handle->base;
-    memcpy(&_contextAnchor->video_frame.vpu_frame,(void*)src_handle->base,sizeof(tVPU_FRAME));
+    _contextAnchor->video_frame.vpu_handle = (void*)GPU_BASE;
+    memcpy(&_contextAnchor->video_frame.vpu_frame,(void*)GPU_BASE,sizeof(tVPU_FRAME));
     
 	memset(&rga_cfg,0x0,sizeof(rga_req));
 
@@ -239,20 +235,11 @@ int rga_video_copybit(struct private_handle_t *src_handle,
 
 
 
-#ifdef TARGET_BOARD_PLATFORM_RK30XXB
- 	rga_cfg.dst.yrgb_addr = src_handle->iBase; //dsthandle->base;//(int)(fixInfo.smem_start + dsthandle->offset);
-   	rga_cfg.dst.vir_w =   (src_handle->iWidth + 31) & ~31;//((srcandle->iWidth*2 + (8-1)) & ~(8-1))/2 ;  /* 2:RK_FORMAT_RGB_565 ,8:????*///srcandle->width;
-    rga_cfg.dst.vir_h =  src_handle->iHeight;
-	rga_cfg.dst.act_w = src_handle->iWidth;//Rga_Request.dst.vir_w;
-	rga_cfg.dst.act_h = src_handle->iHeight;//Rga_Request.dst.vir_h;
-#else
-	rga_cfg.dst.yrgb_addr = src_handle->base; //dsthandle->base;//(int)(fixInfo.smem_start + dsthandle->offset);
-   	rga_cfg.dst.vir_w =   ((src_handle->width*2 + (8-1)) & ~(8-1))/2 ;  /* 2:RK_FORMAT_RGB_565 ,8:????*///srcandle->width;
-    rga_cfg.dst.vir_h = src_handle->height;
-	rga_cfg.dst.act_w = src_handle->width;//Rga_Request.dst.vir_w;
-	rga_cfg.dst.act_h = src_handle->height;//Rga_Request.dst.vir_h;
-#endif
-
+ 	rga_cfg.dst.yrgb_addr = GPU_BASE; //dsthandle->base;//(int)(fixInfo.smem_start + dsthandle->offset);
+   	rga_cfg.dst.vir_w =   (GPU_WIDTH + 31) & ~31;//((srcandle->iWidth*2 + (8-1)) & ~(8-1))/2 ;  /* 2:RK_FORMAT_RGB_565 ,8:????*///srcandle->width;
+    rga_cfg.dst.vir_h =  GPU_HEIGHT;
+	rga_cfg.dst.act_w = GPU_WIDTH;//Rga_Request.dst.vir_w;
+	rga_cfg.dst.act_h = GPU_HEIGHT;//Rga_Request.dst.vir_h;
     rga_cfg.dst.uv_addr  = 0;//Rga_Request.dst.yrgb_addr + (( srcandle->width + 15) & ~15) * ((srcandle->height + 15) & ~15);
     rga_cfg.dst.v_addr   = rga_cfg.dst.uv_addr;
     //Rga_Request.dst.format = RK_FORMAT_RGB_565;
@@ -427,11 +414,11 @@ _CheckLayer(
         #ifndef USE_LCDC_COMPOSER
         ||(hfactor >1.0f)  // because rga scale down too slowly,so return to opengl  ,huangds modify
         ||(vfactor >1.0f)  // because rga scale down too slowly,so return to opengl ,huangds modify
-        ||((hfactor <1.0f || vfactor <1.0f) && handle->format == HAL_PIXEL_FORMAT_RGBA_8888) // because rga scale up RGBA foramt not support
+        ||((hfactor <1.0f || vfactor <1.0f) &&(handle && GPU_FORMAT == HAL_PIXEL_FORMAT_RGBA_8888)) // because rga scale up RGBA foramt not support
         #endif
         ||((Layer->transform != 0)/*&&(!videoflag)*/)
 #ifndef USE_LCDC_COMPOSER
-        ||( Context->IsRk3188 && !(videoflag && Count <=2))
+        ||(Context->IsRk3188 && !(videoflag && Count <=2))
         #endif
         || skip_count<5
         )
@@ -573,8 +560,8 @@ _CheckLayer(
             /*    ----end  ----*/
         }
         #else
-        if( (handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO && Count <= 2 && getHdmiMode()==0) 
-           || (handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO && Count == 3 && getHdmiMode()==0 && strstr(list->hwLayers[Count - 2].LayerName, "SystemBar"))
+        if( (GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO && Count <= 2 && getHdmiMode()==0) 
+           || (GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO && Count == 3 && getHdmiMode()==0 && strstr(list->hwLayers[Count - 2].LayerName, "SystemBar"))
           )
         {
           /*if (strstr(list->hwLayers[Count - 1].LayerName, "android.rk.RockVideoPlayer")
@@ -594,7 +581,7 @@ _CheckLayer(
         }
         #endif
 
-        if( (handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
+        if( (GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
            )
         //if( handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO )
         {
@@ -1734,14 +1721,14 @@ hwc_prepare(
 
     for (i = 0; i < (list->numHwLayers - 1); i++)
     {
-        struct private_handle_t * handle_pre = (struct private_handle_t *) list->hwLayers[i].handle;
+        struct private_handle_t * handle = (struct private_handle_t *) list->hwLayers[i].handle;
 
         if( ( list->hwLayers[i].flags & HWC_SKIP_LAYER)
-            ||(handle_pre == NULL)
+            ||(handle == NULL)
            )
             break;
 
-        if( handle_pre->format == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO )
+        if( GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
         {
             videoflag = 1;
             break;
@@ -1778,11 +1765,11 @@ hwc_prepare(
         {
             list->hwLayers[j].compositionType = HWC_FRAMEBUFFER;
             struct private_handle_t * handle = (struct private_handle_t *)list->hwLayers[j].handle;
-            if (handle && handle->format==HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
+            if (handle && GPU_FORMAT==HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
             {
                ALOGV("rga_video_copybit,%x,w=%d,h=%d",\
-                      handle->base,handle->width,handle->height);
-               if (!context->video_frame.vpu_handle)
+                      GPU_BASE,GPU_WIDTH,GPU_HEIGHT);
+               if (!_contextAnchor->video_frame.vpu_handle)
                {
                   rga_video_copybit(handle,handle);
                }
@@ -2159,7 +2146,7 @@ hwc_set(
                 LOGE("%s(%d):Get back buffer handle =NULL.", __FUNCTION__, __LINE__);
                 hwcONERROR(hwcSTATUS_INVALID_ARGUMENT);
             }
-
+            struct private_handle_t *handle = fbhandle;
 #if ENABLE_HWC_WORMHOLE
             /* Reset allocated areas. */
             if (context->compositionArea != NULL)
@@ -2171,8 +2158,8 @@ hwc_set(
 
             FbRect.left = 0;
             FbRect.top = 0;
-            FbRect.right = fbhandle->width;
-            FbRect.bottom = fbhandle->height;
+            FbRect.right = GPU_WIDTH;
+            FbRect.bottom = GPU_HEIGHT;
 
             /* Generate new areas. */
             /* Put a no-owner area with screen size, this is for worm hole,
@@ -2326,7 +2313,7 @@ hwc_set(
 
         case HWC_TOWIN0:
             {
-                struct private_handle_t * lyhandle = NULL;
+                struct private_handle_t * handle = NULL;
                 LOGV("%s(%d):Layer %d is HWC_TOWIN0", __FUNCTION__, __LINE__, i);
 
                 fbBuffer = (android_native_buffer_t *)
@@ -2341,7 +2328,7 @@ hwc_set(
 
                 /* Get gc buffer handle. */
                 fbhandle = (struct private_handle_t *)fbBuffer->handle;
-                lyhandle = (struct private_handle_t *)list->hwLayers[i].handle;
+                handle = (struct private_handle_t *)list->hwLayers[i].handle;
                 hwcONERROR(
                     hwcLayerToWin(context,
                             &list->hwLayers[i],
@@ -2353,10 +2340,8 @@ hwc_set(
                             0
                             ));
 
-                if((list->numHwLayers - 1) == 1 || i == 1 || lyhandle->format == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
+                if((list->numHwLayers - 1) == 1 || i == 1 || GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
                 {
-                    hwc_sync_release(list);
-                
                     ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &sync);
                     if( context->fbFd1 > 0 )
                     {
@@ -2368,6 +2353,7 @@ hwc_set(
                             context->fb1_cflag = false;
                         }
                     }
+                    hwc_sync_release(list);
                     return hwcSTATUS_OK;
                 }
 
@@ -2431,7 +2417,6 @@ hwc_set(
             if((list->numHwLayers == 1) || i == 1)
             {
                 sync = 1; 
- 			 	hwc_sync_release(list);                
                 ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &sync);
 
                 /*
@@ -2440,6 +2425,7 @@ hwc_set(
                         eglSwapBuffers((EGLDisplay) dpy, (EGLSurface) surf);
                     }
                 }*/
+ 			 	hwc_sync_release(list);
                 return hwcSTATUS_OK;
             }
 

@@ -60,13 +60,14 @@ hwcLockBuffer(
     unsigned int height;
     unsigned int stride;
 	int bpp,bpr;
+    struct private_handle_t * handle = Handle;
 #ifndef TARGET_BOARD_PLATFORM_RK30XXB    	
 	stride = Handle->stride;	
 #else
-    stride = gcmALIGN(Handle->width,32);
+    stride = gcmALIGN(GPU_WIDTH,32);
 #endif	   
-   	width  = Handle->width ;
-    height = Handle->height;
+   	width  = GPU_WIDTH ;
+    height = GPU_HEIGHT;
     
 	//LOGD(" Handle->width=%d,width=%d",Handle->width,width);
     
@@ -119,9 +120,9 @@ hwcLockBuffer(
             }
 
 #ifndef TARGET_BOARD_PLATFORM_RK30XXB    
-            *Logical       = (void *) Handle->base;
+            *Logical       = (void *) GPU_BASE;
 #else
-            *Logical       = (void *) Handle->iBase;
+            *Logical       = (void *) GPU_BASE;
 #endif
             *Physical      = (unsigned int) (Context->fbPhysical + Handle->offset)
                                         - Context->baseAddress;
@@ -157,7 +158,7 @@ hwcLockBuffer(
            
 			
 #ifndef TARGET_BOARD_PLATFORM_RK30XXB    			
-            *Logical       = (void *) Handle->base;
+            *Logical       = (void *) GPU_BASE;
 #else
 	 		const gralloc_module_t * module;
             void * vaddr = NULL;
@@ -175,7 +176,7 @@ hwcLockBuffer(
                     &vaddr);
 
             module->unlock(module, (buffer_handle_t)Handle);
-            *Logical       = (void *) Handle->iBase;
+            *Logical       = (void *) GPU_BASE;
 #endif
 			#ifdef USE_LCDC_COMPOSER
             *Physical      =  Handle->phy_addr;//Context->fbPhysical;//Handle->phy_addr; ; // debug
@@ -190,7 +191,7 @@ hwcLockBuffer(
 
             /* Flush cache. */
 
-			if(Handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
+			if(GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
 			{
 #ifndef TARGET_BOARD_PLATFORM_RK30XXB    						
 				tVPU_FRAME *pFrame = (tVPU_FRAME *)Handle->base;
@@ -232,10 +233,11 @@ hwcGetFormat(
     
     )
 {
+    struct private_handle_t *handle = Handle;
     if (Format != NULL)
     {
     	
-        switch (Handle->format)
+        switch (GPU_FORMAT)
         {
         case HAL_PIXEL_FORMAT_RGB_565:
             *Format = RK_FORMAT_RGB_565;

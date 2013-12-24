@@ -25,11 +25,18 @@
 #endif
 
 #ifdef TARGET_BOARD_PLATFORM_RK30XXB
- struct private_handle_t;
+ #define GPU_BASE    handle->iBase
+ #define GPU_WIDTH   handle->iWidth
+ #define GPU_HEIGHT  handle->iHeight
+ #define GPU_FORMAT  handle->iFormat
+ #define GPU_DST_FORMAT  DstHandle->iFormat
  #define private_handle_t IMG_native_handle_t
- #define format iFormat
- #define width iWidth
- #define height iHeight
+#else
+ #define GPU_BASE    handle->base
+ #define GPU_WIDTH   handle->width
+ #define GPU_HEIGHT  handle->height
+ #define GPU_FORMAT  handle->format
+ #define GPU_DST_FORMAT  DstHandle->format
 #endif
 
 extern "C" {

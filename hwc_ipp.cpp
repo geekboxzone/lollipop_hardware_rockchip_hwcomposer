@@ -136,7 +136,7 @@ static int ipp_set_req(struct private_handle_t *handle, int tranform, struct rk2
 #endif
 	int width = pVideo->width;
 	int height = pVideo->height;
-	int format = handle->format; 
+	int format = GPU_FORMAT; 
 	int rot = tranform;
 	int ipp_format = ipp_get_format(format);
 	int ipp_rot = ipp_get_rot(rot);

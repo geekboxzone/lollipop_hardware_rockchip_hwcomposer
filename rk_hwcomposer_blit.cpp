@@ -169,8 +169,8 @@ hwcBlit(
     unsigned char   scale_mode = 1;
     unsigned char   dither_en = 0;
 
-
-    dither_en = android::bytesPerPixel(srchnd->format) ==  android::bytesPerPixel(DstHandle->format) ? 0 :1;
+    struct private_handle_t* handle = srchnd;
+    dither_en = android::bytesPerPixel(GPU_FORMAT) == android::bytesPerPixel(GPU_DST_FORMAT) ? 0 :1;
     LOGV(" hwcBlit start--->");
 
     LOGI("layer src w-h[%d,%d]",srchnd->width,srchnd->height);
@@ -232,7 +232,7 @@ hwcBlit(
     
     dstPhysical = Context->hwc_ion.pion->phys+Context->hwc_ion.offset;
 
-    if(srchnd->format ==  HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
+    if(GPU_FORMAT ==  HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
     {
         srcLogical = (void*)(srcPhysical + 0x60000000);
         dstLogical = (void*)(dstPhysical + 0x60000000);
@@ -1057,10 +1057,10 @@ hwcLayerToWin(
     int fbFd = Win ? Context->fbFd1 : Context->fbFd;
 
     struct private_handle_t* srchnd = (struct private_handle_t *) Src->handle;
-
+    struct private_handle_t* handle = srchnd;
     LOGV(" hwcBlit start--->");
 
-    LOGV("hwcLayerToWin%d layer src w-h[%d,%d], f[%d]",Win,srchnd->width,srchnd->height,srchnd->format);
+    LOGV("hwcLayerToWin%d layer src w-h[%d,%d], f[%d]",Win,GPU_WIDTH,GPU_HEIGHT,GPU_FORMAT);
     /* >>> Begin surface information. */
     hwcONERROR(
         hwcLockBuffer(Context,
@@ -1075,7 +1075,7 @@ hwcLayerToWin(
     //videodata[1]= videodata[0]= srcPhysical - srcHeight * srcStride;
 
     //videodata[1]= videodata[0]= srcPhysical ;
-    if (srchnd->format == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO && Src->transform!=0 && Context->ippDev!=NULL)
+    if (GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO && Src->transform!=0 && Context->ippDev!=NULL)
     {
         Context->ippDev->ipp_rotate_and_scale(srchnd,Src->transform,videodata);
 	}
@@ -1252,12 +1252,12 @@ hwcLayerToWin(
 
         info.activate = FB_ACTIVATE_NOW;
         info.nonstd &= 0x00;
-        if( srchnd->format == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
+        if( GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
             info.nonstd |= HAL_PIXEL_FORMAT_YCrCb_NV12;
-        else if( Index == 0 && srchnd->format == HAL_PIXEL_FORMAT_RGBA_8888)
+        else if( Index == 0 && GPU_FORMAT == HAL_PIXEL_FORMAT_RGBA_8888)
             info.nonstd |= HAL_PIXEL_FORMAT_RGBX_8888;
         else
-            info.nonstd |= srchnd->format;//HAL_PIXEL_FORMAT_YCrCb_NV12;//HAL_PIXEL_FORMAT_RGB_565
+            info.nonstd |= GPU_FORMAT;//HAL_PIXEL_FORMAT_YCrCb_NV12;//HAL_PIXEL_FORMAT_RGB_565
         info.grayscale &= 0xff;
 
         LOGV("hwcLayerToWin%d: src[%d,%d,%d,%d], dst[%d,%d,%d,%d], src_ex[%d,%d,%d,%d] %d", Win,

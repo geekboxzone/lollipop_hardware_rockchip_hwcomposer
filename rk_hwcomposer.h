@@ -42,6 +42,21 @@
 #define USE_HW_VSYNC        1
 #define FBIOSET_OVERLAY_STATE     	0x5018
 #define bakupbufsize 4
+
+#ifdef TARGET_BOARD_PLATFORM_RK30XXB
+ #define GPU_BASE    handle->iBase
+ #define GPU_WIDTH   handle->iWidth
+ #define GPU_HEIGHT  handle->iHeight
+ #define GPU_FORMAT  handle->iFormat
+ #define GPU_DST_FORMAT  DstHandle->iFormat
+ #define private_handle_t IMG_native_handle_t
+#else
+ #define GPU_BASE    handle->base
+ #define GPU_WIDTH   handle->width
+ #define GPU_HEIGHT  handle->height
+ #define GPU_FORMAT  handle->format
+ #define GPU_DST_FORMAT  DstHandle->format
+#endif
 /* Set it to 1 to enable swap rectangle optimization;
  * Set it to 0 to disable. */
 /* Set it to 1 to enable pmem cache flush.
@@ -54,13 +69,6 @@
 extern "C" {
 #endif
 
-struct private_handle_t;
-#ifdef TARGET_BOARD_PLATFORM_RK30XXB
-#define private_handle_t IMG_native_handle_t
-#define format iFormat
-#define width iWidth
-#define height iHeight
-#endif
 
 #if PLATFORM_SDK_VERSION >= 17
 
@@ -120,10 +128,7 @@ typedef struct _hwbkupmanage
 {
     int count;
     unsigned int direct_addr;
-    void* direct_addr_log;    
     int invalid;
-    int needrev;
-    int dstwinNo;
     unsigned int crrent_dis_addr;
     hwbkupinfo bkupinfo[bakupbufsize];
     struct private_handle_t *handle_bk;
