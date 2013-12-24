@@ -2355,6 +2355,8 @@ hwc_set(
 
                 if((list->numHwLayers - 1) == 1 || i == 1 || lyhandle->format == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
                 {
+                    hwc_sync_release(list);
+                
                     ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &sync);
                     if( context->fbFd1 > 0 )
                     {
@@ -2366,7 +2368,6 @@ hwc_set(
                             context->fb1_cflag = false;
                         }
                     }
-                    hwc_sync_release(list);
                     return hwcSTATUS_OK;
                 }
 
@@ -2430,6 +2431,7 @@ hwc_set(
             if((list->numHwLayers == 1) || i == 1)
             {
                 sync = 1; 
+ 			 	hwc_sync_release(list);                
                 ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &sync);
 
                 /*
@@ -2438,7 +2440,6 @@ hwc_set(
                         eglSwapBuffers((EGLDisplay) dpy, (EGLSurface) surf);
                     }
                 }*/
- 			 	hwc_sync_release(list);
                 return hwcSTATUS_OK;
             }
 
