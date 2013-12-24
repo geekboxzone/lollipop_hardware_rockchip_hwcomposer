@@ -397,13 +397,10 @@ _CheckLayer(
     float hfactor = 1;
     float vfactor = 1;
     char pro_value[PROPERTY_VALUE_MAX];
-    bool IsRk3188 = false;
     (void) Context;
     (void) Count;
     (void) Index;
 
-    property_get("ro.rk.soc",pro_value,"0");
-    IsRk3188 = !strcmp(pro_value,"rk3188");
     if(!videoflag)
     {
 
@@ -434,7 +431,7 @@ _CheckLayer(
         #endif
         ||((Layer->transform != 0)/*&&(!videoflag)*/)
 #ifndef USE_LCDC_COMPOSER
-        ||(IsRk3188 && !(videoflag && Count <=2))
+        ||( Context->IsRk3188 && !(videoflag && Count <=2))
         #endif
         || skip_count<5
         )
@@ -822,6 +819,7 @@ hwcDumpArea(
  
 //extern "C" void *blend(uint8_t *dst, uint8_t *src, int dst_w, int src_w, int src_h);
 
+#ifdef USE_LCDC_COMPOSER
     
 
 static int backupbuffer(hwbkupinfo *pbkupinfo)
@@ -949,6 +947,140 @@ static int  CopyBuffByRGA (hwbkupinfo *pcpyinfo)
         LOGE(" %s(%d) RGA_BLIT fail",__FUNCTION__, __LINE__);
     }
         
+    return 0; 
+}
+static int
+hwc_buff_recover(    
+    hwc_display_contents_1_t* list,
+    int gpuflag
+    )
+{
+    int LcdCont;
+    hwbkupinfo cpyinfo;
+    int i;
+    hwcContext * context = _contextAnchor;
+    unsigned int  videodata[2];
+    struct fb_var_screeninfo info;
+    int sync = 1;
+    bool IsDispDirect = bkupmanage.crrent_dis_addr == bkupmanage.direct_addr;
+    int fbFd = bkupmanage.dstwinNo ? context->fbFd1 : context->fbFd;
+    int needrev = 0;
+    ALOGV("fd=%d,bkupmanage.dstwinNo=%d",fbFd,bkupmanage.dstwinNo);
+    if (context == NULL )
+    {
+        LOGE("%s(%d):Invalid device!", __FUNCTION__, __LINE__);
+        return HWC_EGL_ERROR;
+    }
+    if(!gpuflag)
+    {
+        if( (list->numHwLayers - 1) <= 2
+            || !fbFd)
+        {
+            return 0;
+        }
+        LcdCont = 0;
+        for(  i= 0; i < (list->numHwLayers - 1) ; i++)
+        {
+            if(list->hwLayers[i].compositionType == HWC_TOWIN0 |
+                list->hwLayers[i].compositionType == HWC_TOWIN1
+               )
+            {
+                LcdCont ++;
+            }
+        }
+        if( LcdCont != 2)
+        {
+            return 0;   // dont need recover
+        }
+    }
+    for (i = 0; i < (list->numHwLayers - 1) && i< 2; i++)
+    {
+        struct private_handle_t * handle = (struct private_handle_t *) list->hwLayers[i].handle;
+        if( ( list->hwLayers[i].flags & HWC_SKIP_LAYER)
+            ||(handle == NULL)
+           )
+            continue;
+        if( handle == bkupmanage.handle_bk && \
+            handle->phy_addr == bkupmanage.bkupinfo[0].buf_addr )
+        {
+            ALOGD(" handle->phy_addr==bkupmanage ,name=%s",list->hwLayers[i].LayerName);
+            needrev = 1;
+            break;
+        }
+    }
+    if(!needrev)  
+        return 0;
+    if(!IsDispDirect)
+    {
+        cpyinfo.pmem_bk = bkupmanage.bkupinfo[bkupmanage.count -1].buf_addr;
+        cpyinfo.buf_addr = bkupmanage.direct_addr;
+        cpyinfo.xoffset = 0;
+        cpyinfo.yoffset = 0;
+        cpyinfo.w_vir = bkupmanage.bkupinfo[0].w_vir;        
+        cpyinfo.h_vir = bkupmanage.bkupinfo[0].h_vir;
+        cpyinfo.w_act = bkupmanage.bkupinfo[0].w_vir;        
+        cpyinfo.h_act = bkupmanage.bkupinfo[0].h_vir;
+        cpyinfo.format = bkupmanage.bkupinfo[0].format;
+        CopyBuffByRGA(&cpyinfo);
+        if(ioctl(context->engine_fd, RGA_FLUSH, NULL) != 0)
+        {
+            LOGE("%s(%d):RGA_FLUSH Failed!", __FUNCTION__, __LINE__);
+        }
+        videodata[0]= bkupmanage.direct_addr;
+        if (ioctl(fbFd, FBIOGET_VSCREENINFO, &info) == -1)
+        {
+            LOGE("%s(%d):  fd[%d] Failed", __FUNCTION__, __LINE__,context->fbFd1);
+            return -1;
+        }    
+        if (ioctl(fbFd, FB1_IOCTL_SET_YUV_ADDR, videodata) == -1)
+        {
+            LOGE("%s(%d):  fd[%d] Failed,DataAddr=%x", __FUNCTION__, __LINE__,context->fbFd1,videodata[0]);
+            return -1;
+        }
+        if (ioctl(fbFd, FBIOPUT_VSCREENINFO, &info) == -1)
+        {
+            LOGE("%s(%d):  fd[%d] Failed", __FUNCTION__, __LINE__,context->fbFd1);
+            return -1;
+        }
+        ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &sync);
+        bkupmanage.crrent_dis_addr =  bkupmanage.direct_addr;        
+    }
+    for(i = 0; i < bkupmanage.count;i++)
+    {    
+        restorebuffer(&bkupmanage.bkupinfo[i],0);
+    }
+    if(ioctl(context->engine_fd, RGA_FLUSH, NULL) != 0)
+    {
+        LOGE("%s(%d):RGA_FLUSH Failed!", __FUNCTION__, __LINE__);
+    }
+    return 0;
+}
+int
+hwc_layer_recover(
+    hwc_composer_device_1_t * dev,
+    size_t numDisplays,
+    hwc_display_contents_1_t** displays
+    )
+{
+    int LcdCont;
+    hwbkupinfo cpyinfo;
+    int i;
+    hwc_display_contents_1_t* list = displays[0];  // ignore displays beyond the first
+    hwc_buff_recover(list,0);  
+    return 0;
+}
+static int
+hwc_LcdcToGpu(
+    hwc_composer_device_1_t * dev,
+    size_t numDisplays,
+    hwc_display_contents_1_t** displays
+    )
+{
+    hwc_display_contents_1_t* list = displays[0];  // ignore displays beyond the first
+    if(!bkupmanage.needrev)
+        return 0;    
+    hwc_buff_recover(list,1); 
+    bkupmanage.needrev = 0;
     return 0; 
 }
 
@@ -1165,11 +1297,11 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
             x_off = list->hwLayers[ComposerIndex].displayFrame.left;
             y_off = list->hwLayers[ComposerIndex].displayFrame.top;
 
-            if((x_off + act_dstwidth) > dstStride 
+            if((x_off + act_dstwidth) > dstWidth 
                 || (y_off + act_dstheight ) > dstHeight ) // overflow zone
             {
                // DstBuferIndex = -1;
-                ALOGV("[%d,%d,%d,%d],[%d,%d]",x_off,y_off,act_dstwidth,act_dstheight,dstStride,dstHeight);
+                ALOGV("[%d,%d,%d,%d],[%d,%d]",x_off,y_off,act_dstwidth,act_dstheight,dstWidth,dstHeight);
                 list->hwLayers[DstBuferIndex].exLeft= 0;
                 list->hwLayers[DstBuferIndex].exTop = 0;
                 list->hwLayers[DstBuferIndex].exRight = 0;
@@ -1206,6 +1338,13 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
         if (DstBuferIndex < 0)      goto BackToGPU;
 
         // Remove the duplicate copies of bottom bar.
+        if(!(bkupmanage.dstwinNo == 0xff || bkupmanage.dstwinNo == DstBuferIndex) )
+        {
+            ALOGW(" last and current frame is not the win,[%d - %d]",bkupmanage.dstwinNo,DstBuferIndex);
+            goto BackToGPU;
+        }    
+        if(srcFormat == RK_FORMAT_YCbCr_420_SP)
+            goto BackToGPU;
 
 
 
@@ -1303,6 +1442,7 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
 
 #if 1
     // Check Aligned
+    if(_contextAnchor->IsRk3188)
     {
         int TotalSize = 0;
         int32_t bpp ;
@@ -1377,14 +1517,17 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
     // Realy Blit
    // ALOGD("RgaCnt=%d",RgaCnt);
     IsDiff = handle_cur != bkupmanage.handle_bk \
-            || handle_cur->phy_addr != bkupmanage.bkupinfo[0].buf_addr ; 
-    if(!IsDiff && bkupmanage.crrent_dis_addr != bkupmanage.direct_addr)  // restore from current display buffer         
+            || (handle_cur->phy_addr != bkupmanage.bkupinfo[0].buf_addr
+                && handle_cur->phy_addr != bkupmanage.bkupinfo[bkupmanage.count -1].buf_addr ) ; 
+    if(!IsDiff )  // restore from current display buffer         
+    {
+        if(bkupmanage.crrent_dis_addr != bkupmanage.direct_addr)
     {
         hwbkupinfo cpyinfo;
         ALOGV("bkupmanage.invalid=%d",bkupmanage.invalid);
         if(bkupmanage.invalid)
         {
-            cpyinfo.pmem_bk = bkupmanage.bkupinfo[0].buf_addr;
+                cpyinfo.pmem_bk = bkupmanage.bkupinfo[bkupmanage.count -1].buf_addr;
             cpyinfo.buf_addr = bkupmanage.direct_addr;
             cpyinfo.xoffset = 0;
             cpyinfo.yoffset = 0;
@@ -1396,12 +1539,19 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
             CopyBuffByRGA(&cpyinfo);
             bkupmanage.invalid = 0;
         }    
-        list->hwLayers[DstBuferIndex].direct_addr = bkupmanage.direct_addr;
+            list->hwLayers[DstBuferIndex].direct_addr = bkupmanage.direct_addr - list->hwLayers[DstBuferIndex].exAddrOffset;
         dst_bk_ddr = bkupmanage.crrent_dis_addr = bkupmanage.direct_addr;
         for(int i=0; i<RgaCnt; i++)
         {
             Rga_Request[i].dst.yrgb_addr = bkupmanage.direct_addr;
+            }
         }
+        for(int i=0; i<bkupmanage.count; i++) 
+        {
+            restorebuffer(&bkupmanage.bkupinfo[i],dst_bk_ddr);
+        }   
+        if(!dst_bk_ddr  )
+            bkupmanage.crrent_dis_addr =  bkupmanage.bkupinfo[bkupmanage.count -1].buf_addr;
     }
     for(int i=0; i<RgaCnt; i++) {
 
@@ -1419,26 +1569,86 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
             if(!i)
             {
                 backcout = 0;
-                bkupmanage.crrent_dis_addr =  bkupmanage.bkupinfo[i].buf_addr;
                 bkupmanage.invalid = 1;
             }    
+            bkupmanage.crrent_dis_addr =  bkupmanage.bkupinfo[i].buf_addr;
+            if(Rga_Request[i].src.format == RK_FORMAT_RGBA_8888)
+                bkupmanage.needrev = 1;
+            else
+                bkupmanage.needrev = 0;
             backcout ++;
             backupbuffer(&bkupmanage.bkupinfo[i]);
 
         }
+        #if 0
         else if(i<bkupmanage.count) // restore the dstbuff
         {
             restorebuffer(&bkupmanage.bkupinfo[i],dst_bk_ddr);
             if(!dst_bk_ddr && !i )
                 bkupmanage.crrent_dis_addr =  bkupmanage.bkupinfo[i].buf_addr;
         }
+        #endif
         uint32_t RgaFlag = (i==(RgaCnt-1)) ? RGA_BLIT_SYNC : RGA_BLIT_ASYNC;
         if(ioctl(_contextAnchor->engine_fd, RgaFlag, &Rga_Request[i]) != 0) {
             LOGE(" %s(%d) RGA_BLIT fail",__FUNCTION__, __LINE__);
         }
+        bkupmanage.dstwinNo = DstBuferIndex;
 
     }
 
+#if 0 // for debug ,Dont remove
+    if (1)
+    {
+        char pro_value[PROPERTY_VALUE_MAX];
+        property_get("sys.dumprga",pro_value,0);
+        static int dumcout = 0;
+        if(!strcmp(pro_value,"true"))
+        {
+            #if 0
+            {
+                int *mem= NULL;
+                int *cl;
+                int ii,j;
+                mem = (int *)((char *)(Rga_Request[0].dst.uv_addr ) + 1902 * 4);
+                for(ii=0;ii<800;ii++)
+                {   
+                    mem +=  2048;
+                    cl = mem;
+                    for(j= 0;j< 50;j++)
+                    {
+                        *cl = 0xffff0000;
+                        cl ++;
+                    }
+                }
+            }    
+            #endif
+        #if 1
+            char layername[100] ;
+            void * pmem;
+                            FILE * pfile = NULL;
+            if(bkupmanage.crrent_dis_addr != bkupmanage.direct_addr)
+                pmem = (void*)Rga_Request[bkupmanage.count -1].dst.uv_addr;
+            else
+                pmem = (void*)bkupmanage.direct_addr_log;
+            memset(layername,0,sizeof(layername));
+            system("mkdir /data/dump/ && chmod /data/dump/ 777 ");
+            sprintf(layername,"/data/dump/dmlayer%d.bin",dumcout);
+            dumcout ++;
+            pfile = fopen(layername,"wb");
+            if(pfile)
+            {
+                fwrite(pmem,(size_t)(2048*300*4),1,pfile);
+                fclose(pfile);
+                LOGI(" dump surface layername %s,crrent_dis_addr=%x DstBuferIndex=%d",layername,bkupmanage.crrent_dis_addr,DstBuferIndex);
+            }
+        #endif
+        }
+        else
+        {
+            dumcout = 0;
+        }
+    }
+#endif     
     bkupmanage.handle_bk = handle_cur;
     bkupmanage.count = backcout;
     return 0;
@@ -1453,6 +1663,7 @@ BackToGPU:
     }
     return 0;
 }
+#endif
 int
 hwc_prepare(
     hwc_composer_device_1_t * dev,
@@ -1464,12 +1675,13 @@ hwc_prepare(
     char value[PROPERTY_VALUE_MAX];
     int new_value = 0;
     int videoflag = 0;
+    hwcContext * context = _contextAnchor;
 
 
     hwc_display_contents_1_t* list = displays[0];  // ignore displays beyond the first
     /* Check device handle. */
-    if (_contextAnchor == NULL
-    || &_contextAnchor->device.common != (hw_device_t *) dev
+    if (context == NULL
+    || &context->device.common != (hw_device_t *) dev
     )
     {
         LOGE("%s(%d):Invalid device!", __FUNCTION__, __LINE__);
@@ -1499,10 +1711,16 @@ hwc_prepare(
     /* Roll back to FRAMEBUFFER if any layer can not be handled. */
     if(new_value <= 0 )
     {
-        if(_contextAnchor->fbFd1 > 0  )
+        #ifdef USE_LCDC_COMPOSER    
+        if(context->fbFd1 > 0  )
         {
-            _contextAnchor->fb1_cflag = true;
+            if(closeFb(context->fbFd1) == 0)
+            {
+                context->fbFd1 = 0;
+                context->fb1_cflag = false;
+            }       
         }
+        #endif        
         for (i = 0; i < (list->numHwLayers - 1); i++)
         {
             list->hwLayers[i].compositionType = HWC_FRAMEBUFFER;
@@ -1536,7 +1754,7 @@ hwc_prepare(
         hwc_layer_1_t * layer = &list->hwLayers[i];
 
         uint32_t compositionType =
-             _CheckLayer(_contextAnchor, list->numHwLayers - 1, i, layer,list,videoflag);
+             _CheckLayer(context, list->numHwLayers - 1, i, layer,list,videoflag);
 
         /* TODO: Viviante limitation:
          * If any layer can not be handled by hwcomposer, fail back to
@@ -1564,16 +1782,16 @@ hwc_prepare(
             {
                ALOGV("rga_video_copybit,%x,w=%d,h=%d",\
                       handle->base,handle->width,handle->height);
-               if (!_contextAnchor->video_frame.vpu_handle)
+               if (!context->video_frame.vpu_handle)
                {
                   rga_video_copybit(handle,handle);
                }
             }
         }
 
-        if(_contextAnchor->fbFd1 > 0  )
+        if(context->fbFd1 > 0  )
         {
-            _contextAnchor->fb1_cflag = true;
+            context->fb1_cflag = true;
         }
 
 
@@ -1610,14 +1828,27 @@ hwc_prepare(
         {
             for(  i= 0; i < 2 ; i++)
             {
-                list->hwLayers[i].compositionType = HWC_BLITTER;
-                if(_contextAnchor->fbFd1 > 0  )
+                list->hwLayers[i].compositionType = HWC_FRAMEBUFFER;
+                if(context->fbFd1 > 0  )
                 {
-                    _contextAnchor->fb1_cflag = true;
-                    ALOGD("line=%d back to gpu", __LINE__);
+                    context->fb1_cflag = true;                    
                     
                 }
             }
+        }
+    }
+    if(list->numHwLayers > 1 && 
+        list->hwLayers[0].compositionType == HWC_FRAMEBUFFER ) // GPU handle it ,so recover
+    {
+        hwc_LcdcToGpu(dev,numDisplays,displays);         //Dont remove
+        bkupmanage.dstwinNo = 0xff;  // GPU handle
+    }
+    if(context->fb1_cflag == true && context->fbFd1 > 0  )
+    {
+        if(closeFb(context->fbFd1) == 0)
+        {
+            context->fbFd1 = 0;
+            context->fb1_cflag = false;
         }
     }
     /*--------------------end----------------------------*/
@@ -2257,15 +2488,7 @@ hwc_set(
 #endif
 
 
-    if(context->fb1_cflag == true && context->fbFd1 > 0  )
-    {
         //close(Context->fbFd1);
-        if(closeFb(context->fbFd1) == 0)
-        {
-            context->fbFd1 = 0;
-            context->fb1_cflag = false;
-        }
-    }
 #ifdef ENABLE_HDMI_APP_LANDSCAP_TO_PORTRAIT            
     if (list != NULL && getHdmiMode()>0) 
     {
@@ -2689,6 +2912,7 @@ hwc_device_open(
     float ydpi;
     uint32_t vsync_period; 
     unsigned int fbPhy_end;
+    char pro_value[PROPERTY_VALUE_MAX];
     LOGD("%s(%d):Open hwc device in thread=%d",
          __FUNCTION__, __LINE__, gettid());
 
@@ -2822,7 +3046,9 @@ hwc_device_open(
 
     context->device.fbPost2 = hwc_fbPost;
     context->device.dump = hwc_dump;
-
+    #ifdef USE_LCDC_COMPOSER    
+    context->device.layer_recover   = hwc_layer_recover;
+    #endif
 
     /* Get gco2D object pointer. */
     context->engine_fd = open("/dev/rga",O_RDWR,0);
@@ -2869,6 +3095,8 @@ hwc_device_open(
 	context->fbHeight = info.yres;
     context->pmemPhysical = ~0U;
     context->pmemLength   = 0;
+	property_get("ro.rk.soc",pro_value,"0");
+    context->IsRk3188 = !strcmp(pro_value,"rk3188");
     context->fbSize = info.xres*info.yres*4*3;
     context->lcdSize = info.xres*info.yres*4; 
     {
@@ -2901,6 +3129,7 @@ hwc_device_open(
     }
 #ifdef USE_LCDC_COMPOSER
     memset(&bkupmanage,0,sizeof(hwbkupmanage));
+    bkupmanage.dstwinNo = 0xff;
     ion_open(fixInfo.line_length * context->fbHeight * 2, ION_MODULE_UI, &context->rk_ion_device);
 	rel = context->rk_ion_device->alloc(context->rk_ion_device, fixInfo.line_length * context->fbHeight*2 ,_ION_HEAP_RESERVE, &context->pion);
 	if (!rel)
@@ -2912,6 +3141,7 @@ hwc_device_open(
             bkupmanage.bkupinfo[i].pmem_bk_log = (void*)((int)context->pion->virt + (fixInfo.line_length * context->fbHeight/4)*i);
         }
         bkupmanage.direct_addr = context->pion->phys + (fixInfo.line_length * context->fbHeight/4)*i;
+        bkupmanage.direct_addr_log = (void*)((int)context->pion->virt + (fixInfo.line_length * context->fbHeight/4)*i);
 	}
 	else
 	{
@@ -2953,7 +3183,7 @@ hwc_device_open(
     property_set("sys.ghwc.version","1.025");
 #else
     #ifdef USE_LCDC_COMPOSER
-    property_set("sys.ghwc.version","1.025_LCP");
+    property_set("sys.ghwc.version","1.026_LCP"); 
     #else
     property_set("sys.ghwc.version","1.025");
     #endif
