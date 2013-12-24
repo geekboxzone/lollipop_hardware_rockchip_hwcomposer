@@ -120,7 +120,10 @@ typedef struct _hwbkupmanage
 {
     int count;
     unsigned int direct_addr;
+    void* direct_addr_log;    
     int invalid;
+    int needrev;
+    int dstwinNo;
     unsigned int crrent_dis_addr;
     hwbkupinfo bkupinfo[bakupbufsize];
     struct private_handle_t *handle_bk;
@@ -248,6 +251,7 @@ typedef struct _hwcContext
     hwcAreaPool                      areaPool;
 #endif
      int      flag;
+    bool IsRk3188;  
 }
 hwcContext;
 
