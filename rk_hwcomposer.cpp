@@ -2449,11 +2449,7 @@ hwc_set(
          display_commit(0,(struct private_handle_t *) fbBuffer->handle); 
 #endif
     }
-    else
-    {
-        hwc_fbPost(dev,numDisplays,displays);
-    }
-
+    
 #if hwcUseTime
     gettimeofday(&tpend2,NULL);
     usec1 = 1000*(tpend2.tv_sec - tpend1.tv_sec) + (tpend2.tv_usec- tpend1.tv_usec)/1000;
