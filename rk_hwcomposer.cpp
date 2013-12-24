@@ -161,7 +161,7 @@ void hwc_sync_release(hwc_display_contents_1_t  *list)
 {
   for (int i=0; i<list->numHwLayers; i++)
   {
-    hwc_layer_1_t* layer = &list->hwLayers[list->numHwLayers-1];
+    hwc_layer_1_t* layer = &list->hwLayers[i];
     if (layer == NULL)
     {
       return ;
@@ -176,7 +176,7 @@ void hwc_sync_release(hwc_display_contents_1_t  *list)
 
   if (list->outbufAcquireFenceFd>0)
   {
-    ALOGD(">>>close outbufAcquireFenceFd:%d",list->outbufAcquireFenceFd);
+    ALOGV(">>>close outbufAcquireFenceFd:%d",list->outbufAcquireFenceFd);
     close(list->outbufAcquireFenceFd);
     list->outbufAcquireFenceFd = -1;
   }
