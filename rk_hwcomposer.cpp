@@ -2451,7 +2451,9 @@ hwc_set(
     }
     else
     {
+#ifndef USE_LCDC_COMPOSER
         hwc_fbPost(dev,numDisplays,displays);
+#endif
     }
 
 #if hwcUseTime
