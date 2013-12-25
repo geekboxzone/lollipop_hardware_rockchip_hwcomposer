@@ -152,6 +152,7 @@ void hwc_sync(hwc_display_contents_1_t  *list)
   
   for (int i=0; i<list->numHwLayers; i++)
   {
+    
     sync_wait(list->hwLayers[i].acquireFenceFd,-1);
     ALOGV("fenceFd=%d,name=%s",list->hwLayers[i].acquireFenceFd,list->hwLayers[i].layerName);
   }
@@ -1357,9 +1358,11 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
             planeAlpha = list->hwLayers[ComposerIndex].blending >> 16;
             /* Setup blending. */
 
-            switch ((list->hwLayers[ComposerIndex].blending & 0xFFFF))
+            if(list->hwLayers[DstBuferIndex].exAddrOffset == 0 && 
+               (list->hwLayers[ComposerIndex].blending & 0xFFFF) == HWC_BLENDING_PREMULT 
+              )
             {
-                case HWC_BLENDING_PREMULT:
+               
                     perpixelAlpha = _HasAlpha(srcFormat);
                     LOGV("perpixelAlpha=%d,planeAlpha=%d,line=%d ",perpixelAlpha,planeAlpha,__LINE__);
                     /* Setup alpha blending. */
@@ -1380,44 +1383,24 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
                        RGA_set_alpha_en_info(&Rga_Request[RgaCnt],1, 0, planeAlpha ,0,0,0);
 
                     }
-                    break;
 
-                case HWC_BLENDING_COVERAGE:
                 /* SRC_ALPHA / ONE_MINUS_SRC_ALPHA. */
                 /* Cs' = Cs * As
                  * As' = As
                  * C = Cs' + Cd * (1 - As)
                  * A = As' + Ad * (1 - As) */
-                    perpixelAlpha = _HasAlpha(srcFormat);
-                    LOGV("perpixelAlpha=%d,planeAlpha=%d,line=%d ",perpixelAlpha,planeAlpha,__LINE__);
                     /* Setup alpha blending. */
-                    if (perpixelAlpha && planeAlpha < 255)
-                    {
 
-                       RGA_set_alpha_en_info(&Rga_Request[RgaCnt],1,2, planeAlpha ,0,0,0);
                     }
-                    else if (perpixelAlpha)
-                    {
                         /* Perpixel alpha only. */
-                       RGA_set_alpha_en_info(&Rga_Request[RgaCnt],1,1, 0, 0, 0,0);
 
-                    }
-                    else /* if (planeAlpha < 255) */
-                    {
                         /* Plane alpha only. */
-                       RGA_set_alpha_en_info(&Rga_Request[RgaCnt],1, 0, planeAlpha ,0,0,0);
 
-                    }
-                    break;
 
-                case HWC_BLENDING_NONE:
-                default:
                 /* Tips: BLENDING_NONE is non-zero value, handle zero value as
                  * BLENDING_NONE. */
                 /* C = Cs
                  * A = As */
-                break;
-            }
 
             RGA_set_bitblt_mode(&Rga_Request[RgaCnt], 0, 0,0,0,0,0);
             RGA_set_src_act_info(&Rga_Request[RgaCnt],srcWidth, srcHeight,  0, 0);
@@ -1501,6 +1484,14 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
     // there isn't suitable dstLayer to copy, use gpu compose.
 #endif
 
+#if 0   
+    if(strcmp(bkupmanage.LayerName,list->hwLayers[DstBuferIndex].LayerName))
+    {
+        ALOGD("[%s],[%s]",bkupmanage.LayerName,list->hwLayers[DstBuferIndex].LayerName);
+        strcpy( bkupmanage.LayerName,list->hwLayers[DstBuferIndex].LayerName);        
+        goto BackToGPU; 
+    }
+#endif    
     // Realy Blit
    // ALOGD("RgaCnt=%d",RgaCnt);
     IsDiff = handle_cur != bkupmanage.handle_bk \
