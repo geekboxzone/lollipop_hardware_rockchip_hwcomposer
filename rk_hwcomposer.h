@@ -132,6 +132,7 @@ typedef struct _hwbkupmanage
     int invalid;
     int needrev;
     int dstwinNo;
+	char LayerName[LayerNameLength + 1];    
     unsigned int crrent_dis_addr;
     hwbkupinfo bkupinfo[bakupbufsize];
     struct private_handle_t *handle_bk;
