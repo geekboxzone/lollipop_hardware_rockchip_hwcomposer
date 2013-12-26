@@ -1833,14 +1833,6 @@ hwc_prepare(
             }
         }
     }
-    if(context->fb1_cflag == true && context->fbFd1 > 0  )
-    {
-        if(closeFb(context->fbFd1) == 0)
-        {
-            context->fbFd1 = 0;
-            context->fb1_cflag = false;
-        }
-    }
     /*--------------------end----------------------------*/
     #endif
     if(list->numHwLayers > 1 && 
@@ -1865,7 +1857,16 @@ hwc_prepare(
             }
         }
     }
-
+    #ifdef USE_LCDC_COMPOSER    
+    if(context->fb1_cflag == true && context->fbFd1 > 0  )
+    {
+        if(closeFb(context->fbFd1) == 0)
+        {
+            context->fbFd1 = 0;
+            context->fb1_cflag = false;
+        }
+    }        
+    #endif
     return 0;
 }
 
