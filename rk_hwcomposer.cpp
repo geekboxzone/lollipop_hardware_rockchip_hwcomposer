@@ -994,7 +994,7 @@ hwc_buff_recover(
         if( handle == bkupmanage.handle_bk && \
             handle->phy_addr == bkupmanage.bkupinfo[0].buf_addr )
         {
-            ALOGD(" handle->phy_addr==bkupmanage ,name=%s",list->hwLayers[i].LayerName);
+            ALOGV(" handle->phy_addr==bkupmanage ,name=%s",list->hwLayers[i].LayerName);
             needrev = 1;
             break;
         }
@@ -1487,6 +1487,18 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
     // there isn't suitable dstLayer to copy, use gpu compose.
 #endif
 
+	/*
+    if(!strcmp("Keyguard",list->hwLayers[DstBuferIndex].LayerName))
+    {       
+         bkupmanage.skipcnt = 10;
+    }
+    else if( bkupmanage.skipcnt > 0)
+    {
+        bkupmanage.skipcnt --;
+        if(bkupmanage.skipcnt > 0)
+          goto BackToGPU; 
+    }
+	*/
 #if 0   
     if(strcmp(bkupmanage.LayerName,list->hwLayers[DstBuferIndex].LayerName))
     {
@@ -1758,6 +1770,8 @@ hwc_prepare(
         for (j = 0; j <(list->numHwLayers - 1); j++)
         {
             list->hwLayers[j].compositionType = HWC_FRAMEBUFFER;
+
+            /*  // move to exit
             struct private_handle_t * handle = (struct private_handle_t *)list->hwLayers[j].handle;
             if (handle && GPU_FORMAT==HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
             {
@@ -1768,6 +1782,7 @@ hwc_prepare(
                   rga_video_copybit(handle,handle);
                }
             }
+            */
         }
 
         if(context->fbFd1 > 0  )
@@ -1818,12 +1833,6 @@ hwc_prepare(
             }
         }
     }
-    if(list->numHwLayers > 1 && 
-        list->hwLayers[0].compositionType == HWC_FRAMEBUFFER ) // GPU handle it ,so recover
-    {
-        hwc_LcdcToGpu(dev,numDisplays,displays);         //Dont remove
-        bkupmanage.dstwinNo = 0xff;  // GPU handle
-    }
     if(context->fb1_cflag == true && context->fbFd1 > 0  )
     {
         if(closeFb(context->fbFd1) == 0)
@@ -1834,6 +1843,28 @@ hwc_prepare(
     }
     /*--------------------end----------------------------*/
     #endif
+    if(list->numHwLayers > 1 && 
+        list->hwLayers[0].compositionType == HWC_FRAMEBUFFER ) // GPU handle it ,so recover
+    {
+        size_t j;
+    #ifdef USE_LCDC_COMPOSER    
+        hwc_LcdcToGpu(dev,numDisplays,displays);         //Dont remove
+        bkupmanage.dstwinNo = 0xff;  // GPU handle
+    #endif
+        for (j = 0; j <(list->numHwLayers - 1); j++)
+        {
+            struct private_handle_t * handle = (struct private_handle_t *)list->hwLayers[j].handle;
+            if (handle && GPU_FORMAT==HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
+            {
+               ALOGV("rga_video_copybit,%x,w=%d,h=%d",\
+                      GPU_BASE,GPU_WIDTH,GPU_HEIGHT);
+               if (!_contextAnchor->video_frame.vpu_handle)
+               {
+                  rga_video_copybit(handle,handle);
+               }
+            }
+        }
+    }
 
     return 0;
 }
@@ -2334,7 +2365,11 @@ hwc_set(
                             0
                             ));
 
-                if((list->numHwLayers - 1) == 1 || i == 1 || GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
+                if((list->numHwLayers - 1) == 1 || i == 1 
+                #ifndef USE_LCDC_COMPOSER
+                    || GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO
+                #endif    
+                  )
                 {
                     ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &sync);
                     if( context->fbFd1 > 0 )
