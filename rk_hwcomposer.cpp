@@ -189,8 +189,8 @@ static int layer_seq = 0;
 int rga_video_copybit(struct private_handle_t *src_handle,
 			 struct private_handle_t *dst_handle)
 {
-   	struct tVPU_FRAME *pFrame  = NULL;
-   	struct rga_req  rga_cfg;
+    struct tVPU_FRAME *pFrame  = NULL;
+    struct rga_req  rga_cfg;
     int   rga_fd = _contextAnchor->engine_fd;
     if (!rga_fd)
     {
@@ -208,9 +208,8 @@ int rga_video_copybit(struct private_handle_t *src_handle,
     _contextAnchor->video_frame.vpu_handle = (void*)GPU_BASE;
     memcpy(&_contextAnchor->video_frame.vpu_frame,(void*)GPU_BASE,sizeof(tVPU_FRAME));
     
-	memset(&rga_cfg,0x0,sizeof(rga_req));
-
-	ALOGV("videopFrame addr=%x,FrameWidth=%d,FrameHeight=%d",pFrame->FrameBusAddr[0],pFrame->FrameWidth,pFrame->FrameHeight);
+    memset(&rga_cfg,0x0,sizeof(rga_req));
+    ALOGV("videopFrame addr=%x,FrameWidth=%d,FrameHeight=%d",pFrame->FrameBusAddr[0],pFrame->FrameWidth,pFrame->FrameHeight);
     rga_cfg.src.yrgb_addr =  (int)pFrame->FrameBusAddr[0] + 0x60000000;
     rga_cfg.src.uv_addr  = rga_cfg.src.yrgb_addr + (( pFrame->FrameWidth + 15) & ~15) * ((pFrame->FrameHeight + 15) & ~15);
     rga_cfg.src.v_addr   =  rga_cfg.src.uv_addr;
@@ -218,7 +217,7 @@ int rga_video_copybit(struct private_handle_t *src_handle,
     rga_cfg.src.vir_h = ((pFrame->FrameHeight + 15) & ~15);
     rga_cfg.src.format = RK_FORMAT_YCbCr_420_SP;
 
-  	rga_cfg.src.act_w = pFrame->FrameWidth;
+    rga_cfg.src.act_w = pFrame->FrameWidth;
     rga_cfg.src.act_h = pFrame->FrameHeight;
     rga_cfg.src.x_offset = 0;
     rga_cfg.src.y_offset = 0;
@@ -235,12 +234,16 @@ int rga_video_copybit(struct private_handle_t *src_handle,
         );
 
 
-
- 	rga_cfg.dst.yrgb_addr = GPU_BASE; //dsthandle->base;//(int)(fixInfo.smem_start + dsthandle->offset);
-   	rga_cfg.dst.vir_w =   (GPU_WIDTH + 31) & ~31;//((srcandle->iWidth*2 + (8-1)) & ~(8-1))/2 ;  /* 2:RK_FORMAT_RGB_565 ,8:????*///srcandle->width;
+#ifdef TARGET_BOARD_PLATFORM_RK30XXB
+    rga_cfg.dst.yrgb_addr = GPU_BASE; //dsthandle->base;//(int)(fixInfo.smem_start + dsthandle->offset);
+    rga_cfg.dst.vir_w =   (GPU_WIDTH + 31) & ~31;//((srcandle->iWidth*2 + (8-1)) & ~(8-1))/2 ;  /* 2:RK_FORMAT_RGB_565 ,8:????*///srcandle->width;
+#else
+    rga_cfg.dst.yrgb_addr = GPU_BASE; //dsthandle->base;//(int)(fixInfo.smem_start + dsthandle->offset);
+    rga_cfg.dst.vir_w =   ((GPU_WIDTH*2 + (8-1)) & ~(8-1))/2 ;  
+#endif
     rga_cfg.dst.vir_h =  GPU_HEIGHT;
-	rga_cfg.dst.act_w = GPU_WIDTH;//Rga_Request.dst.vir_w;
-	rga_cfg.dst.act_h = GPU_HEIGHT;//Rga_Request.dst.vir_h;
+    rga_cfg.dst.act_w = GPU_WIDTH;//Rga_Request.dst.vir_w;
+    rga_cfg.dst.act_h = GPU_HEIGHT;//Rga_Request.dst.vir_h;
     rga_cfg.dst.uv_addr  = 0;//Rga_Request.dst.yrgb_addr + (( srcandle->width + 15) & ~15) * ((srcandle->height + 15) & ~15);
     rga_cfg.dst.v_addr   = rga_cfg.dst.uv_addr;
     //Rga_Request.dst.format = RK_FORMAT_RGB_565;
@@ -248,11 +251,11 @@ int rga_video_copybit(struct private_handle_t *src_handle,
     rga_cfg.clip.xmax = rga_cfg.dst.vir_w - 1;
     rga_cfg.clip.ymin = 0;
     rga_cfg.clip.ymax = rga_cfg.dst.vir_h - 1;
-	rga_cfg.dst.x_offset = 0;
-	rga_cfg.dst.y_offset = 0;
+    rga_cfg.dst.x_offset = 0;
+    rga_cfg.dst.y_offset = 0;
 
-	rga_cfg.sina = 0;
-	rga_cfg.cosa = 0x10000;
+    rga_cfg.sina = 0;
+    rga_cfg.cosa = 0x10000;
 
 	char property[PROPERTY_VALUE_MAX];
 	int gpuformat = HAL_PIXEL_FORMAT_RGB_565;
