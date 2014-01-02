@@ -2094,6 +2094,11 @@ hwc_set(
 
     hwc_display_contents_1_t* list = displays[0];  // ignore displays beyond the first
     hwc_sync(list);
+    hwc_display_contents_1_t* list_wfd = displays[HWC_DISPLAY_VIRTUAL];
+    if (list_wfd)
+    {
+       hwc_sync_release(list_wfd);
+    }
     rga_video_reset();
     if (list != NULL) {
         //dpy = list->dpy;
