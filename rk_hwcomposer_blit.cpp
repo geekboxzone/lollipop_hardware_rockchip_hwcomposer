@@ -230,7 +230,6 @@ hwcBlit(
     clip.ymin = 0;
     clip.ymax = dstHeight -1;
     
-    dstPhysical = Context->hwc_ion.pion->phys+Context->hwc_ion.offset;
 
     if(GPU_FORMAT ==  HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
     {

@@ -2201,7 +2201,7 @@ hwc_set(
                                                      0U);
 
             /* Split areas: go through all regions. */
-            for (int i = 0; i < list->numHwLayers; i++)
+            for (int i = 0; i < list->numHwLayers-1; i++)
             {
                 int owner = 1U << i;
                 hwc_layer_1_t *  hwLayer = &list->hwLayers[i];
