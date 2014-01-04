@@ -278,7 +278,7 @@ hwcBlit(
             perpixelAlpha = _HasAlpha(srcFormat);
            
             /* Setup alpha blending. */
-            if (perpixelAlpha && planeAlpha < 255 && planeAlpha != 0)
+            if (perpixelAlpha && planeAlpha < 255)
             {
 
                RGA_set_alpha_en_info(&Rga_Request,1,2, planeAlpha ,1, 9,0);
