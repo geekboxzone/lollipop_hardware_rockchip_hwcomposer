@@ -2097,7 +2097,7 @@ hwc_set(
     hwc_display_contents_1_t* list_wfd = displays[HWC_DISPLAY_VIRTUAL];
     if (list_wfd)
     {
-       hwc_sync_release(list_wfd);
+       hwc_sync(list_wfd);
     }
     rga_video_reset();
     if (list != NULL) {
