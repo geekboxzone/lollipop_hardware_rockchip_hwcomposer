@@ -124,7 +124,12 @@ hwcLockBuffer(
 #else
             *Logical       = (void *) GPU_BASE;
 #endif
-	 *Physical        = (unsigned int)(Context->hwc_ion.pion->phys+Context->hwc_ion.offset);
+
+#ifndef USE_LCDC_COMPOSER
+	 		*Physical        = (unsigned int)(Context->hwc_ion.pion->phys+Context->hwc_ion.offset);
+#else
+            *Physical      = (unsigned int) (Context->fbPhysical + Handle->offset)
+#endif                                       - Context->baseAddress;
 
             *Width         = width;
             *Height        = height;
