@@ -129,7 +129,8 @@ hwcLockBuffer(
 	 		*Physical        = (unsigned int)(Context->hwc_ion.pion->phys+Context->hwc_ion.offset);
 #else
             *Physical      = (unsigned int) (Context->fbPhysical + Handle->offset)
-#endif                                       - Context->baseAddress;
+                                     - Context->baseAddress;
+#endif									 
 
             *Width         = width;
             *Height        = height;
