@@ -133,6 +133,7 @@ typedef struct _hwbkupmanage
     int needrev;
     int dstwinNo;
     int skipcnt;
+    unsigned int ckpstcnt;
 	char LayerName[LayerNameLength + 1];    
     unsigned int crrent_dis_addr;
     hwbkupinfo bkupinfo[bakupbufsize];

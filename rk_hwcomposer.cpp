@@ -1141,6 +1141,8 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
     {
         return 0;
     }
+    if(bkupmanage.ckpstcnt <= 4) // for phy mem not enough,switch to logic memery ,so one phy,three log addr ,accur err
+         goto BackToGPU;
 
     memset(&Rga_Request, 0x0, sizeof(Rga_Request));
 
@@ -1760,6 +1762,12 @@ hwc_prepare(
         }
     }
 
+    #ifdef USE_LCDC_COMPOSER
+    if(i == (list->numHwLayers - 1))
+        bkupmanage.ckpstcnt ++;
+    else 
+        bkupmanage.ckpstcnt = 0;        
+    #endif
     /* Roll back to FRAMEBUFFER if any layer can not be handled. */
     if (i != (list->numHwLayers - 1))
     {
@@ -1842,6 +1850,7 @@ hwc_prepare(
     #ifdef USE_LCDC_COMPOSER    
         hwc_LcdcToGpu(dev,numDisplays,displays);         //Dont remove
         bkupmanage.dstwinNo = 0xff;  // GPU handle
+        bkupmanage.invalid = 1;
     #endif
         for (j = 0; j <(list->numHwLayers - 1); j++)
         {
