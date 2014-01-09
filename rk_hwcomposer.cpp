@@ -1962,7 +1962,7 @@ static int display_commit( int dpy, private_handle_t*  handle)
         ALOGE("%s(%d):  fd[%d] Failed,DataAddr=%x", __FUNCTION__, __LINE__,context->dpyAttr[dpy].fd,videodata[0]);
         return -1;
     } 
-    int sync = 1;
+    int sync = 0;
     ioctl(context->dpyAttr[0].fd, FBIOPUT_VSCREENINFO, &info);
     ioctl(context->dpyAttr[0].fd, RK_FBIOSET_CONFIG_DONE, &sync);
     if ((context->hwc_ion.offset+context->lcdSize) >= context->fbSize)
