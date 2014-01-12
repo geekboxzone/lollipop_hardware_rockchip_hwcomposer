@@ -247,6 +247,7 @@ typedef struct _hwcContext
     unsigned int fbStride;
     ion_device_t *rk_ion_device;
     ion_buffer_t *pion;
+	int          wfdOptimize;
     /* PMEM stuff. */
     unsigned int pmemPhysical;
     unsigned int pmemLength;

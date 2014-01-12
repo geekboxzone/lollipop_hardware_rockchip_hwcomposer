@@ -237,6 +237,7 @@ hwcBlit(
         dstLogical = (void*)(dstPhysical + 0x60000000);
         //RGA_set_bitblt_mode(&Rga_Request,RotateMode,1,Rotation,1,0,0);
     }
+	dstPhysical = (unsigned int)(Context->hwc_ion.pion->phys+Context->hwc_ion.offset);
     //RGA_set_bitblt_mode(&Rga_Request,RotateMode,1,Rotation,1,0,0);
     LOGI("RGA src_vir_w = %d, src_vir_h = %d,srcLogical=%x,srcFormat=%d", srcStride, srcHeight,srcLogical,srcFormat);
     RGA_set_src_vir_info(&Rga_Request, (int)srcLogical, 0, 0, srcStride, srcHeight, srcFormat, 0);
@@ -1051,6 +1052,8 @@ hwcLayerToWin(
     unsigned int m;
     hwcRECT srcRects[16];
     hwcRECT dstRects[16];
+    int video_width = 0;
+    int video_height = 0;
     hwc_rect_t const * rects = Region->rects;
     
     int fbFd = Win ? Context->fbFd1 : Context->fbFd;
@@ -1076,7 +1079,7 @@ hwcLayerToWin(
     //videodata[1]= videodata[0]= srcPhysical ;
     if (GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO && Src->transform!=0 && Context->ippDev!=NULL)
     {
-        Context->ippDev->ipp_rotate_and_scale(srchnd,Src->transform,videodata);
+        Context->ippDev->ipp_rotate_and_scale(srchnd,Src->transform,videodata,&video_width,&video_height);
 	}
     else if( Src->direct_addr)
     {
@@ -1271,6 +1274,28 @@ hwcLayerToWin(
         info.yres = (srcRects[i].bottom - srcRects[i].top) + (Src->exTop + Src->exBottom);
         info.xres_virtual = srcStride;
         info.yres_virtual = srcHeight + hwcMAX(Src->exBottom,Src->exTop);
+
+		if (srchnd->format == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
+		{
+			if (Src->transform==HWC_TRANSFORM_ROT_90||Src->transform==HWC_TRANSFORM_ROT_270)
+			{
+			    info.yres = (srcRects[i].right- srcRects[i].left) + (Src->exLeft + Src->exRight);
+        	    info.xres = (srcRects[i].bottom - srcRects[i].top) + (Src->exTop + Src->exBottom);
+        	    info.xres_virtual = video_width;//info.xres ;//srcStride;
+        	    info.yres_virtual = info.yres;//srcHeight + hwcMAX(Src->exBottom,Src->exTop);
+                if (Src->transform==HWC_TRANSFORM_ROT_90)
+                {
+                  info.xoffset = info.xres_virtual - info.xres;
+                } 
+			}
+			else if (Src->transform==HWC_TRANSFORM_ROT_180)
+			{
+				info.yoffset = info.yres_virtual - info.yres + srcRects[i].top;
+			}
+			else
+			{
+			}
+		}
         
         info.nonstd |= hwcMAX(dstRects[i].left - Src->exLeft, 0) << 8;
         info.nonstd |= hwcMAX(dstRects[i].top - Src->exTop, 0) << 20;

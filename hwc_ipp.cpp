@@ -156,12 +156,19 @@ static int ipp_set_req(struct private_handle_t *handle, int tranform, struct rk2
 	
 	req->dst0.YrgbMst = ipp_phys_addr_base;
 	req->dst0.CbrMst = req->dst0.YrgbMst+width*height;	
-	req->dst0.w = ipp_x_aligned(pVideo->width);//2¶ÔÆë	
-	req->dst0.h = height;//swith	
+	if (ipp_rot==IPP_ROT_90 || ipp_rot==IPP_ROT_270)
+    {
+		req->dst0.w = height;//ipp_x_aligned(pVideo->width);//2¶ÔÆë	
+		req->dst0.h = width;//swith	
+	}
+    else
+    {
+       req->dst0.w = width;
+       req->dst0.h = height;
+    }
 	req->store_clip_mode = 1;//¶ÔÆë	
-	req->src_vir_w = width; 	
-	req->dst_vir_w = req->dst0.w;	
-	
+	req->src_vir_w = pVideo->width; 	
+	req->dst_vir_w = ipp_x_aligned(req->dst0.w);	
 	req->timeout = 50;//ms	
 	req->flag = ipp_rot;//
 	ipp_buffer.Yrgb = req->dst0.YrgbMst;
@@ -184,7 +191,7 @@ static int ipp_reset()
 }
 
 static int  ipp_rotate_and_scale(struct private_handle_t *handle,\
-							int tranform,unsigned int* srcPhysical)
+							int tranform,unsigned int* srcPhysical, int *videoWidth, int *videoHeight)
 {
    if (handle == NULL)
    {
@@ -203,6 +210,8 @@ static int  ipp_rotate_and_scale(struct private_handle_t *handle,\
 	  }
 	  srcPhysical[0] = ipp_buffer.Yrgb;
 	  srcPhysical[1] = ipp_buffer.CbrMst;
+      *videoWidth = ipp_req.dst_vir_w;
+      *videoHeight = ipp_req.dst0.h;
 	  return 0;
    }
    else

@@ -30,6 +30,7 @@ LOCAL_SRC_FILES := \
 	rga_api.cpp \
 	rk_hwcomposer_hdmi.cpp \
 	hwc_ipp.cpp \
+	hwc_rga.cpp \
 	blend.S
 
 LOCAL_CFLAGS := \

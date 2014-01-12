@@ -42,6 +42,7 @@
 #include <ui/PixelFormat.h>
 #include <sys/stat.h>
 #include "hwc_ipp.h"
+#include "hwc_rga.h"
 #define MAX_DO_SPECIAL_COUNT        5
 #define RK_FBIOSET_ROTATE            0x5003 
 #define FPS_NAME                    "com.aatt.fpsm"
@@ -152,9 +153,12 @@ void hwc_sync(hwc_display_contents_1_t  *list)
   
   for (int i=0; i<list->numHwLayers; i++)
   {
-    
-    sync_wait(list->hwLayers[i].acquireFenceFd,-1);
-    ALOGV("fenceFd=%d,name=%s",list->hwLayers[i].acquireFenceFd,list->hwLayers[i].layerName);
+	  if (list->hwLayers[i].acquireFenceFd>0)
+	  {
+		  sync_wait(list->hwLayers[i].acquireFenceFd,-1);
+		  ALOGV("fenceFd=%d,name=%s",list->hwLayers[i].acquireFenceFd,list->hwLayers[i].layerName);
+	  }
+
   }
 }
 
@@ -420,7 +424,7 @@ _CheckLayer(
         ||(vfactor >1.0f)  // because rga scale down too slowly,so return to opengl ,huangds modify
         ||((hfactor <1.0f || vfactor <1.0f) &&(handle && GPU_FORMAT == HAL_PIXEL_FORMAT_RGBA_8888)) // because rga scale up RGBA foramt not support
         #endif
-        ||((Layer->transform != 0)/*&&(!videoflag)*/)
+        ||((Layer->transform != 0)&&(!videoflag))
 #ifndef USE_LCDC_COMPOSER
         ||(Context->IsRk3188 && !(videoflag && Count <=2))
         #endif
@@ -564,8 +568,9 @@ _CheckLayer(
             /*    ----end  ----*/
         }
         #else
-        if( (GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO && Count <= 2 && getHdmiMode()==0) 
-           || (GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO && Count == 3 && getHdmiMode()==0 && strstr(list->hwLayers[Count - 2].LayerName, "SystemBar"))
+        if( (GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO && Count <= 2 && getHdmiMode()==0 && Context->wfdOptimize==0) 
+           || (GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO && Count == 3 && getHdmiMode()==0 \
+		      && strstr(list->hwLayers[Count - 2].LayerName, "SystemBar") && Context->wfdOptimize==0)
           )
         {
           /*if (strstr(list->hwLayers[Count - 1].LayerName, "android.rk.RockVideoPlayer")
@@ -1659,6 +1664,34 @@ BackToGPU:
     return 0;
 }
 #endif
+
+int hwc_prepare_virtual(hwc_composer_device_1_t * dev, hwc_display_contents_1_t  *contents)
+{
+	if (contents==NULL)
+	{
+		return -1;
+	}
+	hwcContext * context = _contextAnchor;
+	for (int j = 0; j <(contents->numHwLayers - 1); j++)
+	{
+		struct private_handle_t * handle = (struct private_handle_t *)contents->hwLayers[j].handle;
+
+		if (handle && GPU_FORMAT==HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
+		{
+			ALOGD("WFD rga_video_copybit,%x,w=%d,h=%d",\
+				GPU_BASE,GPU_WIDTH,GPU_HEIGHT);
+			if (context->wfdOptimize==0)
+			{
+				if (!_contextAnchor->video_frame.vpu_handle)
+				{
+					rga_video_copybit(handle,handle);
+				}
+			}
+		}
+	}
+	return 0;
+}
+
 int
 hwc_prepare(
     hwc_composer_device_1_t * dev,
@@ -1866,6 +1899,12 @@ hwc_prepare(
             }
         }
     }
+
+	hwc_display_contents_1_t* list_wfd = displays[HWC_DISPLAY_VIRTUAL];
+	if (list_wfd)
+	{
+		hwc_prepare_virtual(dev, list);
+	}
     #ifdef USE_LCDC_COMPOSER    
     if(context->fb1_cflag == true && context->fbFd1 > 0  )
     {
@@ -1965,6 +2004,7 @@ static int display_commit( int dpy, private_handle_t*  handle)
     int sync = 0;
     ioctl(context->dpyAttr[0].fd, FBIOPUT_VSCREENINFO, &info);
     ioctl(context->dpyAttr[0].fd, RK_FBIOSET_CONFIG_DONE, &sync);
+	context->hwc_ion.last_offset = context->hwc_ion.offset;
     if ((context->hwc_ion.offset+context->lcdSize) >= context->fbSize)
     {
      context->hwc_ion.offset = 0; 
@@ -2071,6 +2111,61 @@ static int hwc_fbPost(hwc_composer_device_1_t * dev, size_t numDisplays, hwc_dis
  }
   return 0;
 }
+
+int hwc_set_virtual(hwc_composer_device_1_t * dev, hwc_display_contents_1_t  **contents, unsigned int rga_fb_addr)
+{
+	hwc_display_contents_1_t* list_pri = contents[0];
+	hwc_display_contents_1_t* list_wfd = contents[2];
+	hwc_layer_1_t *  fbLayer = &list_pri->hwLayers[list_pri->numHwLayers - 1];
+	hwc_layer_1_t *  wfdLayer = &list_wfd->hwLayers[list_wfd->numHwLayers - 1];
+	hwcContext * context = _contextAnchor;
+	struct timeval tpend1, tpend2;
+	long usec1 = 0;
+	gettimeofday(&tpend1,NULL);
+	if (list_wfd)
+	{
+		hwc_sync(list_wfd);
+	}
+	if (fbLayer==NULL || wfdLayer==NULL)
+	{
+		return -1;
+	}
+
+	if ((context->wfdOptimize>0) && wfdLayer->handle)
+	{
+		hwc_cfg_t cfg;
+		memset(&cfg, 0, sizeof(hwc_cfg_t));
+		cfg.src_handle = (struct private_handle_t *)fbLayer->handle;
+		cfg.transform = fbLayer->realtransform;
+		ALOGD("++++transform=%d",cfg.transform);
+		cfg.dst_handle = (struct private_handle_t *)wfdLayer->handle;
+		cfg.src_rect.left = (int)fbLayer->displayFrame.left;
+		cfg.src_rect.top = (int)fbLayer->displayFrame.top;
+		cfg.src_rect.right = (int)fbLayer->displayFrame.right;
+		cfg.src_rect.bottom = (int)fbLayer->displayFrame.bottom;
+		cfg.src_format = cfg.src_handle->format;
+
+		cfg.rga_fbAddr = rga_fb_addr;
+		cfg.dst_rect.left = (int)wfdLayer->displayFrame.left;
+		cfg.dst_rect.top = (int)wfdLayer->displayFrame.top;
+		cfg.dst_rect.right = (int)wfdLayer->displayFrame.right;
+		cfg.dst_rect.bottom = (int)wfdLayer->displayFrame.bottom;
+		cfg.dst_format = cfg.dst_handle->format;
+		set_rga_cfg(&cfg);
+		do_rga_transform_and_scale();
+	}
+	
+	if (list_wfd)
+	{
+		hwc_sync_release(list_wfd);
+	}
+
+	gettimeofday(&tpend2,NULL);
+	usec1 = 1000*(tpend2.tv_sec - tpend1.tv_sec) + (tpend2.tv_usec- tpend1.tv_usec)/1000;
+	ALOGD("hwc use time=%ld ms",usec1);
+	return 0;
+}
+
 int
 hwc_set(
     hwc_composer_device_1_t * dev,
@@ -2102,12 +2197,8 @@ hwc_set(
     struct private_handle_t * fbhandle = NULL;
 
     hwc_display_contents_1_t* list = displays[0];  // ignore displays beyond the first
+	hwc_display_contents_1_t* list_wfd = displays[HWC_DISPLAY_VIRTUAL];
     hwc_sync(list);
-    hwc_display_contents_1_t* list_wfd = displays[HWC_DISPLAY_VIRTUAL];
-    if (list_wfd)
-    {
-       hwc_sync(list_wfd);
-    }
     rga_video_reset();
     if (list != NULL) {
         //dpy = list->dpy;
@@ -2398,6 +2489,10 @@ hwc_set(
                         }
                     }
                     hwc_sync_release(list);
+					if (list_wfd)
+					{
+						hwc_sync_release(list_wfd);
+					}
                     return hwcSTATUS_OK;
                 }
 
@@ -2470,6 +2565,11 @@ hwc_set(
                     }
                 }*/
  			 	hwc_sync_release(list);
+				
+				if (list_wfd)
+				{
+				  hwc_sync_release(list_wfd);
+				}
                 return hwcSTATUS_OK;
             }
 
@@ -2570,13 +2670,18 @@ hwc_set(
        // success = eglSwapBuffers((EGLDisplay) dpy, (EGLSurface) surf); 
 
     hwc_sync_release(list);
-    {
-     hwc_display_contents_1_t* list_wfd = displays[HWC_DISPLAY_VIRTUAL];
-     if (list_wfd)
-     {
-       hwc_sync_release(list_wfd);
-     }
-    }
+	{
+		if (list_wfd)
+		{
+			int mode = -1;
+			unsigned int fb_addr = 0;
+			if (fbBuffer != NULL)
+			{
+				fb_addr = context->hwc_ion.pion->phys + context->hwc_ion.last_offset;
+			}
+			hwc_set_virtual(dev, displays,fb_addr);
+		}
+	}
     return 0; //? 0 : HWC_EGL_ERROR;
 OnError:
     /* Error rollback */
@@ -3091,8 +3196,17 @@ hwc_device_open(
 
     }
 
-
-
+#if ENABLE_WFD_OPTIMIZE
+	 property_set("sys.enable.wfd.optimize","1");
+#endif
+	 {
+		 char value[PROPERTY_VALUE_MAX];
+		 memset(value,0,PROPERTY_VALUE_MAX);
+		 property_get("sys.enable.wfd.optimize", value, "0");
+		 int type = atoi(value);
+		 context->wfdOptimize = type;
+		 init_rga_cfg(context->engine_fd);
+	 }
 
     /* Initialize pmem and frameubffer stuff. */
    // context->fbFd         = 0;

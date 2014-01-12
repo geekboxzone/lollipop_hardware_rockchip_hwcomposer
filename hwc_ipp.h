@@ -52,7 +52,7 @@ typedef struct ipp_device_t
     int (*ipp_format_is_surport)(int format); //ipp is surport
 	int (*ipp_rotate_and_scale)(struct private_handle_t *handle,\
 								int tranform,\
-								unsigned int* srcPhysical);//ipp rotate or scale
+								unsigned int* srcPhysical,int *videoWidth, int *videoHeight);//ipp rotate or scale
 	void *reserved;//
 } ipp_device_t;
 
