@@ -87,7 +87,7 @@ hwc_rect_t calculate_src_crop_center(hwc_rect_t src_rect, hwc_rect_t dst_rect, i
 hwc_rect_t calculate_wfd_dst_crop_center(hwc_rect_t src_rect, hwc_rect_t dst_rect, int transform)
 {
 	hwc_rect_t crop;
-    memset(&crop, 0, sizeof(hwc_rect_t));
+        memset(&crop, 0, sizeof(hwc_rect_t));
 	switch (transform)
 	{
 	case 0:
@@ -104,7 +104,7 @@ hwc_rect_t calculate_wfd_dst_crop_center(hwc_rect_t src_rect, hwc_rect_t dst_rec
 		   int sh = HEIGHT(src_rect);
 		   int dw = WIDTH(dst_rect);
 		   int dh = HEIGHT(dst_rect);
-	       double aspec = is_scrop_by_width(sw,sh,dw,dh);
+	           double aspec = is_scrop_by_width(sw,sh,dw,dh);
 		   int w = sw*aspec;
 		   int h = sh*aspec;
 		   if (dw > dh)
@@ -473,6 +473,9 @@ int do_rga_transform_and_scale()
 	}
     return 0;
 }
+
+
+
 
 
 

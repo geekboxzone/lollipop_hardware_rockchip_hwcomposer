@@ -153,11 +153,11 @@ void hwc_sync(hwc_display_contents_1_t  *list)
   
   for (int i=0; i<list->numHwLayers; i++)
   {
-	  if (list->hwLayers[i].acquireFenceFd>0)
-	  {
-		  sync_wait(list->hwLayers[i].acquireFenceFd,-1);
-		  ALOGV("fenceFd=%d,name=%s",list->hwLayers[i].acquireFenceFd,list->hwLayers[i].layerName);
-	  }
+     if (list->hwLayers[i].acquireFenceFd>0)
+     {
+       sync_wait(list->hwLayers[i].acquireFenceFd,-1);
+       ALOGV("fenceFd=%d,name=%s",list->hwLayers[i].acquireFenceFd,list->hwLayers[i].layerName);
+     }
 
   }
 }
@@ -1900,11 +1900,11 @@ hwc_prepare(
         }
     }
 
-	hwc_display_contents_1_t* list_wfd = displays[HWC_DISPLAY_VIRTUAL];
-	if (list_wfd)
-	{
-		hwc_prepare_virtual(dev, list);
-	}
+    hwc_display_contents_1_t* list_wfd = displays[HWC_DISPLAY_VIRTUAL];
+    if (list_wfd)
+    {
+      hwc_prepare_virtual(dev, list);
+    }
     #ifdef USE_LCDC_COMPOSER    
     if(context->fb1_cflag == true && context->fbFd1 > 0  )
     {
@@ -2004,7 +2004,7 @@ static int display_commit( int dpy, private_handle_t*  handle)
     int sync = 0;
     ioctl(context->dpyAttr[0].fd, FBIOPUT_VSCREENINFO, &info);
     ioctl(context->dpyAttr[0].fd, RK_FBIOSET_CONFIG_DONE, &sync);
-	context->hwc_ion.last_offset = context->hwc_ion.offset;
+    context->hwc_ion.last_offset = context->hwc_ion.offset;
     if ((context->hwc_ion.offset+context->lcdSize) >= context->fbSize)
     {
      context->hwc_ion.offset = 0; 
@@ -2197,7 +2197,7 @@ hwc_set(
     struct private_handle_t * fbhandle = NULL;
 
     hwc_display_contents_1_t* list = displays[0];  // ignore displays beyond the first
-	hwc_display_contents_1_t* list_wfd = displays[HWC_DISPLAY_VIRTUAL];
+    hwc_display_contents_1_t* list_wfd = displays[HWC_DISPLAY_VIRTUAL];
     hwc_sync(list);
     rga_video_reset();
     if (list != NULL) {
@@ -2489,10 +2489,10 @@ hwc_set(
                         }
                     }
                     hwc_sync_release(list);
-					if (list_wfd)
-					{
-						hwc_sync_release(list_wfd);
-					}
+                    if (list_wfd)
+                    {
+                      hwc_sync_release(list_wfd);
+                    }
                     return hwcSTATUS_OK;
                 }
 
@@ -2564,12 +2564,12 @@ hwc_set(
                         eglSwapBuffers((EGLDisplay) dpy, (EGLSurface) surf);
                     }
                 }*/
- 			 	hwc_sync_release(list);
+ 		hwc_sync_release(list);
 				
-				if (list_wfd)
-				{
-				  hwc_sync_release(list_wfd);
-				}
+		if (list_wfd)
+                {
+                  hwc_sync_release(list_wfd);
+                }
                 return hwcSTATUS_OK;
             }
 
@@ -2670,18 +2670,18 @@ hwc_set(
        // success = eglSwapBuffers((EGLDisplay) dpy, (EGLSurface) surf); 
 
     hwc_sync_release(list);
-	{
-		if (list_wfd)
-		{
-			int mode = -1;
-			unsigned int fb_addr = 0;
-			if (fbBuffer != NULL)
-			{
-				fb_addr = context->hwc_ion.pion->phys + context->hwc_ion.last_offset;
-			}
-			hwc_set_virtual(dev, displays,fb_addr);
-		}
+    {
+      if (list_wfd)
+      {
+        int mode = -1;
+        unsigned int fb_addr = 0;
+        if (fbBuffer != NULL)
+        {
+          fb_addr = context->hwc_ion.pion->phys + context->hwc_ion.last_offset;
 	}
+        hwc_set_virtual(dev, displays,fb_addr);
+      }
+    }
     return 0; //? 0 : HWC_EGL_ERROR;
 OnError:
     /* Error rollback */

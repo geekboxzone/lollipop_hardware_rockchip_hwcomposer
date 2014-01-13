@@ -144,7 +144,7 @@ static int ipp_set_req(struct private_handle_t *handle, int tranform, struct rk2
 	uint32_t ipp_phys_addr_base = ipp_buffer.pion->phys+ipp_buffer.offset;
 	if (ipp_phys_addr_base+videoLen >= (ipp_buffer.pion->phys+ION_SIZE))
 	{
-      ipp_buffer.offset = 0;
+          ipp_buffer.offset = 0;
 	  ipp_phys_addr_base = ipp_buffer.pion->phys+ipp_buffer.offset;
 	}
 	req->src0.YrgbMst = pVideo->videoAddr[0]; //
@@ -157,15 +157,15 @@ static int ipp_set_req(struct private_handle_t *handle, int tranform, struct rk2
 	req->dst0.YrgbMst = ipp_phys_addr_base;
 	req->dst0.CbrMst = req->dst0.YrgbMst+width*height;	
 	if (ipp_rot==IPP_ROT_90 || ipp_rot==IPP_ROT_270)
-    {
+        {
 		req->dst0.w = height;//ipp_x_aligned(pVideo->width);//2¶ÔÆë	
 		req->dst0.h = width;//swith	
 	}
-    else
-    {
-       req->dst0.w = width;
-       req->dst0.h = height;
-    }
+        else
+        {
+           req->dst0.w = width;
+           req->dst0.h = height;
+        }
 	req->store_clip_mode = 1;//¶ÔÆë	
 	req->src_vir_w = pVideo->width; 	
 	req->dst_vir_w = ipp_x_aligned(req->dst0.w);	
@@ -202,16 +202,16 @@ static int  ipp_rotate_and_scale(struct private_handle_t *handle,\
    int err = ipp_set_req(handle, tranform, &ipp_req);
    if (err == 0)
    {
-      int ret = ioctl(ipp_buffer.ipp_fd, IPP_BLIT_SYNC, &ipp_req);
+          int ret = ioctl(ipp_buffer.ipp_fd, IPP_BLIT_SYNC, &ipp_req);
 	  if (ret != 0)
 	  {
 	     ALOGE("ipp IPP_BLIT_SYNC error,ret=%d.",ret);
-         return -1;
+             return -1;
 	  }
 	  srcPhysical[0] = ipp_buffer.Yrgb;
 	  srcPhysical[1] = ipp_buffer.CbrMst;
-      *videoWidth = ipp_req.dst_vir_w;
-      *videoHeight = ipp_req.dst0.h;
+          *videoWidth = ipp_req.dst_vir_w;
+          *videoHeight = ipp_req.dst0.h;
 	  return 0;
    }
    else
