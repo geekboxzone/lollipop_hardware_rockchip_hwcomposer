@@ -3017,6 +3017,21 @@ static int hwc_getDisplayAttributes(struct hwc_composer_device_1* dev, int disp,
    return 0;
 }
 
+int is_surport_wfd_optimize()
+{
+   char value[PROPERTY_VALUE_MAX];
+   memset(value,0,PROPERTY_VALUE_MAX);
+   property_get("drm.service.enabled", value, "false");
+   if (!strcmp(value,"false"))
+   {
+     return false;
+   }
+   else
+   {
+     return true;
+   }
+}
+
 int hwc_copybit(struct hwc_composer_device_1 *dev,
              hwc_layer_1_t *src_layer,
 			 hwc_layer_1_t *dst_layer,
@@ -3199,14 +3214,18 @@ hwc_device_open(
 #if ENABLE_WFD_OPTIMIZE
 	 property_set("sys.enable.wfd.optimize","1");
 #endif
-	 {
-		 char value[PROPERTY_VALUE_MAX];
-		 memset(value,0,PROPERTY_VALUE_MAX);
-		 property_get("sys.enable.wfd.optimize", value, "0");
-		 int type = atoi(value);
-		 context->wfdOptimize = type;
-		 init_rga_cfg(context->engine_fd);
-	 }
+    {
+	char value[PROPERTY_VALUE_MAX];
+	memset(value,0,PROPERTY_VALUE_MAX);
+	property_get("sys.enable.wfd.optimize", value, "0");
+	int type = atoi(value);
+        context->wfdOptimize = type;
+        init_rga_cfg(context->engine_fd);
+        if (type>0 && !is_surport_wfd_optimize())
+        {
+           property_set("sys.enable.wfd.optimize","0");
+        }
+    }
 
     /* Initialize pmem and frameubffer stuff. */
    // context->fbFd         = 0;
