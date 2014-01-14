@@ -1080,7 +1080,8 @@ hwcLayerToWin(
     if (GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO && Src->transform!=0 && Context->ippDev!=NULL)
     {
         Context->ippDev->ipp_rotate_and_scale(srchnd,Src->transform,videodata,&video_width,&video_height);
-	}
+        videodata[1]= videodata[0] + (srcHeight+SrcRect->top) * srcStride + SrcRect->left;
+    }
     else if( Src->direct_addr)
     {
 	    videodata[0]= Src->direct_addr;
