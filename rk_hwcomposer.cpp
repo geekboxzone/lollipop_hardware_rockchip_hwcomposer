@@ -3368,8 +3368,9 @@ hwc_device_open(
 	 rel = ipp_open(context->ippDev);
      if (rel < 0)
      {
-		ALOGE("Open ipp device fail.");
-	 }
+        context->ippDev = NULL;
+	ALOGE("Open ipp device fail.");
+     }
      init_hdmi_mode();
      pthread_t t;
      if (pthread_create(&t, NULL, rk_hwc_hdmi_thread, NULL))
