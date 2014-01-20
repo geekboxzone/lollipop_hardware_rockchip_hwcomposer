@@ -399,10 +399,12 @@ int set_rga_cfg(hwc_cfg_t  *cfg)
   dst_crop = calculate_wfd_dst_crop_center(cfg->src_rect,cfg->dst_rect,transform);
   ALOGD_IF(DEBUG_LOG,"src_crop:[%d,%d,%d,%d]",src_crop.left,src_crop.top,src_crop.right,src_crop.bottom);
   ALOGD_IF(DEBUG_LOG,"dst_crop:[%d,%d,%d,%d]",dst_crop.left,dst_crop.top,dst_crop.right,dst_crop.bottom);
+  struct private_handle_t *src_handle = cfg->src_handle;
+  struct private_handle_t *dst_handle = cfg->dst_handle;
   //src cfg
   if (cfg->rga_fbAddr==0)
   {
-	   g_rga_cfg.rga_cfg.src.yrgb_addr = cfg->src_handle->base;
+	   g_rga_cfg.rga_cfg.src.yrgb_addr = SRC_HANDLE_BASE;
   }
   else
   {
@@ -410,7 +412,7 @@ int set_rga_cfg(hwc_cfg_t  *cfg)
   }
   g_rga_cfg.rga_cfg.src.vir_w = WIDTH(cfg->src_rect);
   g_rga_cfg.rga_cfg.src.vir_h = HEIGHT(cfg->src_rect);
-  g_rga_cfg.rga_cfg.src.format = cfg->src_format == \
+  g_rga_cfg.rga_cfg.src.format = SRC_HANDLE_FORMAT == \
 	  HAL_PIXEL_FORMAT_RGB_565 ?  RK_FORMAT_RGB_565 : RK_FORMAT_RGBX_8888;
   g_rga_cfg.rga_cfg.src.act_w = WIDTH(src_crop);
   g_rga_cfg.rga_cfg.src.act_h = HEIGHT(src_crop);
@@ -419,10 +421,12 @@ int set_rga_cfg(hwc_cfg_t  *cfg)
 
   //dst cfg
   //memset((void*)cfg->dst_handle->base,0,cfg->dst_handle->width*cfg->dst_handle->height*4);
-  g_rga_cfg.rga_cfg.dst.yrgb_addr = cfg->dst_handle->base;
+
+  g_rga_cfg.rga_cfg.dst.yrgb_addr = DST_HANDLE_BASE;
+
   g_rga_cfg.rga_cfg.dst.vir_w = WIDTH(cfg->dst_rect);
   g_rga_cfg.rga_cfg.dst.vir_h = HEIGHT(cfg->dst_rect);
-  g_rga_cfg.rga_cfg.dst.format = cfg->dst_format == \
+  g_rga_cfg.rga_cfg.dst.format = DST_HANDLE_FORMAT == \
 	  HAL_PIXEL_FORMAT_RGB_565 ?  RK_FORMAT_RGB_565 : RK_FORMAT_RGBX_8888;
   g_rga_cfg.rga_cfg.dst.act_w = WIDTH(dst_crop);
   g_rga_cfg.rga_cfg.dst.act_h = HEIGHT(dst_crop);
@@ -452,8 +456,8 @@ int set_rga_cfg(hwc_cfg_t  *cfg)
   g_rga_cfg.rga_cfg.mmu_info.mmu_flag  = ((2 & 0x3) << 4) | 1;
 
   ALOGD_IF(DEBUG_LOG,"src rect[%d,%d,%d,%d],src_addr=0x%x,dst rect[%d,%d,%d,%d],dst_addr=0x%x",\
-	  cfg->src_rect.left,cfg->src_rect.top,cfg->src_rect.right,cfg->src_rect.bottom,cfg->src_handle->base,\
-	  cfg->dst_rect.left,cfg->dst_rect.top,cfg->dst_rect.right,cfg->dst_rect.bottom,cfg->dst_handle->base);
+	  cfg->src_rect.left,cfg->src_rect.top,cfg->src_rect.right,cfg->src_rect.bottom,SRC_HANDLE_BASE,\
+	  cfg->dst_rect.left,cfg->dst_rect.top,cfg->dst_rect.right,cfg->dst_rect.bottom,DST_HANDLE_BASE);
 
   return 0;
 }

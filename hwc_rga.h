@@ -22,6 +22,30 @@
 #include "../libgralloc_ump/gralloc_priv.h"
 #endif
 
+#ifdef TARGET_BOARD_PLATFORM_RK30XXB
+#define SRC_HANDLE_BASE    src_handle->iBase
+#define SRC_HANDLE_WIDTH   src_handle->iWidth
+#define SRC_HANDLE_HEIGHT  src_handle->iHeight
+#define SRC_HANDLE_FORMAT  src_handle->iFormat
+
+#define DST_HANDLE_BASE    dst_handle->iBase
+#define DST_HANDLE_WIDTH   dst_handle->iWidth
+#define DST_HANDLE_HEIGHT  dst_handle->iHeight
+#define DST_HANDLE_FORMAT  dst_handle->iFormat
+#define private_handle_t IMG_native_handle_t
+#else
+#define SRC_HANDLE_BASE    src_handle->base
+#define SRC_HANDLE_WIDTH   src_handle->width
+#define SRC_HANDLE_HEIGHT  src_handle->height
+#define SRC_HANDLE_FORMAT  src_handle->format
+
+#define DST_HANDLE_BASE    dst_handle->base
+#define DST_HANDLE_WIDTH   dst_handle->width
+#define DST_HANDLE_HEIGHT  dst_handle->height
+#define DST_HANDLE_FORMAT  dst_handle->format
+
+#endif
+
 //#define  ENABLE_WFD_OPTIMIZE 1
 #define  DEBUG_LOG  1
 

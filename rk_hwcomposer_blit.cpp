@@ -1276,27 +1276,28 @@ hwcLayerToWin(
         info.xres_virtual = srcStride;
         info.yres_virtual = srcHeight + hwcMAX(Src->exBottom,Src->exTop);
 
-        if (srchnd->format == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
-        {
-          if (Src->transform==HWC_TRANSFORM_ROT_90||Src->transform==HWC_TRANSFORM_ROT_270)
-          {
-             info.yres = (srcRects[i].right- srcRects[i].left) + (Src->exLeft + Src->exRight);
-             info.xres = (srcRects[i].bottom - srcRects[i].top) + (Src->exTop + Src->exBottom);
-             info.xres_virtual = video_width;//info.xres ;//srcStride;
-             info.yres_virtual = info.yres;//srcHeight + hwcMAX(Src->exBottom,Src->exTop);
-             if (Src->transform==HWC_TRANSFORM_ROT_90)
-             {
-                info.xoffset = info.xres_virtual - info.xres;
-             } 
-           }
-           else if (Src->transform==HWC_TRANSFORM_ROT_180)
-           {
-             info.yoffset = info.yres_virtual - info.yres + srcRects[i].top;
-           }
-           else
-           {
-           }
-        }
+		if (GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
+		{
+			if (Src->transform==HWC_TRANSFORM_ROT_90||Src->transform==HWC_TRANSFORM_ROT_270)
+			{
+			    info.yres = (srcRects[i].right- srcRects[i].left) + (Src->exLeft + Src->exRight);
+        	    info.xres = (srcRects[i].bottom - srcRects[i].top) + (Src->exTop + Src->exBottom);
+        	    info.xres_virtual = video_width;//info.xres ;//srcStride;
+        	    info.yres_virtual = info.yres;//srcHeight + hwcMAX(Src->exBottom,Src->exTop);
+                if (Src->transform==HWC_TRANSFORM_ROT_90)
+                {
+                  info.xoffset = info.xres_virtual - info.xres;
+                } 
+			}
+			else if (Src->transform==HWC_TRANSFORM_ROT_180)
+			{
+				info.yoffset = info.yres_virtual - info.yres + srcRects[i].top;
+			}
+			else
+			{
+
+			}
+		}
         
         info.nonstd |= hwcMAX(dstRects[i].left - Src->exLeft, 0) << 8;
         info.nonstd |= hwcMAX(dstRects[i].top - Src->exTop, 0) << 20;

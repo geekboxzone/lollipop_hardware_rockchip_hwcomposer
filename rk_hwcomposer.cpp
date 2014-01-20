@@ -2143,14 +2143,14 @@ int hwc_set_virtual(hwc_composer_device_1_t * dev, hwc_display_contents_1_t  **c
 		cfg.src_rect.top = (int)fbLayer->displayFrame.top;
 		cfg.src_rect.right = (int)fbLayer->displayFrame.right;
 		cfg.src_rect.bottom = (int)fbLayer->displayFrame.bottom;
-		cfg.src_format = cfg.src_handle->format;
+		//cfg.src_format = cfg.src_handle->format;
 
 		cfg.rga_fbAddr = rga_fb_addr;
 		cfg.dst_rect.left = (int)wfdLayer->displayFrame.left;
 		cfg.dst_rect.top = (int)wfdLayer->displayFrame.top;
 		cfg.dst_rect.right = (int)wfdLayer->displayFrame.right;
 		cfg.dst_rect.bottom = (int)wfdLayer->displayFrame.bottom;
-		cfg.dst_format = cfg.dst_handle->format;
+		//cfg.dst_format = cfg.dst_handle->format;
 		set_rga_cfg(&cfg);
 		do_rga_transform_and_scale();
 	}
