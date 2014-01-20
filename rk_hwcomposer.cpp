@@ -3368,6 +3368,7 @@ hwc_device_open(
 	 rel = ipp_open(context->ippDev);
      if (rel < 0)
      {
+        delete context->ippDev;
         context->ippDev = NULL;
 	ALOGE("Open ipp device fail.");
      }
