@@ -1439,8 +1439,8 @@ int hwc_do_special_composer( hwc_display_contents_1_t  * list)
             TotalSize += (rects[0].right - rects[0].left) \
                             *  (rects[0].bottom - rects[0].top) * 4;
         }
-        // fb regard as RGBX , datasize is width * height * 4, so 1.25 multiple is width * height * 4 * 5/4
-        if ( TotalSize >= (_contextAnchor->fbWidth * _contextAnchor->fbHeight * 5))
+        // fb regard as RGBX , datasize is width * height * 4, so 1.25 multiple is width * height * 4 * 3/4
+        if ( TotalSize >= (_contextAnchor->fbWidth * _contextAnchor->fbHeight * 3))
         {
             IsLarge = true;
         }
