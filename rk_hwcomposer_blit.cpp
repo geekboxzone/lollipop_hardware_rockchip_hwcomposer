@@ -1054,6 +1054,8 @@ hwcLayerToWin(
     hwcRECT dstRects[16];
     int video_width = 0;
     int video_height = 0;
+    unsigned int dst_x;
+    unsigned int dst_y;
     hwc_rect_t const * rects = Region->rects;
     
     int fbFd = Win ? Context->fbFd1 : Context->fbFd;
@@ -1090,7 +1092,8 @@ hwcLayerToWin(
     else
     {
 	    videodata[0]= srcPhysical;
-	    videodata[1]= srcPhysical + (srcHeight+SrcRect->top) * srcStride + SrcRect->left;
+	    //videodata[1]= srcPhysical + (srcHeight+SrcRect->top) * srcStride + SrcRect->left;
+	    videodata[1]= srcPhysical + srcHeight * srcStride ;
     }
 
     LOGV(" Src->transform=%d,SrcRect[%d,%d,%d,%d],DstRect[%d,%d,%d,%d]",Src->transform ,
@@ -1271,6 +1274,8 @@ hwcLayerToWin(
         
         info.xoffset = hwcMAX(srcRects[i].left - Src->exLeft, 0);
         info.yoffset = hwcMAX(srcRects[i].top - Src->exTop, 0);
+        info.xoffset = info.xoffset - info.xoffset %2;
+        info.yoffset = info.yoffset - info.yoffset %2;
         info.xres = (srcRects[i].right- srcRects[i].left) + (Src->exLeft + Src->exRight);
         info.yres = (srcRects[i].bottom - srcRects[i].top) + (Src->exTop + Src->exBottom);
         info.xres_virtual = srcStride;
@@ -1299,8 +1304,12 @@ hwcLayerToWin(
 			}
 		}
         
-        info.nonstd |= hwcMAX(dstRects[i].left - Src->exLeft, 0) << 8;
-        info.nonstd |= hwcMAX(dstRects[i].top - Src->exTop, 0) << 20;
+        dst_x = (hwcMAX(dstRects[i].left - Src->exLeft, 0));  
+        dst_x = dst_x - dst_x%2;
+        info.nonstd |=  dst_x << 8;
+        dst_y = (hwcMAX(dstRects[i].top - Src->exTop, 0));
+        dst_y = dst_y -dst_y%2;
+        info.nonstd |= dst_y << 20;
         info.grayscale |= ((dstRects[i].right - dstRects[i].left) + (Src->exLeft + Src->exRight)) << 8;
         info.grayscale |= ((dstRects[i].bottom - dstRects[i].top) + (Src->exTop + Src->exBottom)) << 20;
 
