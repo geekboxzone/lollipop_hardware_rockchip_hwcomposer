@@ -43,7 +43,7 @@
 #include <sys/stat.h>
 #include "hwc_ipp.h"
 #include "hwc_rga.h"
-#define MAX_DO_SPECIAL_COUNT        5
+#define MAX_DO_SPECIAL_COUNT        8
 #define RK_FBIOSET_ROTATE            0x5003 
 #define FPS_NAME                    "com.aatt.fpsm"
 #define BOTTOM_LAYER_NAME           "NavigationBar"
@@ -425,14 +425,15 @@ _CheckLayer(
         ||((hfactor <1.0f || vfactor <1.0f) &&(handle && GPU_FORMAT == HAL_PIXEL_FORMAT_RGBA_8888)) // because rga scale up RGBA foramt not support
         #endif
         ||((Layer->transform != 0)&&(!videoflag))
-#ifndef USE_LCDC_COMPOSER
+        #ifndef USE_LCDC_COMPOSER
+        #error
         ||(Context->IsRk3188 && !(videoflag && Count <=2))
         #endif
         || skip_count<5
         )
     {
         /* We are forbidden to handle this layer. */
-        LOGV("%s(%d):Will not handle layer %s: SKIP_LAYER,Layer->transform=%d,hfactor=%f,vfactor=%f,Layer->flags=%d",
+        LOGD("%s(%d):Will not handle layer %s: SKIP_LAYER,Layer->transform=%d,hfactor=%f,vfactor=%f,Layer->flags=%d",
              __FUNCTION__, __LINE__, Layer->LayerName,Layer->transform,hfactor,vfactor,Layer->flags);
         Layer->compositionType = HWC_FRAMEBUFFER;
         if (skip_count<5)
@@ -485,72 +486,42 @@ _CheckLayer(
              return HWC_FRAMEBUFFER;
         }
 
-        LOGV("name[%d]=%s,phy_addr=%x",Index,list->hwLayers[Index].LayerName,handle->phy_addr);
+        LOGD("name[%d]=%s,phy_addr=%x",Index,list->hwLayers[Index].LayerName,handle->phy_addr);
 
-        #ifdef USE_LCDC_COMPOSER
-        property_get("sys.SD2HD",pro_value,0);
         if(  (Layer->visibleRegionScreen.numRects == 1)
               &&(Count <= MAX_DO_SPECIAL_COUNT)
               && (getHdmiMode()==0)
-              && strcmp(pro_value,"true")
-              && handle->phy_addr != 0
+             // && handle->phy_addr != 0
             )    // layer <=3,do special processing
 
         {
 
-            int SrcHeight = Layer->sourceCrop.bottom - Layer->sourceCrop.top;
-            int SrcWidth = Layer->sourceCrop.right - Layer->sourceCrop.left;
-            bool isLandScape = ( (0==Layer->realtransform) \
-                               || (HWC_TRANSFORM_ROT_180==Layer->realtransform) );
-            bool isSmallRect = (isLandScape && (SrcHeight < Context->fbHeight/4))  \
-                                ||(!isLandScape && (SrcWidth < Context->fbWidth/4)) ;
-            int AlignLh = (android::bytesPerPixel(handle->format))*32;
 
             if(Index == 0)
             {
                 Layer->compositionType = HWC_TOWIN0;
                 Layer->flags           = 0;
+                //ALOGD("win 0");
                 break;
             }
             else if( Index == 1 )
             {
-                if( hfactor != 1.0f || vfactor != 1.0f
-                    || (!isSmallRect &&(handle->stride%AlignLh != 0)) ) // modify win1 no suppost scale
-                {
-                    Layer->compositionType = HWC_FRAMEBUFFER;
-                    return HWC_FRAMEBUFFER;
-                }
-                else
-                {
-                    Layer->compositionType = HWC_TOWIN1;
-                    Layer->flags           = 0;
-                }
+                Layer->compositionType = HWC_TOWIN1;
+                Layer->flags           = 0;
+                //ALOGD("win 1");                
                 break;
             }
-
-            if( Index >= 2 )
+            else
             {
-                bool IsBottom = !strcmp(BOTTOM_LAYER_NAME,list->hwLayers[Index].LayerName);
-                bool IsTop = !strcmp(TOP_LAYER_NAME,list->hwLayers[Index].LayerName);
-                bool IsFps = !strcmp(FPS_NAME,list->hwLayers[Index].LayerName);
+                Layer->compositionType = HWC_BLITTER;
+                Layer->flags           = 0;
+                //ALOGD("other [%d]",Index);                
 
-                if( (!(IsBottom | IsTop | IsFps)) ||
-                    (videoflag && Count > 3)||!isSmallRect)
-                {
-                    if(Context->fbFd1 > 0  )
-                    {
-                        Context->fb1_cflag = true;
-                    }
-                    Layer->compositionType = HWC_FRAMEBUFFER;
-                    return HWC_FRAMEBUFFER;
-                }
+                break;
             }
+                        
 
-            if(Context->fbFd1 > 0 && Count == 1 )
-            {
-                Context->fb1_cflag = true;
-
-            }
+           
         }
         else
         {
@@ -558,76 +529,11 @@ _CheckLayer(
             {
                 Context->fb1_cflag = true;
             }
-
-            /* return GPU for temp*/
-            //if(IsRk3188)
-            {
-                Layer->compositionType = HWC_FRAMEBUFFER;
-                return HWC_FRAMEBUFFER;
-            }
+            Layer->compositionType = HWC_FRAMEBUFFER;
+            return HWC_FRAMEBUFFER;
             /*    ----end  ----*/
-        }
-        #else
-        if( (GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO && Count <= 2 && getHdmiMode()==0 && Context->wfdOptimize==0) 
-           || (GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO && Count == 3 && getHdmiMode()==0 \
-		      && strstr(list->hwLayers[Count - 2].LayerName, "SystemBar") && Context->wfdOptimize==0)
-          )
-        {
-          /*if (strstr(list->hwLayers[Count - 1].LayerName, "android.rk.RockVideoPlayer")
-               ||strstr(list->hwLayers[Count - 1].LayerName, "SystemBar")  // for Gallery
-               ||strstr(list->hwLayers[Count - 1].LayerName,"com.android.gallery3d")  // for Gallery
-               ||strstr(list->hwLayers[Count - 1].LayerName,"com.asus.ephoto.app.MovieActivity")
-			   ||strstr(list->hwLayers[Count - 1].LayerName,"com.mxtech.videoplayer.ad"))
-          {*/
-           if (Layer->transform==0 || (Context->ippDev!=NULL && Layer->transform!=0 && Context->ippDev->ipp_is_enable()>0))
-           {
-            Layer->compositionType = HWC_TOWIN0;
-            Layer->flags = 0;
-            Context->flag = 1;
-			break;
-           }
-          //}
-        }
-        #endif
+        }           
 
-        if( (GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
-           )
-        //if( handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO )
-        {
-            Layer->compositionType = HWC_FRAMEBUFFER;
-            return HWC_FRAMEBUFFER;
-
-        }
-        
-
-        //if( videoflag)
-        ///{
-
-           // Layer->compositionType = HWC_FRAMEBUFFER;
-           // return HWC_FRAMEBUFFER;
-        //}
-
-
-        //if((!strcmp(Layer->LayerName,"Starting com.android.camera"))
-            //||(!strcmp(Layer->LayerName,"com.android.camera/com.android.camera.Camera"))
-            //)
-        /*
-        if(strstr(Layer->LayerName,"com.android.camera"))
-        {
-            Layer->compositionType = HWC_FRAMEBUFFER;
-            return HWC_FRAMEBUFFER;
-
-        }
-        */
-
-        /* Normal 2D blit can be use. */
-        Layer->compositionType = HWC_BLITTER;
-
-        /* Stupid, disable alpha blending for the first layer. */
-        if (Index == 0)
-        {
-            Layer->blending = HWC_BLENDING_NONE;
-        }
     }
     while (0);
 
@@ -1739,16 +1645,6 @@ hwc_prepare(
     /* Roll back to FRAMEBUFFER if any layer can not be handled. */
     if(new_value <= 0 )
     {
-        #ifdef USE_LCDC_COMPOSER    
-        if(context->fbFd1 > 0  )
-        {
-            if(closeFb(context->fbFd1) == 0)
-            {
-                context->fbFd1 = 0;
-                context->fb1_cflag = false;
-            }       
-        }
-        #endif        
         for (i = 0; i < (list->numHwLayers - 1); i++)
         {
             list->hwLayers[i].compositionType = HWC_FRAMEBUFFER;
@@ -1795,12 +1691,6 @@ hwc_prepare(
         }
     }
 
-    #ifdef USE_LCDC_COMPOSER
-    if(i == (list->numHwLayers - 1))
-        bkupmanage.ckpstcnt ++;
-    else 
-        bkupmanage.ckpstcnt = 0;        
-    #endif
     /* Roll back to FRAMEBUFFER if any layer can not be handled. */
     if (i != (list->numHwLayers - 1))
     {
@@ -1812,18 +1702,6 @@ hwc_prepare(
         {
             list->hwLayers[j].compositionType = HWC_FRAMEBUFFER;
 
-            /*  // move to exit
-            struct private_handle_t * handle = (struct private_handle_t *)list->hwLayers[j].handle;
-            if (handle && GPU_FORMAT==HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
-            {
-               ALOGV("rga_video_copybit,%x,w=%d,h=%d",\
-                      GPU_BASE,GPU_WIDTH,GPU_HEIGHT);
-               if (!_contextAnchor->video_frame.vpu_handle)
-               {
-                  rga_video_copybit(handle,handle);
-               }
-            }
-            */
         }
 
         if(context->fbFd1 > 0  )
@@ -1833,58 +1711,10 @@ hwc_prepare(
 
 
     }
-    #ifdef USE_LCDC_COMPOSER
-    else if( (list->numHwLayers - 1) <= MAX_DO_SPECIAL_COUNT && getHdmiMode()==0)
-    {
-        //struct timeval tpend1, tpend2;
-        //long usec1 = 0;
-       // gettimeofday(&tpend1,NULL);    
-        hwc_do_special_composer(list);
-       // gettimeofday(&tpend2,NULL);
-       // usec1 = 1000*(tpend2.tv_sec - tpend1.tv_sec) + (tpend2.tv_usec- tpend1.tv_usec)/1000;
-      //  if((int)usec1 > 5)
-         //   ALOGD(" hwc_do_special_composer  time=%ld ms",usec1);
-        
-    }
-
-
-    /*------------Roll back to HWC_BLITTER if any layer can not be handled by lcdc -----------*/
-    if((list->numHwLayers -1) >= 2)
-    {
-        size_t LcdCont = 0;
-        for(  i= 0; i < (list->numHwLayers - 1) ; i++)
-        {
-            if(list->hwLayers[i].compositionType == HWC_TOWIN0 |
-                list->hwLayers[i].compositionType == HWC_TOWIN1
-               )
-            {
-                LcdCont ++;
-            }
-        }
-        if( LcdCont == 1)
-        {
-            for(  i= 0; i < 2 ; i++)
-            {
-                list->hwLayers[i].compositionType = HWC_FRAMEBUFFER;
-                if(context->fbFd1 > 0  )
-                {
-                    context->fb1_cflag = true;                    
-                    
-                }
-            }
-        }
-    }
-    /*--------------------end----------------------------*/
-    #endif
     if(list->numHwLayers > 1 && 
         list->hwLayers[0].compositionType == HWC_FRAMEBUFFER ) // GPU handle it ,so recover
     {
         size_t j;
-    #ifdef USE_LCDC_COMPOSER    
-        hwc_LcdcToGpu(dev,numDisplays,displays);         //Dont remove
-        bkupmanage.dstwinNo = 0xff;  // GPU handle
-        bkupmanage.invalid = 1;
-    #endif
         for (j = 0; j <(list->numHwLayers - 1); j++)
         {
             struct private_handle_t * handle = (struct private_handle_t *)list->hwLayers[j].handle;
@@ -1903,18 +1733,8 @@ hwc_prepare(
     hwc_display_contents_1_t* list_wfd = displays[HWC_DISPLAY_VIRTUAL];
     if (list_wfd)
     {
-      hwc_prepare_virtual(dev, list);
+        hwc_prepare_virtual(dev, list);
     }
-    #ifdef USE_LCDC_COMPOSER    
-    if(context->fb1_cflag == true && context->fbFd1 > 0  )
-    {
-        if(closeFb(context->fbFd1) == 0)
-        {
-            context->fbFd1 = 0;
-            context->fb1_cflag = false;
-        }
-    }        
-    #endif
     return 0;
 }
 
@@ -2564,9 +2384,9 @@ hwc_set(
                         eglSwapBuffers((EGLDisplay) dpy, (EGLSurface) surf);
                     }
                 }*/
- 		hwc_sync_release(list);
+ 		        hwc_sync_release(list);
 				
-		if (list_wfd)
+		        if (list_wfd)
                 {
                   hwc_sync_release(list_wfd);
                 }
@@ -2678,7 +2498,7 @@ hwc_set(
         if (fbBuffer != NULL)
         {
           fb_addr = context->hwc_ion.pion->phys + context->hwc_ion.last_offset;
-	}
+	    }
         hwc_set_virtual(dev, displays,fb_addr);
       }
     }
@@ -3203,22 +3023,25 @@ hwc_device_open(
     context->device.layer_recover   = hwc_layer_recover;
     #endif
 
+    
     /* Get gco2D object pointer. */
+    /*
     context->engine_fd = open("/dev/rga",O_RDWR,0);
     if( context->engine_fd < 0)
     {
         hwcONERROR(hwcRGA_OPEN_ERR);
 
     }
+    */
 
 #if ENABLE_WFD_OPTIMIZE
 	 property_set("sys.enable.wfd.optimize","1");
 #endif
     {
-	char value[PROPERTY_VALUE_MAX];
-	memset(value,0,PROPERTY_VALUE_MAX);
-	property_get("sys.enable.wfd.optimize", value, "0");
-	int type = atoi(value);
+    	char value[PROPERTY_VALUE_MAX];
+    	memset(value,0,PROPERTY_VALUE_MAX);
+    	property_get("sys.enable.wfd.optimize", value, "0");
+    	int type = atoi(value);
         context->wfdOptimize = type;
         init_rga_cfg(context->engine_fd);
         if (type>0 && !is_surport_wfd_optimize())
@@ -3265,22 +3088,6 @@ hwc_device_open(
     context->IsRk3188 = !strcmp(pro_value,"rk3188");
     context->fbSize = info.xres*info.yres*4*3;
     context->lcdSize = info.xres*info.yres*4; 
-    {
-#ifndef USE_LCDC_COMPOSER
-     ion_open(context->fbSize, ION_MODULE_UI, &context->hwc_ion.ion_device);
-     int err = context->hwc_ion.ion_device->alloc(context->hwc_ion.ion_device, context->fbSize,\
-                                              _ION_HEAP_RESERVE, &context->hwc_ion.pion); 
-     if (!err)
-     {
-        ALOGD("Ion alloc succ.");  
-     }
-     else
-     {
-        ALOGE("Ion alloc fail.");  
-     }
-    context->hwc_ion.offset=0;
-#endif
-    }
 
     /* Increment reference count. */
     context->reference++;
@@ -3293,27 +3100,6 @@ hwc_device_open(
     {
       property_set("sys.display.oritation","2");
     }
-#ifdef USE_LCDC_COMPOSER
-    memset(&bkupmanage,0,sizeof(hwbkupmanage));
-    bkupmanage.dstwinNo = 0xff;
-    ion_open(fixInfo.line_length * context->fbHeight * 2, ION_MODULE_UI, &context->rk_ion_device);
-	rel = context->rk_ion_device->alloc(context->rk_ion_device, fixInfo.line_length * context->fbHeight*2 ,_ION_HEAP_RESERVE, &context->pion);
-	if (!rel)
-	{
-	    int i;
-        for(i=0;i<bakupbufsize;i++)
-        {
-            bkupmanage.bkupinfo[i].pmem_bk = context->pion->phys + (fixInfo.line_length * context->fbHeight/4)*i;
-            bkupmanage.bkupinfo[i].pmem_bk_log = (void*)((int)context->pion->virt + (fixInfo.line_length * context->fbHeight/4)*i);
-        }
-        bkupmanage.direct_addr = context->pion->phys + (fixInfo.line_length * context->fbHeight/4)*i;
-        bkupmanage.direct_addr_log = (void*)((int)context->pion->virt + (fixInfo.line_length * context->fbHeight/4)*i);
-	}
-	else
-	{
-	    ALOGE(" ion_device->alloc failed");
-	}
-#endif
 
 #if USE_HW_VSYNC
 
@@ -3364,20 +3150,22 @@ hwc_device_open(
         LOGD(" rga version =%s",Version);
 
     }
+    /*
 	 context->ippDev = new ipp_device_t();
 	 rel = ipp_open(context->ippDev);
      if (rel < 0)
      {
         delete context->ippDev;
         context->ippDev = NULL;
-	ALOGE("Open ipp device fail.");
+	    ALOGE("Open ipp device fail.");
      }
-     init_hdmi_mode();
-     pthread_t t;
-     if (pthread_create(&t, NULL, rk_hwc_hdmi_thread, NULL))
-     {
-         LOGD("Create readHdmiMode thread error .");
-     }
+     */
+    init_hdmi_mode();
+    pthread_t t;
+    if (pthread_create(&t, NULL, rk_hwc_hdmi_thread, NULL))
+    {
+        LOGD("Create readHdmiMode thread error .");
+    }
     return 0;
 
 OnError:

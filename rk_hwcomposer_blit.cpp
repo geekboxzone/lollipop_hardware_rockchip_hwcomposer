@@ -1096,6 +1096,7 @@ hwcLayerToWin(
 	    videodata[1]= srcPhysical + srcHeight * srcStride ;
     }
 
+
     LOGV(" Src->transform=%d,SrcRect[%d,%d,%d,%d],DstRect[%d,%d,%d,%d]",Src->transform ,
                 SrcRect->left,SrcRect->top,SrcRect->right,SrcRect->bottom ,
                 DstRect->left,DstRect->top,DstRect->right,DstRect->bottom);
@@ -1323,7 +1324,14 @@ hwcLayerToWin(
             LOGE("%s(%d):  fd[%d] Failed,DataAddr=%x", __FUNCTION__, __LINE__,fbFd,videodata[0]);
             return hwcSTATUS_IO_ERR;
         }
-       // _DumpFbInfo(&info, Win);
+        if ( ioctl(fbFd, RK_FBIOSET_DMABUF_FD, &(srchnd->share_fd)) == -1)
+        {
+            LOGE("%s(%d):  fd[%d] SET_DMABUF_FD Failed,share_fd=%x", __FUNCTION__, __LINE__,srchnd->share_fd);
+            return hwcSTATUS_IO_ERR;
+        }
+
+        
+        //_DumpFbInfo(&info, Win);
 
         if (ioctl(fbFd, FBIOPUT_VSCREENINFO, &info) == -1)
         {
