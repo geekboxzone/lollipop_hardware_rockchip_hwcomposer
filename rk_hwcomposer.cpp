@@ -426,7 +426,6 @@ _CheckLayer(
         #endif
         ||((Layer->transform != 0)&&(!videoflag))
         #ifndef USE_LCDC_COMPOSER
-        #error
         ||(Context->IsRk3188 && !(videoflag && Count <=2))
         #endif
         || skip_count<5
