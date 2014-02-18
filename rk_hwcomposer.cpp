@@ -485,7 +485,7 @@ _CheckLayer(
              return HWC_FRAMEBUFFER;
         }
 
-        LOGD("name[%d]=%s,phy_addr=%x",Index,list->hwLayers[Index].LayerName,handle->phy_addr);
+        LOGD("name[%d]=%s",Index,list->hwLayers[Index].LayerName);
 
         if(  (Layer->visibleRegionScreen.numRects == 1)
               &&(Count <= MAX_DO_SPECIAL_COUNT)
