@@ -432,7 +432,7 @@ _CheckLayer(
         )
     {
         /* We are forbidden to handle this layer. */
-        LOGD("%s(%d):Will not handle layer %s: SKIP_LAYER,Layer->transform=%d,hfactor=%f,vfactor=%f,Layer->flags=%d",
+        LOGV("%s(%d):Will not handle layer %s: SKIP_LAYER,Layer->transform=%d,hfactor=%f,vfactor=%f,Layer->flags=%d",
              __FUNCTION__, __LINE__, Layer->LayerName,Layer->transform,hfactor,vfactor,Layer->flags);
         Layer->compositionType = HWC_FRAMEBUFFER;
         if (skip_count<5)
