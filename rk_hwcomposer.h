@@ -42,22 +42,14 @@
 //#define USE_LCDC_COMPOSER
 #define USE_HW_VSYNC        1
 #define FBIOSET_OVERLAY_STATE     	0x5018
-#define bakupbufsize 4
+#define MaxZones 10
 
-#ifdef TARGET_BOARD_PLATFORM_RK30XXB
- #define GPU_BASE    handle->iBase
- #define GPU_WIDTH   handle->iWidth
- #define GPU_HEIGHT  handle->iHeight
- #define GPU_FORMAT  handle->iFormat
- #define GPU_DST_FORMAT  DstHandle->iFormat
- #define private_handle_t IMG_native_handle_t
-#else
- #define GPU_BASE    handle->base
- #define GPU_WIDTH   handle->width
- #define GPU_HEIGHT  handle->height
- #define GPU_FORMAT  handle->format
- #define GPU_DST_FORMAT  DstHandle->format
-#endif
+
+#define GPU_BASE    handle->base
+#define GPU_WIDTH   handle->width
+#define GPU_HEIGHT  handle->height
+#define GPU_FORMAT  handle->format
+#define GPU_DST_FORMAT  DstHandle->format
 /* Set it to 1 to enable swap rectangle optimization;
  * Set it to 0 to disable. */
 /* Set it to 1 to enable pmem cache flush.
@@ -110,37 +102,53 @@ typedef struct _hwcRECT
 }
 hwcRECT;
 
-typedef struct _hwbkupinfo
+typedef enum _hwc_lcdc_res
 {
-    unsigned int pmem_bk;
-    unsigned int buf_addr;
-    void* pmem_bk_log;
-    void* buf_addr_log;
-    int xoffset;
-    int yoffset;
-    int w_vir;
-    int h_vir;
-    int w_act;
-    int h_act;
-    int format;
+	win0				= 1,
+	win1                = 2,
+	win2_0              = 3,   
+	win2_1              = 4,
+	win2_2              = 5,
+	win2_3              = 6,   
+	win3_0              = 7,
+	win3_1              = 8,
+	win3_2              = 9,
+	win3_3              = 10,
+
 }
-hwbkupinfo;
-typedef struct _hwbkupmanage
+hwc_lcdc_res;
+
+typedef struct _ZoneInfo
 {
-    int count;
-    unsigned int direct_addr;
-    void* direct_addr_log;    
-    int invalid;
-    int needrev;
-    int dstwinNo;
-    int skipcnt;
-    unsigned int ckpstcnt;
-	char LayerName[LayerNameLength + 1];    
-    unsigned int crrent_dis_addr;
-    hwbkupinfo bkupinfo[bakupbufsize];
-    struct private_handle_t *handle_bk;
+    unsigned int        stride;
+    unsigned int        width;
+    unsigned int        height;
+    hwc_rect_t  src_rect;
+    hwc_rect_t  disp_rect;
+	int         layer_fd;
+	int         zone_alpha;
+	int         blend;
+	bool        is_stretch;
+	int         format;
+	int         zone_index;
+	int         layer_index;
+	int         transform;
+	int         realtransform;
+	int         layer_flag;
+	int         dispatched;
+	int         sort;
+	char        LayerName[LayerNameLength + 1];   
 }
-hwbkupmanage;
+ZoneInfo;
+
+typedef struct _ZoneManager
+{
+    ZoneInfo    zone_info[MaxZones];
+    int         zone_cnt;   
+    int         composter_mode;        
+	        
+}
+ZoneManager;
 #define IN
 #define OUT
 
@@ -230,13 +238,12 @@ typedef struct _hwcContext
     int       fbFd;
     int       fbFd1;
     int       vsync_fd;
-    int       fbWidth;
-    int       fbHeight;
+    struct private_handle_t fbhandle ;    
     bool      fb1_cflag;
     char      cupcore_string[16];
     hwc_ion_t      hwc_ion;
     DisplayAttributes              dpyAttr[HWC_NUM_DISPLAY_TYPES];
-     struct                         fb_var_screeninfo info;
+    struct                         fb_var_screeninfo info;
 
     hwc_procs_t *procs;
     ipp_device_t *ippDev;
@@ -255,7 +262,8 @@ typedef struct _hwcContext
 	vpu_frame_t  video_frame;
 	unsigned int fbSize;
 	unsigned int lcdSize;
-	char *pbakupbuf[bakupbufsize];
+	ZoneManager  zone_manager;;
+
 #if ENABLE_HWC_WORMHOLE
     /* Splited composition area queue. */
     hwcArea *                        compositionArea;
@@ -264,7 +272,6 @@ typedef struct _hwcContext
     hwcAreaPool                      areaPool;
 #endif
      int      flag;
-    bool IsRk3188;  
 }
 hwcContext;
 

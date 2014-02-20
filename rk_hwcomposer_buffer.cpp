@@ -18,11 +18,7 @@
 
 
 #include "rk_hwcomposer.h"
-#ifdef TARGET_BOARD_PLATFORM_RK30XXB    
-#include <hardware/hal_public.h>
-#else
 #include "../libgralloc_ump/gralloc_priv.h"
-#endif
 #include <linux/fb.h>
 #include <linux/fs.h>
 #include <sys/ioctl.h>
@@ -61,11 +57,7 @@ hwcLockBuffer(
     unsigned int stride;
 	int bpp,bpr;
     struct private_handle_t * handle = Handle;
-#ifndef TARGET_BOARD_PLATFORM_RK30XXB    	
 	stride = Handle->stride;	
-#else
-    stride = gcmALIGN(GPU_WIDTH,32);
-#endif	   
    	width  = GPU_WIDTH ;
     height = GPU_HEIGHT;
     
@@ -74,31 +66,13 @@ hwcLockBuffer(
 
 	//LOGD("hwcLockBuffer width=%d,Handle->format=%x,bytesPerPixel=%d,stride=%d",width,Handle->format,android::bytesPerPixel(Handle->format),stride);
     {
-#ifndef TARGET_BOARD_PLATFORM_RK30XXB    
 		if (Handle->flags & private_handle_t::PRIV_FLAGS_FRAMEBUFFER)
-#else    
-        if (Handle->usage & GRALLOC_USAGE_HW_FB)
-#endif        
         {
             /* Framebuffer. */
             if (Context->fbFd == 0)
             {
                 struct fb_fix_screeninfo fixInfo;
-#ifndef TARGET_BOARD_PLATFORM_RK30XXB   
-                int rel = ioctl(Handle->fd, FBIOGET_FSCREENINFO, &fixInfo);
-			
-#else                
-                int iFbFd;
-        		iFbFd = open("/dev/graphics/fb0", O_RDWR, 0);
-
-				if (!iFbFd)
-				{
-					LOGE("open(dev/graphics/fb0) failed in %s", __func__);
-					return hwcSTATUS_IO_ERR;
-				}
-				int rel = ioctl(iFbFd, FBIOGET_FSCREENINFO, &fixInfo);
-#endif				
-            
+                int rel = ioctl(Handle->fd, FBIOGET_FSCREENINFO, &fixInfo);			            
 
                 if (rel != 0)
                 {
@@ -107,11 +81,7 @@ hwcLockBuffer(
 
                     return hwcSTATUS_IO_ERR;
                 }
-#ifndef TARGET_BOARD_PLATFORM_RK30XXB  
 				Context->fbFd       = Handle->fd;
-#else
-				Context->fbFd       = iFbFd;
-#endif
 			
 
              
@@ -119,18 +89,9 @@ hwcLockBuffer(
                 Context->fbStride   = fixInfo.line_length;
             }
 
-#ifndef TARGET_BOARD_PLATFORM_RK30XXB    
             *Logical       = (void *) GPU_BASE;
-#else
-            *Logical       = (void *) GPU_BASE;
-#endif
 
-#ifndef USE_LCDC_COMPOSER
 	 		*Physical        = (unsigned int)(Context->hwc_ion.pion->phys+Context->hwc_ion.offset);
-#else
-            *Physical      = (unsigned int) (Context->fbPhysical + Handle->offset)
-                                     - Context->baseAddress;
-#endif									 
 
             *Width         = width;
             *Height        = height;
@@ -139,72 +100,23 @@ hwcLockBuffer(
         }
         else //if (Handle->flags & private_handle_t::PRIV_FLAGS_USES_UMP)
         {
-            /* PMEM type. */
-            #if 0
-            struct pmem_region region;
-
-            //if (Context->pmemPhysical == ~0U)
-            {
-                /* ASSUME: PMEM physical address is constant.
-                 * PMEM physical address must be constant for PMEM pool,
-                 * unless multiple PMEM devices are used. */
-                if (ioctl(Handle->fd, PMEM_GET_PHYS, &region) != 0)
-                {
-                    LOGE("Get PMEM physical address failed: fd=%d", Handle->fd);
-                    return hwcSTATUS_IO_ERR;
-                }
-
-                Context->pmemPhysical = region.offset;
-                Context->pmemLength   = region.len;
-            }
-			#endif
 
             /* Try lock handle once. */
            
 			
-#ifndef TARGET_BOARD_PLATFORM_RK30XXB    			
             *Logical       = (void *) GPU_BASE;
-#else
-	 		const gralloc_module_t * module;
-            void * vaddr = NULL;
-
-            if (hw_get_module(GRALLOC_HARDWARE_MODULE_ID,
-                              (const hw_module_t **) &module) != 0)
-            {
-                 return hwcSTATUS_IO_ERR;
-            }
-
-            module->lock(module,
-                    (buffer_handle_t)Handle,
-                    GRALLOC_USAGE_SW_READ_OFTEN,
-                    0, 0, width, height,
-                    &vaddr);
-
-            module->unlock(module, (buffer_handle_t)Handle);
-            *Logical       = (void *) GPU_BASE;
-#endif
-			#ifdef USE_LCDC_COMPOSER
-            *Physical      =  Handle->phy_addr;//Context->fbPhysical;//Handle->phy_addr; ; // debug
-            #else
-            *Physical      = NULL;
-            #endif
+            //*Physical      =  Handle->phy_addr;//Context->fbPhysical;//Handle->phy_addr; ; // debug
                                       //  - Context->baseAddress; 
             *Width         = width;
             *Height        = height;
             *Stride        = stride;
             *Info          = NULL;
 
-            /* Flush cache. */
 
 			if(GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
 			{
-#ifndef TARGET_BOARD_PLATFORM_RK30XXB    						
 				tVPU_FRAME *pFrame = (tVPU_FRAME *)Handle->base;
 		    	stride = 1 * (gcmALIGN(width,16));//((width + 15) & ~15);
-#else
-				tVPU_FRAME *pFrame = (tVPU_FRAME *)Handle->iBase;
-				stride = gcmALIGN(pFrame->FrameWidth,16)  ;
-#endif
 			    *Height = gcmALIGN(pFrame->FrameHeight,16) ; 
 				*Width = gcmALIGN(pFrame->FrameWidth,16)  ;
 				*Physical = pFrame->FrameBusAddr[0];

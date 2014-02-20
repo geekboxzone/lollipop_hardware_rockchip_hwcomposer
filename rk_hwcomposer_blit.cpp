@@ -20,12 +20,7 @@
 #include "rk_hwcomposer.h"
 
 #include <fcntl.h>
-#ifdef TARGET_BOARD_PLATFORM_RK30XXB
-#include <hardware/hal_public.h>
-#include <linux/fb.h>
-#else
 #include "../libgralloc_ump/gralloc_priv.h"
-#endif
 #include <ui/PixelFormat.h>
 
 //#include "struct.h"
@@ -114,7 +109,6 @@ _ComputeUVOffset(
 
 #include <cutils/properties.h>
 
-static int blitcount = 0;
 hwcSTATUS
 hwcBlit(
     IN hwcContext * Context,
@@ -873,7 +867,6 @@ hwcClear(
 {
     hwcSTATUS status = hwcSTATUS_OK;
 
-#if 1
     void *     dstLogical;
     unsigned int      dstPhysical = ~0;
     void *     dstInfo;
@@ -1017,7 +1010,6 @@ OnError:
     LOGE("%s(%d):  Failed", __FUNCTION__, __LINE__);
     /* Error roll back. */
 
-#endif
     return status;
 }
 
