@@ -2112,6 +2112,8 @@ static int hwc_primary_Post( hwcContext * context,hwc_display_contents_1_t* list
 
         ALOGD("hwc_primary_Post num=%d,ion=%d",numLayers,handle->share_fd);
         #if 1
+        unsigned int videodata[2];
+
         videodata[0] = videodata[1] = context->fbPhysical;
 	    if(ioctl(context->fbFd, RK_FBIOSET_DMABUF_FD, &(handle->share_fd))== -1)
 	    {
