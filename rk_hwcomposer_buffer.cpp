@@ -55,7 +55,6 @@ hwcLockBuffer(
     unsigned int width;
     unsigned int height;
     unsigned int stride;
-	int bpp,bpr;
     struct private_handle_t * handle = Handle;
 	stride = Handle->stride;	
    	width  = GPU_WIDTH ;
@@ -81,9 +80,7 @@ hwcLockBuffer(
 
                     return hwcSTATUS_IO_ERR;
                 }
-				Context->fbFd       = Handle->fd;
-			
-
+				Context->fbFd       = Handle->fd;			
              
                 Context->fbPhysical = fixInfo.smem_start;
                 Context->fbStride   = fixInfo.line_length;
@@ -91,7 +88,7 @@ hwcLockBuffer(
 
             *Logical       = (void *) GPU_BASE;
 
-	 		*Physical        = (unsigned int)(Context->hwc_ion.pion->phys+Context->hwc_ion.offset);
+	 		//*Physical        = (unsigned int)(Context->hwc_ion.pion->phys+Context->hwc_ion.offset);
 
             *Width         = width;
             *Height        = height;
@@ -110,20 +107,7 @@ hwcLockBuffer(
             *Width         = width;
             *Height        = height;
             *Stride        = stride;
-            *Info          = NULL;
-
-
-			if(GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
-			{
-				tVPU_FRAME *pFrame = (tVPU_FRAME *)Handle->base;
-		    	stride = 1 * (gcmALIGN(width,16));//((width + 15) & ~15);
-			    *Height = gcmALIGN(pFrame->FrameHeight,16) ; 
-				*Width = gcmALIGN(pFrame->FrameWidth,16)  ;
-				*Physical = pFrame->FrameBusAddr[0];
-		        *Info          = NULL;
-		        *Stride        = stride;
-
-			}
+            *Info          = NULL;          
 
         }
         

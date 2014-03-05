@@ -15,7 +15,6 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <cutils/log.h>
-#include "rga_angle.h"
 #ifdef TARGET_BOARD_PLATFORM_RK30XXB
 #include  <hardware/hal_public.h>
 #else

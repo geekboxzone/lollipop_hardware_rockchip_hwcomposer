@@ -29,7 +29,8 @@
 #include <hardware/rga.h>
 #include <utils/Thread.h>
 #include <linux/fb.h>
-#include "hwc_ipp.h"
+#include <hardware/gralloc.h>
+#include "../libgralloc_ump/gralloc_priv.h"
 #define hwcDEBUG 0
 #define hwcUseTime 0
 #define hwcBlitUseTime 0
@@ -39,10 +40,13 @@
 #define FB1_IOCTL_SET_YUV_ADDR	0x5002
 #define RK_FBIOSET_VSYNC_ENABLE     0x4629
 #define RK_FBIOSET_DMABUF_FD	 0x5004
+#define RK_FBIOGET_DSP_FD     	0x4630
+#define RK_FBIOGET_LIST_STAT   		0X4631
 //#define USE_LCDC_COMPOSER
 #define USE_HW_VSYNC        1
 #define FBIOSET_OVERLAY_STATE     	0x5018
 #define MaxZones 10
+#define bakupbufsize 4
 
 
 #define GPU_BASE    handle->base
@@ -114,6 +118,7 @@ typedef enum _hwc_lcdc_res
 	win3_1              = 8,
 	win3_2              = 9,
 	win3_3              = 10,
+	win_ext             = 11,
 
 }
 hwc_lcdc_res;
@@ -125,7 +130,10 @@ typedef struct _ZoneInfo
     unsigned int        height;
     hwc_rect_t  src_rect;
     hwc_rect_t  disp_rect;
+    struct private_handle_t *handle;      
 	int         layer_fd;
+	int         direct_fd;
+	unsigned int addr;
 	int         zone_alpha;
 	int         blend;
 	bool        is_stretch;
@@ -149,6 +157,44 @@ typedef struct _ZoneManager
 	        
 }
 ZoneManager;
+
+typedef struct _hwbkupinfo
+{
+    buffer_handle_t phd_bk;
+    int membk_fd;
+    int buf_fd;
+    unsigned int pmem_bk;
+    unsigned int buf_addr;
+    void* pmem_bk_log;
+    void* buf_addr_log;
+    int xoffset;
+    int yoffset;
+    int w_vir;
+    int h_vir;
+    int w_act;
+    int h_act;
+    int format;
+}
+hwbkupinfo;
+typedef struct _hwbkupmanage
+{
+    int count;
+    buffer_handle_t phd_drt;    
+    int          direct_fd;         
+    unsigned int direct_addr;
+    void* direct_addr_log;    
+    int invalid;
+    int needrev;
+    int dstwinNo;
+    int skipcnt;
+    unsigned int ckpstcnt;    
+    unsigned int inputspcnt;    
+	char LayerName[LayerNameLength + 1];    
+    unsigned int crrent_dis_fd;
+    hwbkupinfo bkupinfo[bakupbufsize];
+    struct private_handle_t *handle_bk;
+}
+hwbkupmanage;
 #define IN
 #define OUT
 
@@ -199,11 +245,11 @@ struct DisplayAttributes {
     bool isPause;
 };
 
-typedef struct tVPU_FRAME
+struct tVPU_FRAME
 {
-    uint32_t          FrameBusAddr[2];    // 0: Y address; 1: UV address;
-    uint32_t         FrameWidth;         // 16 aligned frame width
-    uint32_t         FrameHeight;        // 16 aligned frame height
+    uint32_t         videoAddr[2];    // 0: Y address; 1: UV address;
+    uint32_t         width;         // 16 aligned frame width
+    uint32_t         height;        // 16 aligned frame height
 };
 
 typedef struct 
@@ -212,13 +258,7 @@ typedef struct
    void*      vpu_handle;
 } vpu_frame_t;
 
-typedef struct
-{
-  ion_buffer_t *pion;
-  ion_device_t *ion_device; 
-  unsigned int  offset;
-  unsigned int  last_offset;
-} hwc_ion_t;
+
 typedef struct _hwcContext
 {
     hwc_composer_device_1_t device;
@@ -241,20 +281,16 @@ typedef struct _hwcContext
     struct private_handle_t fbhandle ;    
     bool      fb1_cflag;
     char      cupcore_string[16];
-    hwc_ion_t      hwc_ion;
     DisplayAttributes              dpyAttr[HWC_NUM_DISPLAY_TYPES];
     struct                         fb_var_screeninfo info;
 
     hwc_procs_t *procs;
-    ipp_device_t *ippDev;
     pthread_t hdmi_thread;
     pthread_mutex_t lock;
     nsecs_t         mNextFakeVSync;
     float           fb_fps;
     unsigned int fbPhysical;
     unsigned int fbStride;
-    ion_device_t *rk_ion_device;
-    ion_buffer_t *pion;
 	int          wfdOptimize;
     /* PMEM stuff. */
     unsigned int pmemPhysical;
@@ -262,6 +298,7 @@ typedef struct _hwcContext
 	vpu_frame_t  video_frame;
 	unsigned int fbSize;
 	unsigned int lcdSize;
+    alloc_device_t  *mAllocDev;	
 	ZoneManager  zone_manager;;
 
 #if ENABLE_HWC_WORMHOLE

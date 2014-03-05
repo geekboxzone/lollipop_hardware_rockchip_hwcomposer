@@ -1,4 +1,5 @@
 #include "hwc_rga.h"
+#include "rga_angle.h"
 
 inline int WIDTH(const hwc_rect &rect) { return rect.right - rect.left; }
 inline int HEIGHT(const hwc_rect &rect) { return rect.bottom - rect.top; }
