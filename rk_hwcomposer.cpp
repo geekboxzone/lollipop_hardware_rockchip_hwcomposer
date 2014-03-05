@@ -1972,6 +1972,7 @@ hwc_prepare(
 
     property_get("sys.hwc.compose_policy", value, "0");
     new_value = atoi(value); 
+    new_value = 0;
     /* Roll back to FRAMEBUFFER if any layer can not be handled. */
     if(new_value <= 0 )
     {
