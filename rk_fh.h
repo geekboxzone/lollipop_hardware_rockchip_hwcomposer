@@ -33,6 +33,8 @@ struct rk_fb_win_par {
 	u8 win_id;
 	u8 z_order;		/*win sel layer*/
 	struct rk_fb_area_par area_par[RK_WIN_MAX_REGION];
+	u32 alpha_mode;
+	u32 g_alpha_val;
 };
 
 struct rk_fb_win_cfg_data {
@@ -40,6 +42,6 @@ struct rk_fb_win_cfg_data {
 	u16 rel_fence_fd[RK_MAX_BUF_NUM];
 	struct  rk_fb_win_par win_par[RK30_MAX_LAYER_SUPPORT];
 	struct  rk_lcdc_post_cfg post_cfg;
-	//u8      wait_fs;
+	u8      wait_fs;
 	//u8      fence_begin;
 };

@@ -214,9 +214,9 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
     clip.xmax = handle->height - 1;
     clip.ymin = 0;
     clip.ymax = handle->width - 1;
-    ALOGV("src fd=[%x],w-h[%d,%d][f=%d]",
-        handle->video_share_fd, handle->video_width, handle->video_height,RK_FORMAT_YCbCr_420_SP);
-    ALOGV("dst fd=[%x],w-h[%d,%d][f=%d]",
+    ALOGD("src addr=[%x],w-h[%d,%d][f=%d]",
+        handle->video_addr, handle->video_width, handle->video_height,RK_FORMAT_YCbCr_420_SP);
+    ALOGD("dst fd=[%x],w-h[%d,%d][f=%d]",
         handle->share_fd, handle->width, handle->height,RK_FORMAT_YCbCr_420_SP);
     switch (tranform)
     {
@@ -274,7 +274,7 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
             DstActH = handle->height;
             break;
     }        
-    RGA_set_src_vir_info(&Rga_Request, handle->video_addr, 0, 0,SrcVirW, SrcVirH, RK_FORMAT_YCbCr_420_SP, 0);
+    RGA_set_src_vir_info(&Rga_Request, 0, handle->video_addr, 0,SrcVirW, SrcVirH, RK_FORMAT_YCbCr_420_SP, 0);
     RGA_set_dst_vir_info(&Rga_Request, handle->share_fd, 0, 0,DstVirW,DstActH,&clip, RK_FORMAT_YCbCr_420_SP, 0);    
     RGA_set_bitblt_mode(&Rga_Request, 0, RotateMode,Rotation,0,0,0);    
     RGA_set_src_act_info(&Rga_Request,SrcActW,SrcActH, 0,0);
@@ -432,8 +432,8 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                 int w_valid = 0 ,h_valid = 0;
     		    hwc_rect_t * psrc_rect = &(Context->zone_manager.zone_info[j].src_rect);            
                 Context->zone_manager.zone_info[j].format = HAL_PIXEL_FORMAT_YCrCb_NV12;
-                ALOGD("HAL_PIXEL_FORMAT_YCrCb_NV12 addr[%x][%dx%d],ori_fd[%d][%dx%d]",
-                        SrcHnd->video_addr,SrcHnd->video_width,SrcHnd->video_height,
+                ALOGD("HAL_PIXEL_FORMAT_YCrCb_NV12 transform=%d, addr[%x][%dx%d],ori_fd[%d][%dx%d]",
+                        layer->transform,SrcHnd->video_addr,SrcHnd->video_width,SrcHnd->video_height,
                         SrcHnd->share_fd,SrcHnd->width,SrcHnd->height);
                 switch (layer->transform)                
                 {
@@ -842,7 +842,14 @@ int try_wins_dispatch_ver(hwcContext * Context)
                 }  
                 if(j>=4)
                 {
-                    pzone_mag->zone_info[i].dispatched  = win_ext;
+                    bool isLandScape = ( (0==pzone_mag->zone_info[i].realtransform) \
+                                || (HWC_TRANSFORM_ROT_180==pzone_mag->zone_info[i].realtransform) );
+                    bool isSmallRect = (isLandScape && (pzone_mag->zone_info[i].height< Context->fbhandle.height/4))  \
+                                ||(!isLandScape && (pzone_mag->zone_info[i].width < Context->fbhandle.width/4)) ;
+                    if(isSmallRect)
+                        pzone_mag->zone_info[i].dispatched  = win_ext;
+                    else
+                        return -1;  // too large
                 }   
                 else
                 {
@@ -1446,10 +1453,9 @@ int hwc_do_special_composer( hwcContext * Context)
     LcdCont = 0;
   
     memset(&Rga_Request, 0x0, sizeof(Rga_Request));
-
+    ALOGD("ext_st=%d,ext_cnt=%d,zone_cnt=%d",ext_st,ext_cnt,pzone_mag->zone_cnt);
     for(ComposerIndex = ext_st ;ComposerIndex < (ext_st + ext_cnt); ComposerIndex++)
     {
-
         bool NeedBlit = true;
         ZoneInfo *psrcZeInfo = &pzone_mag->zone_info[ComposerIndex];
         srcWidth = psrcZeInfo->width;
@@ -1486,18 +1492,18 @@ int hwc_do_special_composer( hwcContext * Context)
             hwc_rect_t const * srcVR = &(psrcZeInfo->disp_rect);
             hwc_rect_t const * dstVR = &(pdstZeInfo->disp_rect);
 
-            LOGV("  %d->%d:  src= rot[%d] fmt[%d] wh[%d(%d),%d] src[%d,%d,%d,%d] vis[%d,%d,%d,%d]",
+            LOGD("  %d->%d:  src= rot[%d] fmt[%d] wh[%d(%d),%d] src[%d,%d,%d,%d] vis[%d,%d,%d,%d]",
                 ComposerIndex, DstBuferIndex,
                 psrcZeInfo->realtransform, srcFormat, srcWidth, srcStride, srcHeight,
                 psrcZeInfo->src_rect.left,psrcZeInfo->src_rect.top,
                 psrcZeInfo->src_rect.right,psrcZeInfo->src_rect.bottom,
                 srcVR->left, srcVR->top, srcVR->right, srcVR->bottom
                 );
-            LOGV("         dst= rot[%d] fmt[%d] wh[%d(%d),%d] src[%d,%d,%d,%d] vis[%d,%d,%d,%d] ",
+            LOGD("           dst= rot[%d] fmt[%d] wh[%d(%d),%d] src[%d,%d,%d,%d] vis[%d,%d,%d,%d] ",
                 pdstZeInfo->realtransform, dstFormat, dstWidth, dstStride, dstHeight,
                 pdstZeInfo->src_rect.left,pdstZeInfo->src_rect.top,
                 pdstZeInfo->src_rect.right,pdstZeInfo->src_rect.bottom,
-                dstVR->left, dstVR->top, dstVR->right, dstVR->bottom,
+                dstVR->left, dstVR->top, dstVR->right, dstVR->bottom
                 );
 
             // lcdc need address aligned to 128 byte when win1 area is too large.
@@ -1560,9 +1566,9 @@ int hwc_do_special_composer( hwcContext * Context)
             //x_off  = x_off < 0 ? 0:x_off;
 
 
-            LOGV("    src[%d]=%s,  dst[%d]=%s",ComposerIndex,pzone_mag->zone_info[ComposerIndex].LayerName,DstBuferIndex,pzone_mag->zone_info[DstBuferIndex].LayerName);
-            LOGV("    src info f[%d] w_h[%d(%d),%d]",srcFormat,srcWidth,srcStride,srcHeight);
-            LOGV("    dst info f[%d] w_h[%d(%d),%d] rect[%d,%d,%d,%d]",dstFormat,dstWidth,dstStride,dstHeight,x_off,y_off,act_dstwidth,act_dstheight);
+            LOGD("    src[%d]=%s,  dst[%d]=%s",ComposerIndex,pzone_mag->zone_info[ComposerIndex].LayerName,DstBuferIndex,pzone_mag->zone_info[DstBuferIndex].LayerName);
+            LOGD("    src info f[%d] w_h[%d(%d),%d]",srcFormat,srcWidth,srcStride,srcHeight);
+            LOGD("    dst info f[%d] w_h[%d(%d),%d] rect[%d,%d,%d,%d]",dstFormat,dstWidth,dstStride,dstHeight,x_off,y_off,act_dstwidth,act_dstheight);
             RGA_set_src_vir_info(&Rga_Request[RgaCnt], srcFd, (int)0, 0,srcStride, srcHeight, srcFormat, 0);
             RGA_set_dst_vir_info(&Rga_Request[RgaCnt], dstFd, (int)0, 0,dstStride, dstHeight, &clip, dstFormat, 0);
             /* Get plane alpha. */
@@ -1896,28 +1902,36 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
    
     if(vertical == true)
     {
+        #if 1
         ret = try_wins_dispatch_ver(context);
-        if(!ret)
+        if(ret)
         {
             goto GpuComP;
         }
         ret = hwc_do_special_composer(context);
-        if(!ret)
+        if(ret)
         {
             goto GpuComP;
         }
+        #else
+        ret = try_wins_dispatch_hor(context); 
+        if(ret)
+        {
+            goto GpuComP; 
+        }        
+        #endif
+        
         
     }   
     else
     {
         ret = try_wins_dispatch_hor(context); 
-        if(!ret)
+        if(ret)
         {
             goto GpuComP; 
         }
     
-    }
-            
+    }            
     return 0;
 GpuComP   :
 
@@ -2111,7 +2125,7 @@ static int hwc_primary_Post( hwcContext * context,hwc_display_contents_1_t* list
 
 
         ALOGD("hwc_primary_Post num=%d,ion=%d",numLayers,handle->share_fd);
-        #if 1
+        #if 0
         unsigned int videodata[2];
 
         videodata[0] = videodata[1] = context->fbPhysical;
@@ -2574,8 +2588,8 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list)
         fb_info.win_par[win_no-1].win_id = win_id;
         fb_info.win_par[win_no-1].z_order = z_order-1;
         fb_info.win_par[win_no-1].area_par[area_no].ion_fd = \
-                        pzone_mag->zone_info[i].dispatched ? \
-                        pzone_mag->zone_info[i].dispatched: pzone_mag->zone_info[i].layer_fd;     
+                        pzone_mag->zone_info[i].direct_fd ? \
+                        pzone_mag->zone_info[i].direct_fd: pzone_mag->zone_info[i].layer_fd;     
         fb_info.win_par[win_no-1].area_par[area_no].phy_addr = pzone_mag->zone_info[i].addr;
         fb_info.win_par[win_no-1].area_par[area_no].acq_fence_fd = -1;
         fb_info.win_par[win_no-1].area_par[area_no].x_offset = hwcMAX(psrc_rect->left, 0);
@@ -2589,27 +2603,13 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list)
         fb_info.win_par[win_no-1].area_par[area_no].xvir = pzone_mag->zone_info[i].stride;
         fb_info.win_par[win_no-1].area_par[area_no].yvir = pzone_mag->zone_info[i].height;
     }    
- 
-    #if 0
-    if(pzone_mag->zone_info[i].addr == 0)
-    {
-        if(ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info) == -1)
-        {
-            ALOGE("RK_FBIOSET_CONFIG_DONE err line=%d !",__LINE__);
-        }   
-    }
-    else
-    {
-        ALOGD(" video_addr[%d]=%x",i,pzone_mag->zone_info[i].addr);
-    }
-    #else
-
+   
     for(i = 0;i<4;i++)
     {
         for(j=0;j<4;j++)
         {
             if(fb_info.win_par[i].area_par[j].ion_fd || fb_info.win_par[i].area_par[j].phy_addr)
-                ALOGV("win[%d],area[%d],z_win[%d,%d],[%d,%d,%d,%d]=>[%d,%d,%d,%d],w_h_f[%d,%d,%d],fd=%d,addr=%x",
+                ALOGD("win[%d],area[%d],z_win[%d,%d],[%d,%d,%d,%d]=>[%d,%d,%d,%d],w_h_f[%d,%d,%d],fd=%d,addr=%x",
                     i,j,
                     fb_info.win_par[i].z_order,
                     fb_info.win_par[i].win_id,
@@ -2628,15 +2628,11 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list)
                     fb_info.win_par[i].area_par[j].phy_addr);
         }
         
-    }        
+    }    
     if(ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info) == -1)
     {
         ALOGE("RK_FBIOSET_CONFIG_DONE err line=%d !",__LINE__);
-    }   
-
-    #endif
-    
-    
+    }           
     return 0;
 }
 
@@ -3339,14 +3335,15 @@ hwc_device_open(
     context->device.layer_recover   = hwc_layer_recover;
 
     /* Get gco2D object pointer. */
-    /*
+    
     context->engine_fd = open("/dev/rga",O_RDWR,0);
     if( context->engine_fd < 0)
     {
         hwcONERROR(hwcRGA_OPEN_ERR);
+        ALOGE("rga open err!");
 
     }
-    */
+    
 
 #if ENABLE_WFD_OPTIMIZE
 	 property_set("sys.enable.wfd.optimize","1");
