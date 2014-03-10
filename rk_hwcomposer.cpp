@@ -38,7 +38,7 @@
 #include <sys/stat.h>
 //#include "hwc_ipp.h" 
 #include "hwc_rga.h"
-#include "rk_fh.h"
+#include <hardware/rk_fh.h>
 #include <linux/ion.h>
 #include <ion/ion.h>
 
@@ -2199,6 +2199,33 @@ static int hwc_primary_Post( hwcContext * context,hwc_display_contents_1_t* list
         fb_info.win_par[0].area_par[0].xvir = handle->width;
         fb_info.win_par[0].area_par[0].yvir = handle->height;
         ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info);
+
+        for(int i = 0;i<4;i++)
+        {
+            for(int j=0;j<4;j++)
+            {
+                if(fb_info.win_par[i].area_par[j].ion_fd || fb_info.win_par[i].area_par[j].phy_addr)
+                    ALOGV("win[%d],area[%d],z_win[%d,%d],[%d,%d,%d,%d]=>[%d,%d,%d,%d],w_h_f[%d,%d,%d],fd=%d,addr=%x",
+                        i,j,
+                        fb_info.win_par[i].z_order,
+                        fb_info.win_par[i].win_id,
+                        fb_info.win_par[i].area_par[j].x_offset,
+                        fb_info.win_par[i].area_par[j].y_offset,
+                        fb_info.win_par[i].area_par[j].xact,
+                        fb_info.win_par[i].area_par[j].yact,
+                        fb_info.win_par[i].area_par[j].xpos,
+                        fb_info.win_par[i].area_par[j].ypos,
+                        fb_info.win_par[i].area_par[j].xsize,
+                        fb_info.win_par[i].area_par[j].ysize,
+                        fb_info.win_par[i].area_par[j].xvir,
+                        fb_info.win_par[i].area_par[j].yvir,
+                        fb_info.win_par[i].data_format,
+                        fb_info.win_par[i].area_par[j].ion_fd,
+                        fb_info.win_par[i].area_par[j].phy_addr);
+            }
+            
+        }    
+        
         #endif        
     }
     return 0;
