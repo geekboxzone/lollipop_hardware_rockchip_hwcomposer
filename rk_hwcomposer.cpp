@@ -1861,7 +1861,7 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
         return 0;
     }
 
-    LOGD("%s(%d):>>> hwc_prepare_primary %d layers <<<",
+    LOGV("%s(%d):>>> hwc_prepare_primary %d layers <<<",
          __FUNCTION__,
          __LINE__,
          list->numHwLayers -1);
