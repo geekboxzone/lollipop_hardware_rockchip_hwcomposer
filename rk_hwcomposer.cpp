@@ -2060,7 +2060,7 @@ int hwc_blank(struct hwc_composer_device_1 *dev, int dpy, int blank)
     hwcContext * context = _contextAnchor;
 
     ALOGD("hwc_blank dpy[%d],blank[%d]",dpy,blank);
-    return 0;
+ //    return 0;
     switch (dpy) {
     case HWC_DISPLAY_PRIMARY: {
         int fb_blank = blank ? FB_BLANK_POWERDOWN : FB_BLANK_UNBLANK;
