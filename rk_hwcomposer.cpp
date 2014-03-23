@@ -210,7 +210,6 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
     {
       return -1;
     }
-          
     memset(&Rga_Request, 0x0, sizeof(Rga_Request));
     clip.xmin = 0;
     clip.xmax = handle->height - 1;
@@ -980,7 +979,7 @@ check_layer(
              return HWC_FRAMEBUFFER;
         }
 
-        LOGV("name[%d]=%s,phy_addr=%x",Index,Layer->LayerName,handle->phy_addr);
+        LOGV("name[%d]=%s",Index,Layer->LayerName);
 
         if(            
               (getHdmiMode()==0)            
@@ -1851,6 +1850,8 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
 #if hwcDumpSurface
     _DumpSurface(list);
 #endif
+    char value[PROPERTY_VALUE_MAX];
+    int new_value = 0;
 
     /* Check layer list. */
     if ((list == NULL)
@@ -1887,11 +1888,11 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
                IsDiff = true;
             if(IsDiff)   
             {
-            memcpy(&vpu_hd,(void*)handle->base,sizeof(tVPU_FRAME));
-            handle->video_addr = vpu_hd.videoAddr[0];
-            handle->video_width = vpu_hd.width;
-            handle->video_height = vpu_hd.height;  
-                //ALOGD("prepare [%x,%dx%d]",handle->video_addr,handle->video_width,handle->video_height);
+                memcpy(&vpu_hd,(void*)handle->base,sizeof(tVPU_FRAME));
+                handle->video_addr = vpu_hd.videoAddr[0];
+                handle->video_width = vpu_hd.width;
+                handle->video_height = vpu_hd.height;  
+                ALOGV("prepare [%x,%dx%d]",handle->video_addr,handle->video_width,handle->video_height);
                 context->vdieo_hd = handle ;
                 context->video_base = (void*)handle->base;
             }    
@@ -1917,8 +1918,12 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
         }
     }
 
-    if(1)   // debug goto gpu
+    property_get("sys.hwc.dump", value, "0");
+    new_value = atoi(value); 
+    if(new_value == 0)
         goto GpuComP;
+   // if(1)   // debug goto gpu
+       // goto GpuComP;
     /* Roll back to FRAMEBUFFER if any layer can not be handled. */
     if (i != (list->numHwLayers - 1))
     {
@@ -2154,7 +2159,7 @@ static int hwc_primary_Post( hwcContext * context,hwc_display_contents_1_t* list
         }
 
 
-        ALOGD("hwc_primary_Post num=%d,ion=%d",numLayers,handle->share_fd);
+        ALOGV("hwc_primary_Post num=%d,ion=%d",numLayers,handle->share_fd);
         #if 0
         unsigned int videodata[2];
 
@@ -2641,7 +2646,22 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list)
                 ALOGE("hwc_set_lcdc  err!");
                 return -1;
          }    
-        fb_info.win_par[win_no-1].data_format =  pzone_mag->zone_info[i].format;
+        if(win_no ==1)         
+        {
+            if(pzone_mag->zone_info[i].format ==  HAL_PIXEL_FORMAT_RGBA_8888) //
+            {
+                fb_info.win_par[win_no-1].data_format = HAL_PIXEL_FORMAT_RGBX_8888;
+            }
+            else
+            {
+                fb_info.win_par[win_no-1].data_format =  pzone_mag->zone_info[i].format;
+            }
+                
+        }
+        else
+        {
+            fb_info.win_par[win_no-1].data_format =  pzone_mag->zone_info[i].format;
+        }    
         fb_info.win_par[win_no-1].win_id = win_id;
         fb_info.win_par[win_no-1].z_order = z_order-1;
         fb_info.win_par[win_no-1].area_par[area_no].ion_fd = \
@@ -3649,6 +3669,8 @@ int  getHdmiMode()
    #else
       // LOGD("g_hdmi_mode=%d",g_hdmi_mode);
    #endif
+   // LOGD("g_hdmi_mode=%d",g_hdmi_mode);
+   
     return g_hdmi_mode;
 }
 
@@ -3670,6 +3692,7 @@ void init_hdmi_mode()
                  }
                 close(fd);
                 g_hdmi_mode = atoi(statebuf);
+                g_hdmi_mode = 0;   // debug disable for temp
                /* if (g_hdmi_mode==0)
                 {
                     property_set("sys.hdmi.mode", "0");
