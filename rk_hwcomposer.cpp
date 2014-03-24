@@ -402,11 +402,11 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
         }
         else
         {
-        hfactor = (float) (SrcRect->right - SrcRect->left)
-                / (DstRect->right - DstRect->left);
+            hfactor = (float) (SrcRect->right - SrcRect->left)
+                    / (DstRect->right - DstRect->left);
 
-        vfactor = (float) (SrcRect->bottom - SrcRect->top)
-                / (DstRect->bottom - DstRect->top);
+            vfactor = (float) (SrcRect->bottom - SrcRect->top)
+                    / (DstRect->bottom - DstRect->top);
         }
 
         is_stretch = (hfactor != 1.0) || (vfactor != 1.0);
@@ -433,6 +433,12 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                      dstRects[m].right,
                      dstRects[m].bottom);
                 continue;
+            }
+            if((dstRects[m].right - dstRects[m].left) < 16
+                || (dstRects[m].bottom - dstRects[m].top) < 16)
+            {
+                ALOGD("lcdc dont support too small area");
+                return -1;
             }
             LOGV("%s(%d): Region rect[%d]:  [%d,%d,%d,%d]",
                  __FUNCTION__,
@@ -1918,12 +1924,10 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
         }
     }
 
-    property_get("sys.hwc.dump", value, "0");
+    property_get("sys.hwc.diable", value, "0");
     new_value = atoi(value); 
-    if(new_value == 0)
+    if(new_value == 1)
         goto GpuComP;
-   // if(1)   // debug goto gpu
-       // goto GpuComP;
     /* Roll back to FRAMEBUFFER if any layer can not be handled. */
     if (i != (list->numHwLayers - 1))
     {
