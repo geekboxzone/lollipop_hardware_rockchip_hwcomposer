@@ -661,9 +661,23 @@ int try_wins_dispatch_hor(hwcContext * Context)
         //means 4: win2 or win3 most has 4 zones 
         for(j=1;j<4 && (i+j) < pzone_mag->zone_cnt;j++)
         {
-            ZoneInfo * cur_zf = &(pzone_mag->zone_info[i+j-1]);
-            ZoneInfo * next_zf = &(pzone_mag->zone_info[i+j]);            
-            if(is_zone_combine(cur_zf,next_zf))
+            ZoneInfo * next_zf = &(pzone_mag->zone_info[i+j]);
+            bool is_combine = false;
+            int k;
+            for(k=0;k<=cnt;k++)  // compare all sorted_zone info
+            {
+                ZoneInfo * sorted_zf = &(pzone_mag->zone_info[i+j-1-k]);
+                if(is_zone_combine(sorted_zf,next_zf))
+                {
+                    is_combine = true;
+                }
+                else
+                {
+                    is_combine = false;
+                    break;
+                }
+            }
+            if(is_combine)
             {
                 pzone_mag->zone_info[i+j].sort = sort;
                 cnt++;
@@ -1297,6 +1311,53 @@ static int Is_lcdc_using( int fd)
     }
     return 0;
 }
+
+/**
+ * @brief Sort by ypos (positive-order)
+ *
+ * @param win_id 		Win index
+ * @param p_fb_info 	 	Win config data
+ * @return 				Errno no
+ */
+
+static int  sort_area_by_ypos(int win_id,struct rk_fb_win_cfg_data* p_fb_info)
+{
+	int i,j;
+
+	if((win_id !=2 && win_id !=3) || p_fb_info==NULL)
+	{
+		ALOGW("%s(%d):invalid param",__FUNCTION__,__LINE__);
+		return -1;
+	}
+
+	struct rk_fb_area_par tmp_fb_area;
+	bool bSwitch;
+	for(i=0;i<RK_WIN_MAX_REGION-1;i++)
+	{
+		bSwitch=false;
+		for(j=RK_WIN_MAX_REGION-1;j>i;j--)
+		{
+			if((p_fb_info->win_par[win_id].area_par[j].ion_fd || p_fb_info->win_par[win_id].area_par[j].phy_addr)  && 
+				(p_fb_info->win_par[win_id].area_par[j-1].ion_fd || p_fb_info->win_par[win_id].area_par[j-1].phy_addr) )
+				{
+					if(p_fb_info->win_par[win_id].area_par[j].ypos < p_fb_info->win_par[win_id].area_par[j-1].ypos )
+					{
+						//switch
+						memcpy(&tmp_fb_area,&(p_fb_info->win_par[win_id].area_par[j-1]),sizeof(struct rk_fb_area_par));
+						memcpy(&(p_fb_info->win_par[win_id].area_par[j-1]),&(p_fb_info->win_par[win_id].area_par[j]),sizeof(struct rk_fb_area_par));
+						memcpy(&(p_fb_info->win_par[win_id].area_par[j]),&tmp_fb_area,sizeof(struct rk_fb_area_par));
+						bSwitch=true;
+					}
+				}
+		}
+		if(!bSwitch)	//end advance
+			return 0;
+	}
+
+	return 0;
+}
+
+
 static int
 hwc_buff_recover(        
     int gpuflag
@@ -2695,6 +2756,10 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list)
         fb_info.win_par[win_no-1].area_par[area_no].yvir = pzone_mag->zone_info[i].height;
         }    
     }    
+
+    //win2 & win3 need sort by ypos (positive-order)
+    sort_area_by_ypos(2,&fb_info);
+    sort_area_by_ypos(3,&fb_info);
    
     for(i = 0;i<4;i++)
     {
