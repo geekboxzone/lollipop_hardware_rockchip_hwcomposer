@@ -1322,8 +1322,8 @@ static int Is_lcdc_using( int fd)
 
 static int  sort_area_by_ypos(int win_id,struct rk_fb_win_cfg_data* p_fb_info)
 {
-	int i,j;
-
+    int i,j,k;
+    bool bSwitch;
 	if((win_id !=2 && win_id !=3) || p_fb_info==NULL)
 	{
 		ALOGW("%s(%d):invalid param",__FUNCTION__,__LINE__);
@@ -1331,29 +1331,34 @@ static int  sort_area_by_ypos(int win_id,struct rk_fb_win_cfg_data* p_fb_info)
 	}
 
 	struct rk_fb_area_par tmp_fb_area;
-	bool bSwitch;
-	for(i=0;i<RK_WIN_MAX_REGION-1;i++)
+	for(i=0;i<4;i++)
 	{
-		bSwitch=false;
-		for(j=RK_WIN_MAX_REGION-1;j>i;j--)
+		if(p_fb_info->win_par[i].win_id == win_id)
 		{
-			if((p_fb_info->win_par[win_id].area_par[j].ion_fd || p_fb_info->win_par[win_id].area_par[j].phy_addr)  && 
-				(p_fb_info->win_par[win_id].area_par[j-1].ion_fd || p_fb_info->win_par[win_id].area_par[j-1].phy_addr) )
-				{
-					if(p_fb_info->win_par[win_id].area_par[j].ypos < p_fb_info->win_par[win_id].area_par[j-1].ypos )
-					{
-						//switch
-						memcpy(&tmp_fb_area,&(p_fb_info->win_par[win_id].area_par[j-1]),sizeof(struct rk_fb_area_par));
-						memcpy(&(p_fb_info->win_par[win_id].area_par[j-1]),&(p_fb_info->win_par[win_id].area_par[j]),sizeof(struct rk_fb_area_par));
-						memcpy(&(p_fb_info->win_par[win_id].area_par[j]),&tmp_fb_area,sizeof(struct rk_fb_area_par));
-						bSwitch=true;
-					}
-				}
-		}
-		if(!bSwitch)	//end advance
-			return 0;
-	}
-
+		    for(j=0;j<3;j++)
+		    {
+		        bSwitch=false;
+                for(k=RK_WIN_MAX_REGION-1;k>j;k--)
+                {
+                    if((p_fb_info->win_par[i].area_par[k].ion_fd || p_fb_info->win_par[i].area_par[k].phy_addr)  &&
+                        (p_fb_info->win_par[i].area_par[k-1].ion_fd || p_fb_info->win_par[i].area_par[k-1].phy_addr) )
+                        {
+                            if(p_fb_info->win_par[i].area_par[k].ypos < p_fb_info->win_par[i].area_par[k-1].ypos )
+                            {
+                                //switch
+                                memcpy(&tmp_fb_area,&(p_fb_info->win_par[i].area_par[k-1]),sizeof(struct rk_fb_area_par));
+                                memcpy(&(p_fb_info->win_par[i].area_par[k-1]),&(p_fb_info->win_par[i].area_par[k]),sizeof(struct rk_fb_area_par));
+                                memcpy(&(p_fb_info->win_par[i].area_par[k]),&tmp_fb_area,sizeof(struct rk_fb_area_par));
+                                bSwitch=true;
+                            }
+                        }
+                }
+                if(!bSwitch)    //end advance
+                    return 0;
+            }
+            break;
+        }
+    }
 	return 0;
 }
 
