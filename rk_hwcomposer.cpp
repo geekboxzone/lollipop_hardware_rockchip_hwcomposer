@@ -2010,7 +2010,7 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
 
     property_get("sys.hwc.diable", value, "0");
     new_value = atoi(value); 
-    if(new_value == 0)
+    if(new_value == 1)
         goto GpuComP;
     /* Roll back to FRAMEBUFFER if any layer can not be handled. */
     if (i != (list->numHwLayers - 1))
@@ -2166,6 +2166,10 @@ int hwc_blank(struct hwc_composer_device_1 *dev, int dpy, int blank)
                 ALOGE("%sblank ioctl failed: %s", blank ? "" : "un",
                         strerror(errno));
             return -errno;
+        }
+        else
+        {
+            context->fb_blanked = blank;
         }
         break;
     }
@@ -2842,6 +2846,8 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list)
 	fb_info.wait_fs=0; //not wait acquire fence temp(wait in hwc)
 #endif
 
+    if(!context->fb_blanked)
+    {
     if(ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info) == -1)
     {
         ALOGE("RK_FBIOSET_CONFIG_DONE err line=%d !",__LINE__);
@@ -2850,15 +2856,22 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list)
 #ifdef USE_HWC_FENCE
 	for(i=0;i<RK_MAX_BUF_NUM;i++)
 	{
-        if(i< (list->numHwLayers -1))
+    	   // ALOGD("rel_fence_fd[%d] = %d", i, fb_info.rel_fence_fd[i]);
+    	    if(fb_info.rel_fence_fd[i] != -1)
             list->hwLayers[i].releaseFenceFd = fb_info.rel_fence_fd[i];
-        else if(fb_info.rel_fence_fd[i]!= -1)
-            close(fb_info.rel_fence_fd[i]);
 	}
 
     list->retireFenceFd = fb_info.ret_fence_fd;
 #endif
-
+    }
+    else
+    {
+        for(i=0;i< (list->numHwLayers -1);i++)
+    	{
+            list->hwLayers[i].releaseFenceFd = -1;    	   
+    	}
+        list->retireFenceFd = -1;
+    }
     return 0;
 }
 

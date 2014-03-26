@@ -37,7 +37,7 @@
 #define hwcDumpSurface 0
 #define  ENABLE_HWC_WORMHOLE     1
 #define  DUMP_SPLIT_AREA   0
-//#define USE_HWC_FENCE               		1
+#define USE_HWC_FENCE               		1
 #define FB1_IOCTL_SET_YUV_ADDR	0x5002
 #define RK_FBIOSET_VSYNC_ENABLE     0x4629
 #define RK_FBIOSET_DMABUF_FD	 0x5004
@@ -147,7 +147,9 @@ typedef struct _ZoneInfo
 	int         dispatched;
 	int         sort;
 	char        LayerName[LayerNameLength + 1];   
+#ifdef USE_HWC_FENCE
     int         acq_fence_fd;
+#endif
 }
 ZoneInfo;
 
@@ -313,6 +315,7 @@ typedef struct _hwcContext
     hwcAreaPool                      areaPool;
 #endif
      int      flag;
+     int      fb_blanked;
 }
 hwcContext;
 
