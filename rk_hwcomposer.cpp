@@ -2848,21 +2848,29 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list)
 
     if(!context->fb_blanked)
     {
-    if(ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info) == -1)
-    {
-        ALOGE("RK_FBIOSET_CONFIG_DONE err line=%d !",__LINE__);
-    }           
+        if(ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info) == -1)
+        {
+            ALOGE("RK_FBIOSET_CONFIG_DONE err line=%d !",__LINE__);
+        }           
 
 #ifdef USE_HWC_FENCE
-	for(i=0;i<RK_MAX_BUF_NUM;i++)
-	{
-    	   // ALOGD("rel_fence_fd[%d] = %d", i, fb_info.rel_fence_fd[i]);
-    	    if(fb_info.rel_fence_fd[i] != -1)
-            list->hwLayers[i].releaseFenceFd = fb_info.rel_fence_fd[i];
-	}
+    	for(i=0;i<RK_MAX_BUF_NUM;i++)
+    	{
+            // ALOGD("rel_fence_fd[%d] = %d", i, fb_info.rel_fence_fd[i]);
+            if(fb_info.rel_fence_fd[i] != -1)
+                list->hwLayers[i].releaseFenceFd = fb_info.rel_fence_fd[i];
+    	}
 
-    list->retireFenceFd = fb_info.ret_fence_fd;
+        list->retireFenceFd = fb_info.ret_fence_fd;
+#else
+    	for(i=0;i<RK_MAX_BUF_NUM;i++)
+    	{
+    	    if(fb_info.rel_fence_fd[i]!= -1)
+                close(fb_info.rel_fence_fd[i]);
+    	}
+
 #endif
+
     }
     else
     {
