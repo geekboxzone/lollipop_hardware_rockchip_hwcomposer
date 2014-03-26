@@ -2010,7 +2010,7 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
 
     property_get("sys.hwc.diable", value, "0");
     new_value = atoi(value); 
-    if(new_value == 1)
+    if(new_value == 0)
         goto GpuComP;
     /* Roll back to FRAMEBUFFER if any layer can not be handled. */
     if (i != (list->numHwLayers - 1))
