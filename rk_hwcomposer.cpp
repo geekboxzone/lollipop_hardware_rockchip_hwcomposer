@@ -49,8 +49,6 @@
 #define TOP_LAYER_NAME              "StatusBar"
 #define WALLPAPER                   "ImageWallpaper"
 
-int  g_backup_acq_fence_fd[16];
-
 //#define ENABLE_HDMI_APP_LANDSCAP_TO_PORTRAIT
 static int SkipFrameCount = 0;
 
@@ -1466,9 +1464,8 @@ hwc_buff_recover(
 #ifdef USE_HWC_FENCE
 	for(int k=0;k<RK_MAX_BUF_NUM;k++)
 	{
-	    if(fb_info.rel_fence_fd[k]== -1)
-	        continue;
-		close(fb_info.rel_fence_fd[k]);
+	    if(fb_info.rel_fence_fd[k]!= -1)
+            close(fb_info.rel_fence_fd[k]);
 	}
 //	list->retireFenceFd = fb_info.ret_fence_fd;
 #endif
@@ -2278,20 +2275,6 @@ static int hwc_primary_Post( hwcContext * context,hwc_display_contents_1_t* list
             ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &sync);
         }
         #else
-#ifndef USE_HWC_FENCE
-        for (int m = 0; m < list->numHwLayers; m++)
-        {
-            if (g_backup_acq_fence_fd[m]>0)
-            {
-                close(g_backup_acq_fence_fd[m]);
-            }
-        }
-
-        for (int j=0; j<16; j++)
-        {
-            g_backup_acq_fence_fd[j] = -1;
-        }
-#endif
 
         unsigned int offset = handle->offset;        
         fb_info.win_par[0].data_format = context->fbhandle.format;
@@ -2299,10 +2282,9 @@ static int hwc_primary_Post( hwcContext * context,hwc_display_contents_1_t* list
         fb_info.win_par[0].z_order = 0;
         fb_info.win_par[0].area_par[0].ion_fd = handle->share_fd;
 #ifdef USE_HWC_FENCE
-        fb_info.win_par[0].area_par[0].acq_fence_fd =-1;//fbLayer->acquireFenceFd;
+        fb_info.win_par[0].area_par[0].acq_fence_fd = -1;//fbLayer->acquireFenceFd;
 #else
         fb_info.win_par[0].area_par[0].acq_fence_fd = -1;
-        g_backup_acq_fence_fd[0]=fbLayer->acquireFenceFd;
 #endif
         fb_info.win_par[0].area_par[0].x_offset = 0;
         fb_info.win_par[0].area_par[0].y_offset = offset/context->fbStride;
@@ -2325,7 +2307,7 @@ static int hwc_primary_Post( hwcContext * context,hwc_display_contents_1_t* list
         for(int k=0;k<RK_MAX_BUF_NUM;k++)
         {
             if(fb_info.rel_fence_fd[k]!= -1)
-            close(fb_info.rel_fence_fd[k]);
+                close(fb_info.rel_fence_fd[k]);
         }
 
         list->retireFenceFd = fb_info.ret_fence_fd;
@@ -2596,21 +2578,6 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list)
 
     memset(&fb_info,0,sizeof(fb_info));
 
-#ifndef USE_HWC_FENCE
-	for (int m = 0; m < list->numHwLayers; m++)
-	{
-		if (g_backup_acq_fence_fd[m]>0)
-		{
-			close(g_backup_acq_fence_fd[m]);
-		}
-	}
-
-	for (int j=0; j<16; j++)
-	{
-		g_backup_acq_fence_fd[j] = -1;
-	}
-#endif
-
     for(i=0;i<pzone_mag->zone_cnt;i++)
     {
         hwc_rect_t * psrc_rect = &(pzone_mag->zone_info[i].src_rect);            
@@ -2816,7 +2783,6 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list)
         fb_info.win_par[win_no-1].area_par[area_no].acq_fence_fd = -1;//pzone_mag->zone_info[i].acq_fence_fd;
 #else
         fb_info.win_par[win_no-1].area_par[area_no].acq_fence_fd = -1;
-        g_backup_acq_fence_fd[i]=pzone_mag->zone_info[i].acq_fence_fd;
 #endif
         fb_info.win_par[win_no-1].area_par[area_no].x_offset = hwcMAX(psrc_rect->left, 0);
         fb_info.win_par[win_no-1].area_par[area_no].y_offset = hwcMAX(psrc_rect->top, 0);
@@ -2871,10 +2837,6 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list)
         }
         
     }    
-
-	//win2 & win3 need sort by ypos (positive-order)
-	sort_area_by_ypos(2,&fb_info);
-	sort_area_by_ypos(3,&fb_info);
 
 #ifdef USE_HWC_FENCE
 	fb_info.wait_fs=0; //not wait acquire fence temp(wait in hwc)
@@ -3785,12 +3747,6 @@ hwc_device_open(
         LOGD("Create readHdmiMode thread error .");
     }
 
-#ifndef USE_HWC_FENCE
-	for (int j=0; j<16; j++)
-	{
-		g_backup_acq_fence_fd[j] = -1;
-	}
-#endif
 
     return 0;
 
