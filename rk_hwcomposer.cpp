@@ -2025,7 +2025,7 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
    
     if(vertical == true)
     {
-        #if 1
+        #if 0
         ret = try_wins_dispatch_ver(context);
         if(ret)
         {
@@ -2301,7 +2301,7 @@ static int hwc_primary_Post( hwcContext * context,hwc_display_contents_1_t* list
         fb_info.win_par[0].area_par[0].xvir = handle->width;
         fb_info.win_par[0].area_par[0].yvir = handle->height;
 #ifdef USE_HWC_FENCE
-	    fb_info.wait_fs=1;
+	    fb_info.wait_fs=0;
 #endif
 
         ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info);
