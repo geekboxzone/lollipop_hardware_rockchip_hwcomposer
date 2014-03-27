@@ -282,8 +282,8 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
                 Dstfmt = RK_FORMAT_RGBA_8888;        
             SrcVirW = handle->video_width;
             SrcVirH = handle->video_height;
-            SrcActW = handle->video_width;
-            SrcActH = handle->video_height;
+            SrcActW = handle->width;
+            SrcActH = handle->height;
             DstVirW = handle->width;
             DstVirH = handle->height;
             DstActW = handle->width;
