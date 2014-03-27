@@ -362,6 +362,11 @@ int is_zone_combine(ZoneInfo * zf,ZoneInfo * zf2)
         ALOGV("line=%d",__LINE__);
         return 0;
     }    
+    if(zf->zone_alpha!= zf2->zone_alpha)
+    {
+        ALOGV("line=%d",__LINE__);
+        return 0;
+    }    
     if(zf->is_stretch || zf2->is_stretch )    
     {
         ALOGV("line=%d",__LINE__);    
@@ -2778,6 +2783,8 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list)
             fb_info.win_par[win_no-1].data_format =  pzone_mag->zone_info[i].format;
         }    
         fb_info.win_par[win_no-1].win_id = win_id;
+        fb_info.win_par[win_no-1].alpha_mode = AB_SRC_OVER;
+        fb_info.win_par[win_no-1].g_alpha_val =  pzone_mag->zone_info[i].zone_alpha;
         fb_info.win_par[win_no-1].z_order = z_order-1;
         fb_info.win_par[win_no-1].area_par[area_no].ion_fd = \
                         pzone_mag->zone_info[i].direct_fd ? \
@@ -2820,10 +2827,11 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list)
         for(j=0;j<4;j++)
         {
             if(fb_info.win_par[i].area_par[j].ion_fd || fb_info.win_par[i].area_par[j].phy_addr)
-                ALOGV("win[%d],area[%d],z_win[%d,%d],[%d,%d,%d,%d]=>[%d,%d,%d,%d],w_h_f[%d,%d,%d],acq_fence_fd=%d,fd=%d,addr=%x",
+                ALOGV("par[%d],area[%d],z_win_galp[%d,%d,%x],[%d,%d,%d,%d]=>[%d,%d,%d,%d],w_h_f[%d,%d,%d],acq_fence_fd=%d,fd=%d,addr=%x",
                     i,j,
                     fb_info.win_par[i].z_order,
                     fb_info.win_par[i].win_id,
+                    fb_info.win_par[i].g_alpha_val,
                     fb_info.win_par[i].area_par[j].x_offset,
                     fb_info.win_par[i].area_par[j].y_offset,
                     fb_info.win_par[i].area_par[j].xact,
