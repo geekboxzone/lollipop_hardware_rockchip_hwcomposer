@@ -3855,7 +3855,6 @@ void init_hdmi_mode()
                  }
                 close(fd);
                 g_hdmi_mode = atoi(statebuf);
-                g_hdmi_mode = 0;   // debug disable for temp
                /* if (g_hdmi_mode==0)
                 {
                     property_set("sys.hdmi.mode", "0");
