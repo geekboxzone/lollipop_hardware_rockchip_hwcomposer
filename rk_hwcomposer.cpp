@@ -190,7 +190,7 @@ void hwc_sync_release(hwc_display_contents_1_t  *list)
   }
    
 }
-int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,int h_valid)
+int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,int h_valid,int fd_dst)
 {
     struct rga_req  Rga_Request;
     RECT clip;
@@ -298,9 +298,9 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
     ALOGV("src addr=[%x],w-h[%d,%d],act[%d,%d][f=%d]",
         handle->video_addr, SrcVirW, SrcVirH,SrcActW,SrcActH,RK_FORMAT_YCbCr_420_SP);
     ALOGV("dst fd=[%x],w-h[%d,%d],act[%d,%d][f=%d],rot=%d,rot_mod=%d",
-        handle->share_fd, DstVirW, DstVirH,DstActW,DstActH,Dstfmt,Rotation,RotateMode);
+        fd_dst, DstVirW, DstVirH,DstActW,DstActH,Dstfmt,Rotation,RotateMode);
     RGA_set_src_vir_info(&Rga_Request, 0, handle->video_addr, 0,SrcVirW, SrcVirH, RK_FORMAT_YCbCr_420_SP, 0);
-    RGA_set_dst_vir_info(&Rga_Request, handle->share_fd, 0, 0,DstVirW,DstVirH,&clip, Dstfmt, 0);    
+    RGA_set_dst_vir_info(&Rga_Request, fd_dst, 0, 0,DstVirW,DstVirH,&clip, Dstfmt, 0);    
     RGA_set_bitblt_mode(&Rga_Request, 0, RotateMode,Rotation,0,0,0);    
     RGA_set_src_act_info(&Rga_Request,SrcActW,SrcActH, 0,0);
     RGA_set_dst_act_info(&Rga_Request,DstActW,DstActH, xoffset,yoffset);
@@ -310,7 +310,7 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
         ALOGE("err src addr=[%x],w-h[%d,%d],act[%d,%d][f=%d],x_y_offset[%d,%d]",
             handle->video_addr, SrcVirW, SrcVirH,SrcActW,SrcActH,RK_FORMAT_YCbCr_420_SP,xoffset,yoffset);
         ALOGE("err dst fd=[%x],w-h[%d,%d],act[%d,%d][f=%d],rot=%d,rot_mod=%d",
-            handle->share_fd, DstVirW, DstVirH,DstActW,DstActH,RK_FORMAT_RGB_565,Rotation,RotateMode);
+            fd_dst, DstVirW, DstVirH,DstActW,DstActH,RK_FORMAT_RGB_565,Rotation,RotateMode);
     }
         
 #if 0
@@ -522,7 +522,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                             + (int) ((dstRects[k].right  - dstRects[k].left) * hfactor);
                         h_valid = psrc_rect->bottom - psrc_rect->top;
                         w_valid = psrc_rect->right - psrc_rect->left;
-                        Context->zone_manager.zone_info[j].layer_fd = SrcHnd->share_fd;  
+                        Context->zone_manager.zone_info[j].layer_fd = Context->fd_video_bk;  
                         Context->zone_manager.zone_info[j].width = w_valid;
                         Context->zone_manager.zone_info[j].height = h_valid;
                         Context->zone_manager.zone_info[j].stride = w_valid;                                                    
@@ -544,7 +544,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                             + (int) ((dstRects[k].right  - dstRects[k].left) * hfactor);
                         h_valid = psrc_rect->bottom - psrc_rect->top;
                         w_valid = psrc_rect->right - psrc_rect->left;
-                        Context->zone_manager.zone_info[j].layer_fd = SrcHnd->share_fd;  
+                        Context->zone_manager.zone_info[j].layer_fd = Context->fd_video_bk;  
                         Context->zone_manager.zone_info[j].width = w_valid;
                         Context->zone_manager.zone_info[j].height = h_valid ;
                         Context->zone_manager.zone_info[j].stride = w_valid;   
@@ -565,7 +565,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                             + (int) ((dstRects[k].bottom - dstRects[k].top) * vfactor);
                         w_valid = psrc_rect->right - psrc_rect->left;
                         h_valid = psrc_rect->bottom - psrc_rect->top;   
-                        Context->zone_manager.zone_info[j].layer_fd = SrcHnd->share_fd; 
+                        Context->zone_manager.zone_info[j].layer_fd = Context->fd_video_bk; 
                         Context->zone_manager.zone_info[j].width = w_valid;
                         Context->zone_manager.zone_info[j].height = h_valid;
                         Context->zone_manager.zone_info[j].stride = w_valid;                                                    
@@ -576,7 +576,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                 }   
                 //ALOGD("layer->transform=%d",layer->transform);
                 if(layer->transform)
-                    rga_video_copybit(SrcHnd,layer->transform,w_valid,h_valid);
+                    rga_video_copybit(SrcHnd,layer->transform,w_valid,h_valid,Context->fd_video_bk);
     			psrc_rect->left = psrc_rect->left - psrc_rect->left%2;
     			psrc_rect->top = psrc_rect->top - psrc_rect->top%2;
     			psrc_rect->right = psrc_rect->right - psrc_rect->right%2;
@@ -1923,7 +1923,7 @@ int hwc_prepare_virtual(hwc_composer_device_1_t * dev, hwc_display_contents_1_t 
 				GPU_BASE,GPU_WIDTH,GPU_HEIGHT);
 			if (context->wfdOptimize==0)
 			{
-				rga_video_copybit(handle,0,0,0);
+				rga_video_copybit(handle,0,0,0,handle->share_fd);
 			}
 		}
 	}
@@ -1942,17 +1942,19 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
     
     hwcContext * context = _contextAnchor;
     int ret;
+    int err;    
     bool vertical = false;
 #if hwcDumpSurface
     _DumpSurface(list);
 #endif
     char value[PROPERTY_VALUE_MAX];
     int new_value = 0;
+    bool video_mode = false;
 
     /* Check layer list. */
-    if ((list == NULL)
-    ||  (list->numHwLayers == 0)
-    //||  !(list->flags & HWC_GEOMETRY_CHANGED)
+    if (list == NULL
+        ||(list->numHwLayers  == 0)
+        //||  !(list->flags & HWC_GEOMETRY_CHANGED)
     )
     {
         return 0;
@@ -1979,7 +1981,10 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
         if( GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
         {
             tVPU_FRAME vpu_hd;
+            int stride_gr;            
             bool IsDiff = false;
+            video_mode = true;
+            ALOGV("[%p,%p],[%p,%p]",context->vdieo_hd,handle, context->video_base,(void*)handle->base);
             if(context->vdieo_hd != handle || context->video_base != (void*)handle->base)
                IsDiff = true;
             if(IsDiff)   
@@ -1992,6 +1997,23 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
                 context->vdieo_hd = handle ;
                 context->video_base = (void*)handle->base;
             }    
+            if(context->fd_video_bk == -1)
+            {
+                err = context->mAllocDev->alloc(context->mAllocDev, handle->video_width, \
+                                                handle->video_height, context->fbhandle.format, \
+                                                GRALLOC_USAGE_HW_COMPOSER|GRALLOC_USAGE_HW_RENDER, \
+                                                (buffer_handle_t*)(&(context->pbvideo_bk)),&stride_gr);  
+                if(!err){
+                    struct private_handle_t*phandle_gr = (struct private_handle_t*)context->pbvideo_bk;
+                    context->fd_video_bk = phandle_gr->share_fd;
+                    ALOGV("video alloc fd [%dx%d,f=%d],fd=%d ",phandle_gr->width,phandle_gr->height,phandle_gr->format,phandle_gr->share_fd);                                
+
+                }
+                else {
+                    ALOGE("video alloc faild");
+                    goto GpuComP;
+                }
+            }
         }
         if(list->hwLayers[i].realtransform == HAL_TRANSFORM_ROT_90
             || list->hwLayers[i].realtransform == HAL_TRANSFORM_ROT_270 )
@@ -2000,6 +2022,15 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
         }
 
     }
+    if(!video_mode && context->fd_video_bk >0) // free video gralloc buffer
+    {
+        err = context->mAllocDev->free(context->mAllocDev, context->pbvideo_bk);
+        if(!err)
+            context->fd_video_bk = -1;
+        ALOGW_IF(err, "free(...) failed %d (%s)", err, strerror(-err));            
+
+    }
+    
     /* Check all layers: tag with different compositionType. */
     for (i = 0; i < (list->numHwLayers - 1); i++)
     {
@@ -2070,12 +2101,16 @@ GpuComP   :
     for (j = 0; j <(list->numHwLayers - 1); j++)
     {
         struct private_handle_t * handle = (struct private_handle_t *)list->hwLayers[j].handle;
-        list->hwLayers[j].compositionType = HWC_FRAMEBUFFER;        
+        list->hwLayers[j].compositionType = HWC_FRAMEBUFFER;                
+        if( ( list->hwLayers[j].flags & HWC_SKIP_LAYER)
+            ||(handle == NULL)
+           ) 
+            continue;        
         if (handle && GPU_FORMAT==HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
         {
             ALOGV("rga_video_copybit,%x,w=%d,h=%d",\
                             GPU_BASE,GPU_WIDTH,GPU_HEIGHT);
-            rga_video_copybit(handle,0,0,0);
+            rga_video_copybit(handle,0,0,0,handle->share_fd);
         }
     }
     context->zone_manager.composter_mode = HWC_FRAMEBUFFER;
@@ -3591,7 +3626,7 @@ hwc_device_open(
     context->device.fbPost2 = hwc_fbPost;
     context->device.dump = hwc_dump;
     context->device.layer_recover   = hwc_layer_recover;
-
+    context->fd_video_bk = -1;
     /* Get gco2D object pointer. */
     
     context->engine_fd = open("/dev/rga",O_RDWR,0);

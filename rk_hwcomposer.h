@@ -316,6 +316,10 @@ typedef struct _hwcContext
 #endif
      int      flag;
      int      fb_blanked;
+     int      fd_video_bk;   
+     buffer_handle_t pbvideo_bk;    
+     
+
 }
 hwcContext;
 
