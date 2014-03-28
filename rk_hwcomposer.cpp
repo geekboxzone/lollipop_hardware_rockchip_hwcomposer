@@ -442,7 +442,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
             if((dstRects[m].right - dstRects[m].left) < 16
                 || (dstRects[m].bottom - dstRects[m].top) < 16)
             {
-                ALOGD("lcdc dont support too small area");
+                ALOGD("lcdc dont support too small area name=%s",layer->LayerName);
                 return -1;
             }
             LOGV("%s(%d): Region rect[%d]:  [%d,%d,%d,%d]",
@@ -456,6 +456,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
         }
         if((m+j) > MaxZones)
         {
+            ALOGD("Overflow [%d] >max=%d",m+j,MaxZones);
             return -1;
         }
         for (unsigned int k = 0; k < m; k++)
