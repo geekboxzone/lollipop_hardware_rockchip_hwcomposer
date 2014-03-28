@@ -1980,7 +1980,7 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
         {
             tVPU_FRAME vpu_hd;
             bool IsDiff = false;
-            if(context->vdieo_hd != handle && context->video_base != (void*)handle->base)
+            if(context->vdieo_hd != handle || context->video_base != (void*)handle->base)
                IsDiff = true;
             if(IsDiff)   
             {
