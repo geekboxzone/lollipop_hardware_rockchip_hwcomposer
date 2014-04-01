@@ -165,6 +165,18 @@ void hwc_sync(hwc_display_contents_1_t  *list)
   }
 }
 
+int rga_video_reset()
+{
+    if (_contextAnchor->video_hd || _contextAnchor->video_base)
+    {
+        ALOGV(" rga_video_reset,%x",_contextAnchor->video_hd);
+        _contextAnchor->video_hd = 0;
+        _contextAnchor->video_base =0;
+    }
+
+    return 0;
+}
+
 void hwc_sync_release(hwc_display_contents_1_t  *list)
 {
   for (int i=0; i<(int)list->numHwLayers; i++)
@@ -1973,19 +1985,14 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
     {
         struct private_handle_t * handle = (struct private_handle_t *) list->hwLayers[i].handle;
 
-        if( ( list->hwLayers[i].flags & HWC_SKIP_LAYER)
-            ||(handle == NULL)
-           )
-            continue;
-
-        if( GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
+        if(handle && GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
         {
             tVPU_FRAME vpu_hd;
             int stride_gr;            
             bool IsDiff = false;
             video_mode = true;
-            ALOGV("[%p,%p],[%p,%p]",context->vdieo_hd,handle, context->video_base,(void*)handle->base);
-            if(context->vdieo_hd != handle || context->video_base != (void*)handle->base)
+            ALOGV("[%p,%p],[%p,%p]",context->video_hd,handle, context->video_base,(void*)handle->base);
+            if(context->video_hd != handle || context->video_base != (void*)handle->base)
                IsDiff = true;
             if(IsDiff)   
             {
@@ -1994,7 +2001,7 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
                 handle->video_width = vpu_hd.width;
                 handle->video_height = vpu_hd.height;  
                 ALOGV("prepare [%x,%dx%d]",handle->video_addr,handle->video_width,handle->video_height);
-                context->vdieo_hd = handle ;
+                context->video_hd = handle ;
                 context->video_base = (void*)handle->base;
             }    
             if(context->fd_video_bk == -1)
@@ -2102,10 +2109,7 @@ GpuComP   :
     {
         struct private_handle_t * handle = (struct private_handle_t *)list->hwLayers[j].handle;
         list->hwLayers[j].compositionType = HWC_FRAMEBUFFER;                
-        if( ( list->hwLayers[j].flags & HWC_SKIP_LAYER)
-            ||(handle == NULL)
-           ) 
-            continue;        
+     
         if (handle && GPU_FORMAT==HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
         {
             ALOGV("rga_video_copybit,%x,w=%d,h=%d",\
@@ -3479,13 +3483,35 @@ int is_surport_wfd_optimize()
    }
 }
 
-int hwc_copybit(struct hwc_composer_device_1 *dev,
-             hwc_layer_1_t *src_layer,
-			 hwc_layer_1_t *dst_layer,
-			 int flag
-			 )
+int hwc_copybit(struct hwc_composer_device_1 *dev,buffer_handle_t src_handle,
+                    buffer_handle_t dst_handle,int flag)
 {
- 
+    ALOGV("hwc_copybit");
+
+    if (src_handle==0 || dst_handle==0)
+    {
+        return -1;
+    }
+
+    struct private_handle_t *srcHandle = (struct private_handle_t *)src_handle;
+    struct private_handle_t *dstHandle = (struct private_handle_t *)dst_handle;
+
+    if (srcHandle->format==HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
+    {
+        if (flag > 0)
+        {
+            ALOGV("============rga_video_copybit");
+            //memset((void*)(srcHandle->base),0x80,4*srcHandle->height*srcHandle->stride); //debug:clear screenshots to 0x80
+            rga_video_copybit(srcHandle,0,0,0,srcHandle->share_fd);
+        }
+
+        if (flag == 0)
+        {
+            ALOGV("============rga_video_reset");
+            rga_video_reset();
+        }
+
+    }
 
     return 0;
 }

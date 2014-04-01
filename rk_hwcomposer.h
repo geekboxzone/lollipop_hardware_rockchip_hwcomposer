@@ -282,7 +282,7 @@ typedef struct _hwcContext
     int       fbFd;
     int       fbFd1;
     int       vsync_fd;
-    struct private_handle_t* vdieo_hd ;
+    struct private_handle_t* video_hd ;
     void * video_base;
     struct private_handle_t fbhandle ;    
     bool      fb1_cflag;
