@@ -510,7 +510,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                         psrc_rect->top    = SrcRect->top
                             - (int) ((DstRect->top    - dstRects[k].top)    * vfactor);
                         psrc_rect->right  = SrcRect->right
-                            - (int) ((DstRect->right  - dstRects[i].right)  * hfactor);
+                            - (int) ((DstRect->right  - dstRects[k].right)  * hfactor);
                         psrc_rect->bottom = SrcRect->bottom
                             - (int) ((DstRect->bottom - dstRects[k].bottom) * vfactor);
                         Context->zone_manager.zone_info[j].layer_fd = 0;    
