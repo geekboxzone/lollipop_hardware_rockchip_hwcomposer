@@ -1485,7 +1485,9 @@ hwc_buff_recover(
 	    if(fb_info.rel_fence_fd[k]!= -1)
             close(fb_info.rel_fence_fd[k]);
 	}
-//	list->retireFenceFd = fb_info.ret_fence_fd;
+
+    if(fb_info.ret_fence_fd != -1)
+        close(fb_info.ret_fence_fd);
 #endif
 
         bkupmanage.crrent_dis_fd =  bkupmanage.direct_fd;            
@@ -2904,11 +2906,15 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list)
 #ifdef USE_HWC_FENCE
     	for(i=0;i<RK_MAX_BUF_NUM;i++)
     	{
-            // ALOGD("rel_fence_fd[%d] = %d", i, fb_info.rel_fence_fd[i]);
+            //ALOGD("rel_fence_fd[%d] = %d", i, fb_info.rel_fence_fd[i]);
             if(fb_info.rel_fence_fd[i] != -1)
-                list->hwLayers[i].releaseFenceFd = fb_info.rel_fence_fd[i];
+            {
+                if(i< (list->numHwLayers -1))
+                    list->hwLayers[i].releaseFenceFd = fb_info.rel_fence_fd[i];
+                else
+                    close(fb_info.rel_fence_fd[i]);
+             }
     	}
-
         list->retireFenceFd = fb_info.ret_fence_fd;
 #else
     	for(i=0;i<RK_MAX_BUF_NUM;i++)
@@ -3501,14 +3507,19 @@ int hwc_copybit(struct hwc_composer_device_1 *dev,buffer_handle_t src_handle,
         if (flag > 0)
         {
             ALOGV("============rga_video_copybit");
-            //memset((void*)(srcHandle->base),0x80,4*srcHandle->height*srcHandle->stride); //debug:clear screenshots to 0x80
+
+            //Debug:clear screenshots to 0x80
+#if 0
+            memset((void*)(srcHandle->base),0x80,4*srcHandle->height*srcHandle->stride);
+#endif
             rga_video_copybit(srcHandle,0,0,0,srcHandle->share_fd);
         }
 
+        //do nothing,or it will lead to clear srcHandle's base address.
         if (flag == 0)
         {
             ALOGV("============rga_video_reset");
-            rga_video_reset();
+          //  rga_video_reset();
         }
 
     }
