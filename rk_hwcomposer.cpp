@@ -212,7 +212,7 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
     int DstVirW,DstVirH,DstActW,DstActH;
     int xoffset = 0;
     int yoffset = 0;
-    int Dstfmt = RK_FORMAT_RGB_565;
+    int Dstfmt = RK_FORMAT_YCbCr_420_SP;
     int   rga_fd = _contextAnchor->engine_fd;
     if (!rga_fd)
     {
@@ -221,6 +221,10 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
     if (!handle )
     {
       return -1;
+    }
+    if(_contextAnchor->video_fmt != HAL_PIXEL_FORMAT_YCrCb_NV12)
+    {
+        return -1;
     }
     memset(&Rga_Request, 0x0, sizeof(Rga_Request));
     clip.xmin = 0;
@@ -237,7 +241,7 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
             SrcVirH = handle->video_height;
             SrcActW = w_valid;
             SrcActH = h_valid;
-            DstVirW = h_valid;
+            DstVirW = gcmALIGN(h_valid,8);
             DstVirH = w_valid;
             DstActW = w_valid;
             DstActH = h_valid;
@@ -273,7 +277,7 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
             SrcVirH = handle->video_height;
             SrcActW = w_valid;
             SrcActH = h_valid;
-            DstVirW = h_valid;
+            DstVirW = gcmALIGN(h_valid,8);
             DstVirH = w_valid;
             DstActW = w_valid;
             DstActH = h_valid;
@@ -288,10 +292,10 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
 			if (property_get("sys.yuv.rgb.format", property, NULL) > 0) {
 				fmtflag = atoi(property);
 			}
-			if(fmtflag == 1)
-                Dstfmt = RK_FORMAT_RGB_565;
-			else 
-                Dstfmt = RK_FORMAT_RGBA_8888;        
+			//if(fmtflag == 1)
+               // Dstfmt = RK_FORMAT_RGB_565;
+			//else 
+               // Dstfmt = RK_FORMAT_RGBA_8888;        
             SrcVirW = handle->video_width;
             SrcVirH = handle->video_height;
             SrcActW = handle->width;
@@ -304,6 +308,7 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
             clip.xmax =  handle->width - 1;
             clip.ymin = 0;
             clip.ymax = handle->height - 1;                
+            Dstfmt = RK_FORMAT_YCbCr_420_SP;   
             break;
     }        
     }       
@@ -322,7 +327,7 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
         ALOGE("err src addr=[%x],w-h[%d,%d],act[%d,%d][f=%d],x_y_offset[%d,%d]",
             handle->video_addr, SrcVirW, SrcVirH,SrcActW,SrcActH,RK_FORMAT_YCbCr_420_SP,xoffset,yoffset);
         ALOGE("err dst fd=[%x],w-h[%d,%d],act[%d,%d][f=%d],rot=%d,rot_mod=%d",
-            fd_dst, DstVirW, DstVirH,DstActW,DstActH,RK_FORMAT_RGB_565,Rotation,RotateMode);
+            fd_dst, DstVirW, DstVirH,DstActW,Dstfmt,RK_FORMAT_RGB_565,Rotation,RotateMode);
     }
         
 #if 0
@@ -497,7 +502,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
             {
                 int w_valid = 0 ,h_valid = 0;
     		    hwc_rect_t * psrc_rect = &(Context->zone_manager.zone_info[j].src_rect);            
-                Context->zone_manager.zone_info[j].format = HAL_PIXEL_FORMAT_YCrCb_NV12;
+                Context->zone_manager.zone_info[j].format = Context->video_fmt;//HAL_PIXEL_FORMAT_YCrCb_NV12;
                 ALOGV("HAL_PIXEL_FORMAT_YCrCb_NV12 transform=%d, addr[%x][%dx%d],ori_fd[%d][%dx%d]",
                         layer->transform,SrcHnd->video_addr,SrcHnd->video_width,SrcHnd->video_height,
                         SrcHnd->share_fd,SrcHnd->width,SrcHnd->height);
@@ -536,9 +541,9 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                         w_valid = psrc_rect->right - psrc_rect->left;
                         Context->zone_manager.zone_info[j].layer_fd = Context->fd_video_bk;  
                         Context->zone_manager.zone_info[j].width = w_valid;
-                        Context->zone_manager.zone_info[j].height = h_valid;
+                        Context->zone_manager.zone_info[j].height = gcmALIGN(h_valid,8);
                         Context->zone_manager.zone_info[j].stride = w_valid;                                                    
-                        Context->zone_manager.zone_info[j].format = HAL_PIXEL_FORMAT_RGB_565;
+                       // Context->zone_manager.zone_info[j].format = HAL_PIXEL_FORMAT_RGB_565;
                         
                         break;
 
@@ -558,9 +563,9 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                         w_valid = psrc_rect->right - psrc_rect->left;
                         Context->zone_manager.zone_info[j].layer_fd = Context->fd_video_bk;  
                         Context->zone_manager.zone_info[j].width = w_valid;
-                        Context->zone_manager.zone_info[j].height = h_valid ;
+                        Context->zone_manager.zone_info[j].height = gcmALIGN(h_valid,8); ;
                         Context->zone_manager.zone_info[j].stride = w_valid;   
-                        Context->zone_manager.zone_info[j].format = HAL_PIXEL_FORMAT_RGB_565;
+                        //Context->zone_manager.zone_info[j].format = HAL_PIXEL_FORMAT_RGB_565;
                         break;
 
             		case HWC_TRANSFORM_ROT_180:
@@ -581,7 +586,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                         Context->zone_manager.zone_info[j].width = w_valid;
                         Context->zone_manager.zone_info[j].height = h_valid;
                         Context->zone_manager.zone_info[j].stride = w_valid;                                                    
-                        Context->zone_manager.zone_info[j].format = HAL_PIXEL_FORMAT_RGB_565;                          
+                        //Context->zone_manager.zone_info[j].format = HAL_PIXEL_FORMAT_RGB_565;                          
                         break;
                     default:
                         break;
@@ -2005,6 +2010,11 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
                 ALOGV("prepare [%x,%dx%d]",handle->video_addr,handle->video_width,handle->video_height);
                 context->video_hd = handle ;
                 context->video_base = (void*)handle->base;
+                context->video_fmt = vpu_hd.format;
+                if(context->video_fmt !=HAL_PIXEL_FORMAT_YCrCb_NV12 
+                    || context->video_fmt !=HAL_PIXEL_FORMAT_YCrCb_NV12_10)
+                    context->video_fmt = HAL_PIXEL_FORMAT_YCrCb_NV12;   // Compatible old sf lib 
+                ALOGD("context->video_fmt =%d",context->video_fmt);    
             }    
             if(context->fd_video_bk == -1)
             {
@@ -3821,7 +3831,7 @@ hwc_device_open(
          context,
          context->fb_fps);
 
-    property_set("sys.ghwc.version","1.000_32"); 
+    property_set("sys.ghwc.version","1.001_32"); 
 
     char Version[32];
 

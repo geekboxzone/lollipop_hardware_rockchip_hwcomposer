@@ -27,10 +27,6 @@
 #include <fcntl.h>
 
 
-#define gcmALIGN(n, align) \
-( \
-    ((n) + ((align) - 1)) & ~((align) - 1) \
-)
 
 #ifndef PMEM_CACHE_FLUSH
 #define PMEM_CACHE_FLUSH _IOW(PMEM_IOCTL_MAGIC, 8, unsigned int)

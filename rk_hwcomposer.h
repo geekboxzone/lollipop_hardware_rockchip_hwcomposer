@@ -254,6 +254,7 @@ struct tVPU_FRAME
     uint32_t         videoAddr[2];    // 0: Y address; 1: UV address;
     uint32_t         width;         // 16 aligned frame width
     uint32_t         height;        // 16 aligned frame height
+    uint32_t         format;        // 16 aligned frame height
 };
 
 typedef struct 
@@ -284,6 +285,7 @@ typedef struct _hwcContext
     int       vsync_fd;
     struct private_handle_t* video_hd ;
     void * video_base;
+    int video_fmt;
     struct private_handle_t fbhandle ;    
     bool      fb1_cflag;
     char      cupcore_string[16];
@@ -322,6 +324,10 @@ typedef struct _hwcContext
 
 }
 hwcContext;
+#define gcmALIGN(n, align) \
+( \
+    ((n) + ((align) - 1)) & ~((align) - 1) \
+)
 
 #define hwcMIN(x, y)			(((x) <= (y)) ?  (x) :  (y))
 #define hwcMAX(x, y)			(((x) >= (y)) ?  (x) :  (y))
