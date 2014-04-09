@@ -454,7 +454,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                      dstRects[m].top,
                      dstRects[m].right,
                      dstRects[m].bottom);
-                continue;
+                return -1;
             }
             if((dstRects[m].right - dstRects[m].left) < 16
                 || (dstRects[m].bottom - dstRects[m].top) < 16)
@@ -2012,7 +2012,7 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
                 context->video_base = (void*)handle->base;
                 context->video_fmt = vpu_hd.format;
                 if(context->video_fmt !=HAL_PIXEL_FORMAT_YCrCb_NV12 
-                    || context->video_fmt !=HAL_PIXEL_FORMAT_YCrCb_NV12_10)
+                    && context->video_fmt !=HAL_PIXEL_FORMAT_YCrCb_NV12_10)
                     context->video_fmt = HAL_PIXEL_FORMAT_YCrCb_NV12;   // Compatible old sf lib 
                 ALOGD("context->video_fmt =%d",context->video_fmt);    
             }    
