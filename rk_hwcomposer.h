@@ -35,6 +35,7 @@
 #define hwcUseTime 0
 #define hwcBlitUseTime 0
 #define hwcDumpSurface 0
+#define DEBUG_CHECK_WIN_CFG_DATA  0     //check rk_fb_win_cfg_data for lcdc
 #define  ENABLE_HWC_WORMHOLE     1
 #define  DUMP_SPLIT_AREA   0
 #define USE_HWC_FENCE               		1
@@ -48,7 +49,7 @@
 #define FBIOSET_OVERLAY_STATE     	0x5018
 #define MaxZones 10
 #define bakupbufsize 4
-
+#define MaxVideoBackBuffers     (2)
 
 #define GPU_BASE    handle->base
 #define GPU_WIDTH   handle->width
@@ -318,8 +319,10 @@ typedef struct _hwcContext
 #endif
      int      flag;
      int      fb_blanked;
-     int      fd_video_bk;   
-     buffer_handle_t pbvideo_bk;    
+     /* The index of video buffer will be used */
+     int      mCurVideoIndex;
+     int      fd_video_bk[MaxVideoBackBuffers];
+     buffer_handle_t pbvideo_bk[MaxVideoBackBuffers];
      
 
 }

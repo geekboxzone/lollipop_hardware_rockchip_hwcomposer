@@ -496,11 +496,12 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
             Context->zone_manager.zone_info[j].disp_rect.right = dstRects[k].right;
             Context->zone_manager.zone_info[j].disp_rect.bottom = dstRects[k].bottom;  
 #ifdef USE_HWC_FENCE
-	    Context->zone_manager.zone_info[j].acq_fence_fd =layer->acquireFenceFd;
- #endif
+	        Context->zone_manager.zone_info[j].acq_fence_fd =layer->acquireFenceFd;
+#endif
             if(SrcHnd->format == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
             {
                 int w_valid = 0 ,h_valid = 0;
+                int index_v = Context->mCurVideoIndex%MaxVideoBackBuffers;
     		    hwc_rect_t * psrc_rect = &(Context->zone_manager.zone_info[j].src_rect);            
                 Context->zone_manager.zone_info[j].format = Context->video_fmt;//HAL_PIXEL_FORMAT_YCrCb_NV12;
                 ALOGV("HAL_PIXEL_FORMAT_YCrCb_NV12 transform=%d, addr[%x][%dx%d],ori_fd[%d][%dx%d]",
@@ -539,7 +540,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                             + (int) ((dstRects[k].right  - dstRects[k].left) * hfactor);
                         h_valid = psrc_rect->bottom - psrc_rect->top;
                         w_valid = psrc_rect->right - psrc_rect->left;
-                        Context->zone_manager.zone_info[j].layer_fd = Context->fd_video_bk;  
+                        Context->zone_manager.zone_info[j].layer_fd = Context->fd_video_bk[index_v];
                         Context->zone_manager.zone_info[j].width = w_valid;
                         Context->zone_manager.zone_info[j].height = gcmALIGN(h_valid,8);
                         Context->zone_manager.zone_info[j].stride = w_valid;                                                    
@@ -561,7 +562,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                             + (int) ((dstRects[k].right  - dstRects[k].left) * hfactor);
                         h_valid = psrc_rect->bottom - psrc_rect->top;
                         w_valid = psrc_rect->right - psrc_rect->left;
-                        Context->zone_manager.zone_info[j].layer_fd = Context->fd_video_bk;  
+                        Context->zone_manager.zone_info[j].layer_fd = Context->fd_video_bk[index_v];
                         Context->zone_manager.zone_info[j].width = w_valid;
                         Context->zone_manager.zone_info[j].height = gcmALIGN(h_valid,8); ;
                         Context->zone_manager.zone_info[j].stride = w_valid;   
@@ -582,7 +583,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                             + (int) ((dstRects[k].bottom - dstRects[k].top) * vfactor);
                         w_valid = psrc_rect->right - psrc_rect->left;
                         h_valid = psrc_rect->bottom - psrc_rect->top;   
-                        Context->zone_manager.zone_info[j].layer_fd = Context->fd_video_bk; 
+                        Context->zone_manager.zone_info[j].layer_fd = Context->fd_video_bk[index_v];
                         Context->zone_manager.zone_info[j].width = w_valid;
                         Context->zone_manager.zone_info[j].height = h_valid;
                         Context->zone_manager.zone_info[j].stride = w_valid;                                                    
@@ -593,7 +594,11 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                 }   
                 //ALOGD("layer->transform=%d",layer->transform);
                 if(layer->transform)
-                    rga_video_copybit(SrcHnd,layer->transform,w_valid,h_valid,Context->fd_video_bk);
+                {
+                    rga_video_copybit(SrcHnd,layer->transform,w_valid,h_valid,Context->fd_video_bk[index_v]);
+                    Context->mCurVideoIndex++;  //update video buffer index
+                }
+
     			psrc_rect->left = psrc_rect->left - psrc_rect->left%2;
     			psrc_rect->top = psrc_rect->top - psrc_rect->top%2;
     			psrc_rect->right = psrc_rect->right - psrc_rect->right%2;
@@ -2014,23 +2019,28 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
                 if(context->video_fmt !=HAL_PIXEL_FORMAT_YCrCb_NV12 
                     && context->video_fmt !=HAL_PIXEL_FORMAT_YCrCb_NV12_10)
                     context->video_fmt = HAL_PIXEL_FORMAT_YCrCb_NV12;   // Compatible old sf lib 
-                ALOGD("context->video_fmt =%d",context->video_fmt);    
-            }    
-            if(context->fd_video_bk == -1)
-            {
-                err = context->mAllocDev->alloc(context->mAllocDev, handle->video_width, \
-                                                handle->video_height, context->fbhandle.format, \
-                                                GRALLOC_USAGE_HW_COMPOSER|GRALLOC_USAGE_HW_RENDER, \
-                                                (buffer_handle_t*)(&(context->pbvideo_bk)),&stride_gr);  
-                if(!err){
-                    struct private_handle_t*phandle_gr = (struct private_handle_t*)context->pbvideo_bk;
-                    context->fd_video_bk = phandle_gr->share_fd;
-                    ALOGV("video alloc fd [%dx%d,f=%d],fd=%d ",phandle_gr->width,phandle_gr->height,phandle_gr->format,phandle_gr->share_fd);                                
+                ALOGV("context->video_fmt =%d",context->video_fmt);
+            }
 
-                }
-                else {
-                    ALOGE("video alloc faild");
-                    goto GpuComP;
+            //alloc video gralloc buffer in video mode
+            if(context->fd_video_bk[0] == -1)
+            {
+                for(j=0;j<MaxVideoBackBuffers;j++)
+                {
+                    err = context->mAllocDev->alloc(context->mAllocDev, handle->video_width, \
+                                                    handle->video_height, context->fbhandle.format, \
+                                                    GRALLOC_USAGE_HW_COMPOSER|GRALLOC_USAGE_HW_RENDER, \
+                                                    (buffer_handle_t*)(&(context->pbvideo_bk[j])),&stride_gr);
+                    if(!err){
+                        struct private_handle_t*phandle_gr = (struct private_handle_t*)context->pbvideo_bk[j];
+                        context->fd_video_bk[j] = phandle_gr->share_fd;
+                        ALOGV("video alloc fd [%dx%d,f=%d],fd=%d ",phandle_gr->width,phandle_gr->height,phandle_gr->format,phandle_gr->share_fd);                                
+
+                    }
+                    else {
+                        ALOGE("video alloc faild");
+                        goto GpuComP;
+                    }
                 }
             }
         }
@@ -2041,13 +2051,20 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
         }
 
     }
-    if(!video_mode && context->fd_video_bk >0) // free video gralloc buffer
-    {
-        err = context->mAllocDev->free(context->mAllocDev, context->pbvideo_bk);
-        if(!err)
-            context->fd_video_bk = -1;
-        ALOGW_IF(err, "free(...) failed %d (%s)", err, strerror(-err));            
 
+    // free video gralloc buffer in ui mode
+    if(!video_mode && context->fd_video_bk[0] > 0)
+    {
+        for(i=0;i<MaxVideoBackBuffers;i++)
+        {
+            err = context->mAllocDev->free(context->mAllocDev, context->pbvideo_bk[i]);
+            if(!err)
+            {
+                context->fd_video_bk[i] = -1;
+                context->pbvideo_bk[i] = NULL;
+            }
+            ALOGW_IF(err, "free(...) failed %d (%s)", err, strerror(-err));
+        }
     }
     
     /* Check all layers: tag with different compositionType. */
@@ -2873,34 +2890,52 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list)
     //win2 & win3 need sort by ypos (positive-order)
     sort_area_by_ypos(2,&fb_info);
     sort_area_by_ypos(3,&fb_info);
-   
+
+#if DEBUG_CHECK_WIN_CFG_DATA
     for(i = 0;i<4;i++)
     {
         for(j=0;j<4;j++)
         {
             if(fb_info.win_par[i].area_par[j].ion_fd || fb_info.win_par[i].area_par[j].phy_addr)
-                ALOGV("par[%d],area[%d],z_win_galp[%d,%d,%x],[%d,%d,%d,%d]=>[%d,%d,%d,%d],w_h_f[%d,%d,%d],acq_fence_fd=%d,fd=%d,addr=%x",
-                    i,j,
-                    fb_info.win_par[i].z_order,
-                    fb_info.win_par[i].win_id,
-                    fb_info.win_par[i].g_alpha_val,
-                    fb_info.win_par[i].area_par[j].x_offset,
-                    fb_info.win_par[i].area_par[j].y_offset,
-                    fb_info.win_par[i].area_par[j].xact,
-                    fb_info.win_par[i].area_par[j].yact,
-                    fb_info.win_par[i].area_par[j].xpos,
-                    fb_info.win_par[i].area_par[j].ypos,
-                    fb_info.win_par[i].area_par[j].xsize,
-                    fb_info.win_par[i].area_par[j].ysize,
-                    fb_info.win_par[i].area_par[j].xvir,
-                    fb_info.win_par[i].area_par[j].yvir,
-                    fb_info.win_par[i].data_format,
-                    fb_info.win_par[i].area_par[j].acq_fence_fd,
-                    fb_info.win_par[i].area_par[j].ion_fd,
-                    fb_info.win_par[i].area_par[j].phy_addr);
+            {
+                if(fb_info.win_par[i].z_order<0 ||
+                fb_info.win_par[i].win_id < 0 || fb_info.win_par[i].win_id > 4 ||
+                fb_info.win_par[i].g_alpha_val < 0 || fb_info.win_par[i].g_alpha_val > 0xFF ||
+                fb_info.win_par[i].area_par[j].x_offset < 0 || fb_info.win_par[i].area_par[j].y_offset < 0 ||
+                fb_info.win_par[i].area_par[j].x_offset > 4096 || fb_info.win_par[i].area_par[j].y_offset > 4096 ||
+                fb_info.win_par[i].area_par[j].xact < 0 || fb_info.win_par[i].area_par[j].yact < 0 ||
+                fb_info.win_par[i].area_par[j].xact > 4096 || fb_info.win_par[i].area_par[j].yact > 4096 ||
+                fb_info.win_par[i].area_par[j].xpos < 0 || fb_info.win_par[i].area_par[j].ypos < 0 ||
+                fb_info.win_par[i].area_par[j].xpos >4096 || fb_info.win_par[i].area_par[j].ypos > 4096 ||
+                fb_info.win_par[i].area_par[j].xsize < 0 || fb_info.win_par[i].area_par[j].ysize < 0 ||
+                fb_info.win_par[i].area_par[j].xsize > 4096 || fb_info.win_par[i].area_par[j].ysize > 4096 ||
+                fb_info.win_par[i].area_par[j].xvir < 0 ||  fb_info.win_par[i].area_par[j].yvir < 0 ||
+                fb_info.win_par[i].area_par[j].xvir > 4096 || fb_info.win_par[i].area_par[j].yvir > 4096 ||
+                fb_info.win_par[i].area_par[j].ion_fd < 0)
+                    ALOGE("par[%d],area[%d],z_win_galp[%d,%d,%x],[%d,%d,%d,%d]=>[%d,%d,%d,%d],w_h_f[%d,%d,%d],acq_fence_fd=%d,fd=%d,addr=%x",
+                        i,j,
+                        fb_info.win_par[i].z_order,
+                        fb_info.win_par[i].win_id,
+                        fb_info.win_par[i].g_alpha_val,
+                        fb_info.win_par[i].area_par[j].x_offset,
+                        fb_info.win_par[i].area_par[j].y_offset,
+                        fb_info.win_par[i].area_par[j].xact,
+                        fb_info.win_par[i].area_par[j].yact,
+                        fb_info.win_par[i].area_par[j].xpos,
+                        fb_info.win_par[i].area_par[j].ypos,
+                        fb_info.win_par[i].area_par[j].xsize,
+                        fb_info.win_par[i].area_par[j].ysize,
+                        fb_info.win_par[i].area_par[j].xvir,
+                        fb_info.win_par[i].area_par[j].yvir,
+                        fb_info.win_par[i].data_format,
+                        fb_info.win_par[i].area_par[j].acq_fence_fd,
+                        fb_info.win_par[i].area_par[j].ion_fd,
+                        fb_info.win_par[i].area_par[j].phy_addr);
+              }
         }
         
     }    
+#endif
 
 #ifdef USE_HWC_FENCE
 	fb_info.wait_fs=0; //not wait acquire fence temp(wait in hwc)
@@ -3673,7 +3708,15 @@ hwc_device_open(
     context->device.fbPost2 = hwc_fbPost;
     context->device.dump = hwc_dump;
     context->device.layer_recover   = hwc_layer_recover;
-    context->fd_video_bk = -1;
+
+    /* initialize params of video buffers*/
+    for(i=0;i<MaxVideoBackBuffers;i++)
+    {
+        context->fd_video_bk[i] = -1;
+        context->pbvideo_bk[i] = NULL;
+    }
+    context->mCurVideoIndex= 0;
+
     /* Get gco2D object pointer. */
     
     context->engine_fd = open("/dev/rga",O_RDWR,0);
