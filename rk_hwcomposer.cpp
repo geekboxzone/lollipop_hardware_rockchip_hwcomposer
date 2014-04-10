@@ -430,7 +430,12 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
             vfactor = (float) (SrcRect->bottom - SrcRect->top)
                     / (DstRect->bottom - DstRect->top);
         }
-
+        if(hfactor >= 8.0 || vfactor >= 8.0 || hfactor <= 0.125 || vfactor <= 0.125  )
+        {
+            ALOGV("stretch[%f,%f] not support!",hfactor,vfactor);
+            return -1;
+        
+        }
         is_stretch = (hfactor != 1.0) || (vfactor != 1.0);
         for (m = 0; m < (unsigned int) Region->numRects && m < 16 ; m++)
         {
