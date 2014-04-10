@@ -2967,11 +2967,25 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list)
     	}
         list->retireFenceFd = fb_info.ret_fence_fd;
 #else
+
     	for(i=0;i<RK_MAX_BUF_NUM;i++)
     	{
-    	    if(fb_info.rel_fence_fd[i]!= -1)
-                close(fb_info.rel_fence_fd[i]);
+    	   
+            if(fb_info.rel_fence_fd[i] != -1)
+            {
+                if(i< (list->numHwLayers -1))
+                {
+                    list->hwLayers[i].releaseFenceFd = -1;
+                    close(fb_info.rel_fence_fd[i]);
+                }     
+                else
+                    close(fb_info.rel_fence_fd[i]);
+             }            
     	}
+        list->retireFenceFd = -1;
+        if(fb_info.ret_fence_fd != -1)
+            close(fb_info.ret_fence_fd);
+        //list->retireFenceFd = fb_info.ret_fence_fd;        
 
 #endif
 
