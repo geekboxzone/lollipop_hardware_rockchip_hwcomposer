@@ -158,7 +158,7 @@ void hwc_sync(hwc_display_contents_1_t  *list)
   {
      if (list->hwLayers[i].acquireFenceFd>0)
      {
-       sync_wait(list->hwLayers[i].acquireFenceFd,40);  // add 40ms timeout
+       sync_wait(list->hwLayers[i].acquireFenceFd,100);  // add 40ms timeout
        ALOGV("fenceFd=%d,name=%s",list->hwLayers[i].acquireFenceFd,list->hwLayers[i].LayerName);
      }
 
