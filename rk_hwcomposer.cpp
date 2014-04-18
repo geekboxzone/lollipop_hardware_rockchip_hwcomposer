@@ -1151,7 +1151,7 @@ _DumpSurface(
                 char layername[100] ;
 
 
-                if( handle_pre == NULL)
+                if( handle_pre == NULL || handle_pre->format == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
                     continue;
 
                 SrcStride = android::bytesPerPixel(handle_pre->format);
@@ -1226,9 +1226,85 @@ hwcDumpArea(
 
         /* Advance to next area. */
         area = area->next;
-    }
+    }    
 }
+static int CompareLines(int *da,int w)
+{
+    int i,j;
+    for(i = 0;i<4;i++) // compare 4 lins
+    {
+        for(j= 0;j<w;j++)  
+        {
+            if(*da != 0xff000000 && *da != 0x0)
+            {
+                return 1;
+            }            
+            da ++;    
+        }
+    }    
+    return 0;
+}
+static int CompareVers(int *da,int w,int h)
+{
+    int i,j;
+    int *data ;
+    for(i = 0;i<4;i++) // compare 4 lins
+    {
+        data = da + i;
+        for(j= 0;j<h;j++)  
+        {
+            if(*data != 0xff000000 && *data != 0x0 )
+            {
+                return 1;
+            }    
+            data +=w;    
+        }
+    }    
+    return 0;
+}
+
+static int DetectValidData(int *data,int w,int h)
+{
+    int i,j;
+    int *da;
+    int ret;
+    /*  detect model
+    -------------------------
+    |   |   |    |    |      |       
+    |   |   |    |    |      |
+    |------------------------|       
+    |   |   |    |    |      |
+    |   |   |    |    |      |       
+    |   |   |    |    |      |
+    |------------------------|       
+    |   |   |    |    |      |
+    |   |   |    |    |      |       
+    |------------------------|
+    |   |   |    |    |      |       
+    |   |   |    |    |      |       
+    |------------------------|       
+    |   |   |    |    |      |
+    --------------------------
+       
+    */
+    if(data == NULL)
+        return 1;
+    for(i = h/4;i<h;i+= h/4)
+    {
+        da = data +  i *w;
+        if(CompareLines(da,w))
+            return 1;
+    }    
+    for(i = w/4;i<w;i+= w/4)
+    {
+        da = data +  i ;
+        if(CompareVers(da,w,h))
+            return 1;
+    }
+   
+    return 0; 
     
+}
 
 static int backupbuffer(hwbkupinfo *pbkupinfo)
 {
@@ -2698,85 +2774,10 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list)
 
         switch(pzone_mag->zone_info[i].dispatched) {
             case win0:
-                {
-                    #if 0
-                    struct fb_fix_screeninfo finfo;
-                    struct fb_var_screeninfo info;
-        		    hwc_rect_t * psrc_rect = &(pzone_mag->zone_info[i].src_rect);            
-        		    hwc_rect_t * pdisp_rect = &(pzone_mag->zone_info[i].disp_rect);            
-                    int sync = 1;
-                    if (ioctl(context->fbFd, FBIOGET_FSCREENINFO, &finfo) == -1)
-                    {
-                        LOGE("%s(%d):  fd[%d] Failed", __FUNCTION__, __LINE__,context->fbFd);
-                        return hwcSTATUS_IO_ERR;
-                    }
-
-                    if (ioctl(context->fbFd, FBIOGET_VSCREENINFO, &info) == -1)
-                    {
-                        LOGE("%s(%d):  fd[%d] Failed", __FUNCTION__, __LINE__,context->fbFd);
-                        return hwcSTATUS_IO_ERR;
-                    }
-
-                    info.activate = FB_ACTIVATE_NOW;
-                    info.grayscale &= 0xff;
-                                    
-                    info.xoffset = hwcMAX(psrc_rect->left, 0);
-                    info.yoffset = hwcMAX(psrc_rect->top, 0);                  
-                    info.xres = (psrc_rect->right- psrc_rect->left) ;
-                    info.yres = (psrc_rect->bottom - psrc_rect->top);
-                    info.xres_virtual = pzone_mag->zone_info[i].stride;
-                    info.yres_virtual = pzone_mag->zone_info[i].height;
-                  
-                    info.nonstd |=  hwcMAX(pdisp_rect->left, 0) << 8;                  
-                    info.nonstd |= hwcMAX(pdisp_rect->top , 0) << 20;
-                    info.grayscale |= (pdisp_rect->right - pdisp_rect->left) << 8;
-                    info.grayscale |= (pdisp_rect->bottom - pdisp_rect->top) << 20;
-
-
-                    info.activate |= FB_ACTIVATE_FORCE;
-                    info.nonstd &= 0x00;                                     
-                    if(pzone_mag->zone_info[i].format == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
-                    {
-                		int videodata[2];
-                		videodata[0] = pzone_mag->zone_info[i].addr;     
-                		videodata[1] = videodata[0] + info.xres_virtual * info.yres_virtual; 
-                        info.nonstd |= HAL_PIXEL_FORMAT_YCrCb_NV12;    
-                        ALOGD("FB1_IOCTL_SET_YUV_ADDR=%x",pzone_mag->zone_info[i].addr);
-                        if (ioctl(context->fbFd, FB1_IOCTL_SET_YUV_ADDR, videodata) == -1)
-                        {
-                            LOGE("%s(%d):  fd[%d] Failed,DataAddr=%x", __FUNCTION__, __LINE__,context->fbFd,videodata[0]);
-                            return hwcSTATUS_IO_ERR;
-                        }                        
-                    }
-                    else
-                    {
-                        info.nonstd |= pzone_mag->zone_info[i].format;//HAL_PIXEL_FORMAT_YCrCb_NV12;//HAL_PIXEL_FORMAT_RGB_565
-                    
-                    }
-                     _DumpInfo(&info,0);    
-                    
-                    if (ioctl(context->fbFd, FBIOPUT_VSCREENINFO, &info) == -1)
-                    {
-                        LOGE("%s(%d):  fd[%d] Failed", __FUNCTION__, __LINE__,context->fbFd);
-                        return -1;
-                    }
-                    #if 0
-                    int v_fd=dup(pzone_mag->zone_info[i].layer_fd);
-                    if ( ioctl(context->fbFd, RK_FBIOSET_DMABUF_FD, &(v_fd)) == -1)
-                    {
-                        LOGE("%s(%d):  fd[%d] SET_DMABUF_FD Failed,share_fd=%x", __FUNCTION__, __LINE__,pzone_mag->zone_info[i].layer_fd);
-                        return -1;
-                    }
-                    #endif        
-
-                    ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &sync);
-                    return 0;
-                    #else
+                {  
                     win_no ++;
                     win_id = 0;
-                    area_no = 0;
-                    
-                    #endif
+                    area_no = 0;                    
                     ALOGV("[%d]dispatched=%d,z_order=%d",i,pzone_mag->zone_info[i].dispatched,z_order);
                     z_order++;
                 }
@@ -2893,9 +2894,48 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list)
     }    
 
     //win2 & win3 need sort by ypos (positive-order)
+    
     sort_area_by_ypos(2,&fb_info);
     sort_area_by_ypos(3,&fb_info);
-
+    #if 1 // detect UI invalid ,so close win1 ,reduce  bandwidth.
+    if(
+        fb_info.win_par[0].data_format == HAL_PIXEL_FORMAT_YCrCb_NV12
+        && list->numHwLayers == 3)  // @ video & 2 layers
+    {
+        bool IsDiff = true;
+        int ret;
+        hwc_layer_1_t * layer = &list->hwLayers[1];
+        struct private_handle_t* uiHnd = (struct private_handle_t *) layer->handle;
+        IsDiff = uiHnd->share_fd != context->vui_fd;
+        if(IsDiff)
+        {
+            context->vui_hide = 0;  
+        }
+        else if(!context->vui_hide)
+        {
+            ret = DetectValidData((int *)uiHnd->base,uiHnd->width,uiHnd->height);
+            if(!ret)
+            {                               
+                context->vui_hide = 1;
+                ALOGD(" @video UI close");
+            }    
+        }
+        // close UI win
+        if(context->vui_hide == 1)
+        {
+            for(i = 1;i<4;i++)
+            {
+                for(j=0;j<4;j++)
+                {
+                    fb_info.win_par[i].area_par[j].ion_fd = 0;
+                    fb_info.win_par[i].area_par[j].phy_addr = 0;
+                }
+            }    
+        }    
+        context->vui_fd = uiHnd->share_fd;
+       
+    }
+    #endif
 #if DEBUG_CHECK_WIN_CFG_DATA
     for(i = 0;i<4;i++)
     {
@@ -2903,6 +2943,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list)
         {
             if(fb_info.win_par[i].area_par[j].ion_fd || fb_info.win_par[i].area_par[j].phy_addr)
             {
+                
                 if(fb_info.win_par[i].z_order<0 ||
                 fb_info.win_par[i].win_id < 0 || fb_info.win_par[i].win_id > 4 ||
                 fb_info.win_par[i].g_alpha_val < 0 || fb_info.win_par[i].g_alpha_val > 0xFF ||
@@ -2917,6 +2958,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list)
                 fb_info.win_par[i].area_par[j].xvir < 0 ||  fb_info.win_par[i].area_par[j].yvir < 0 ||
                 fb_info.win_par[i].area_par[j].xvir > 4096 || fb_info.win_par[i].area_par[j].yvir > 4096 ||
                 fb_info.win_par[i].area_par[j].ion_fd < 0)
+                
                     ALOGE("par[%d],area[%d],z_win_galp[%d,%d,%x],[%d,%d,%d,%d]=>[%d,%d,%d,%d],w_h_f[%d,%d,%d],acq_fence_fd=%d,fd=%d,addr=%x",
                         i,j,
                         fb_info.win_par[i].z_order,
@@ -3893,7 +3935,7 @@ hwc_device_open(
          context,
          context->fb_fps);
 
-    property_set("sys.ghwc.version","1.001_32"); 
+    property_set("sys.ghwc.version","1.002_32"); 
 
     char Version[32];
 
