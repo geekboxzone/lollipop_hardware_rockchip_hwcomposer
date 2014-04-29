@@ -674,7 +674,7 @@ int try_wins_dispatch_hor(hwcContext * Context)
     int cnt = 0;
     int srot_tal[4][2] = {0,};
     int sort_stretch[4] = {0}; 
-    
+    int sort_pre;
     ZoneManager* pzone_mag = &(Context->zone_manager);
     // try dispatch stretch wins
     char const* compositionTypeName[] = {
@@ -693,6 +693,7 @@ int try_wins_dispatch_hor(hwcContext * Context)
     for(i=0;i<(pzone_mag->zone_cnt-1);)
     {
         pzone_mag->zone_info[i].sort = sort;
+        sort_pre  = sort;
         cnt = 0;
 
         //means 4: win2 or win3 most has 4 zones 
@@ -727,6 +728,8 @@ int try_wins_dispatch_hor(hwcContext * Context)
                 break;
             }
         }
+        if( sort_pre == sort)
+            sort ++;
         i += cnt;      
     }
     if(sort >4)  // lcdc dont support 5 wins
@@ -2943,7 +2946,6 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list)
         {
             if(fb_info.win_par[i].area_par[j].ion_fd || fb_info.win_par[i].area_par[j].phy_addr)
             {
-                
                 if(fb_info.win_par[i].z_order<0 ||
                 fb_info.win_par[i].win_id < 0 || fb_info.win_par[i].win_id > 4 ||
                 fb_info.win_par[i].g_alpha_val < 0 || fb_info.win_par[i].g_alpha_val > 0xFF ||
@@ -2958,8 +2960,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list)
                 fb_info.win_par[i].area_par[j].xvir < 0 ||  fb_info.win_par[i].area_par[j].yvir < 0 ||
                 fb_info.win_par[i].area_par[j].xvir > 4096 || fb_info.win_par[i].area_par[j].yvir > 4096 ||
                 fb_info.win_par[i].area_par[j].ion_fd < 0)
-                
-                    ALOGE("par[%d],area[%d],z_win_galp[%d,%d,%x],[%d,%d,%d,%d]=>[%d,%d,%d,%d],w_h_f[%d,%d,%d],acq_fence_fd=%d,fd=%d,addr=%x",
+                ALOGE("par[%d],area[%d],z_win_galp[%d,%d,%x],[%d,%d,%d,%d]=>[%d,%d,%d,%d],w_h_f[%d,%d,%d],acq_fence_fd=%d,fd=%d,addr=%x",
                         i,j,
                         fb_info.win_par[i].z_order,
                         fb_info.win_par[i].win_id,
