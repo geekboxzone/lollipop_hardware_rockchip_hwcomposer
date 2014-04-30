@@ -321,6 +321,8 @@ typedef struct _hwcContext
     /* Pre-allocated area pool. */
     hwcAreaPool                      areaPool;
 #endif
+    /* skip flag */
+     int      mSkipFlag;
      int      flag;
      int      fb_blanked;
      /* The index of video buffer will be used */
