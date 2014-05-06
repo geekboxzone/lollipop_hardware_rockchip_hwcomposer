@@ -2456,7 +2456,7 @@ static int hwc_primary_Post( hwcContext * context,hwc_display_contents_1_t* list
         fb_info.win_par[0].area_par[0].ysize = handle->height;
         fb_info.win_par[0].area_par[0].xact = handle->width;
         fb_info.win_par[0].area_par[0].yact = handle->height;
-        fb_info.win_par[0].area_par[0].xvir = handle->width;
+        fb_info.win_par[0].area_par[0].xvir = handle->stride;
         fb_info.win_par[0].area_par[0].yvir = handle->height;
 #ifdef USE_HWC_FENCE
 	    fb_info.wait_fs=0;
@@ -3835,7 +3835,7 @@ hwc_device_open(
     context->fb_fps = refreshRate / 1000.0f;
 
     context->fbPhysical = fixInfo.smem_start;
-    context->fbStride   = fixInfo.line_length;
+    context->fbStride   = gcmALIGN(info.xres,16)*info.bits_per_pixel/8;//fixInfo.line_length;
 	context->fbhandle.width = info.xres;
 	context->fbhandle.height = info.yres;
     context->fbhandle.format = info.nonstd & 0xff;
@@ -3936,7 +3936,7 @@ hwc_device_open(
          context,
          context->fb_fps);
 
-    property_set("sys.ghwc.version","1.002_32"); 
+    property_set("sys.ghwc.version","1.003_32"); 
 
     char Version[32];
 
