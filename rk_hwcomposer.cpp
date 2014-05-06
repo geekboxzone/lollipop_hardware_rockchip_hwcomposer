@@ -327,7 +327,7 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
         ALOGE("err src addr=[%x],w-h[%d,%d],act[%d,%d][f=%d],x_y_offset[%d,%d]",
             handle->video_addr, SrcVirW, SrcVirH,SrcActW,SrcActH,RK_FORMAT_YCbCr_420_SP,xoffset,yoffset);
         ALOGE("err dst fd=[%x],w-h[%d,%d],act[%d,%d][f=%d],rot=%d,rot_mod=%d",
-            fd_dst, DstVirW, DstVirH,DstActW,Dstfmt,RK_FORMAT_RGB_565,Rotation,RotateMode);
+            fd_dst, DstVirW, DstVirH,DstActW,DstActH,Dstfmt,Rotation,RotateMode);
     }
         
 #if 0
@@ -2122,7 +2122,7 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
 
                     }
                     else {
-                        ALOGE("video alloc faild");
+                        ALOGE("video alloc faild video(w=%d,h=%d,format=0x%x)",handle->video_width,handle->video_height,context->fbhandle.format);
                         goto GpuComP;
                     }
                 }
@@ -2227,6 +2227,12 @@ GpuComP   :
         {
             ALOGV("rga_video_copybit,%x,w=%d,h=%d",\
                             GPU_BASE,GPU_WIDTH,GPU_HEIGHT);
+            if(handle->video_width <= 0 || handle->video_height <= 0)
+            {
+                ALOGV("skip error frame");
+                context->mSkipFlag=1;
+                return -1;
+            }
             rga_video_copybit(handle,0,0,0,handle->share_fd);
         }
     }
@@ -3081,9 +3087,13 @@ static int hwc_set_primary(hwc_composer_device_1 *dev, hwc_display_contents_1_t 
         return 0;
     }
 
-    if(list->skipflag)
+    if(list->skipflag || context->mSkipFlag)
     {
         hwc_sync_release(list);
+
+        if(context->mSkipFlag == 1)
+            context->mSkipFlag=0;
+ 
         return 0;
     }
 
@@ -3778,6 +3788,7 @@ hwc_device_open(
         context->pbvideo_bk[i] = NULL;
     }
     context->mCurVideoIndex= 0;
+    context->mSkipFlag = 0;
 
     /* Get gco2D object pointer. */
     
