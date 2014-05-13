@@ -50,7 +50,7 @@
 #define MaxZones 10
 #define bakupbufsize 4
 #define MaxVideoBackBuffers     (2)
-
+#define MAX_VIDEO_SOURCE        (5)
 #define GPU_BASE    handle->base
 #define GPU_WIDTH   handle->width
 #define GPU_HEIGHT  handle->height
@@ -264,6 +264,13 @@ typedef struct
    void*      vpu_handle;
 } vpu_frame_t;
 
+typedef struct _videoCacheInfo
+{
+    struct private_handle_t* video_hd;
+    struct private_handle_t* vui_hd;
+    void * video_base;
+    bool bMatch;
+}videoCacheInfo;
 
 typedef struct _hwcContext
 {
@@ -284,9 +291,7 @@ typedef struct _hwcContext
     int       fbFd;
     int       fbFd1;
     int       vsync_fd;
-    struct private_handle_t* video_hd ;
-    void * video_base;
-    struct private_handle_t* vui_hd ;
+    videoCacheInfo video_info[MAX_VIDEO_SOURCE];
     int vui_fd;
     int vui_hide;
 
