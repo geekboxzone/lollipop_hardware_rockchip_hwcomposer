@@ -331,7 +331,7 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
         ALOGE("err dst fd=[%x],w-h[%d,%d],act[%d,%d][f=%d],rot=%d,rot_mod=%d",
             fd_dst, DstVirW, DstVirH,DstActW,DstActH,Dstfmt,Rotation,RotateMode);
     }
-        
+
 #if 0
     FILE * pfile = NULL;
     int srcStride = android::bytesPerPixel(src_handle->format);
@@ -2086,10 +2086,13 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
     _Dump(list);
 #endif
 
-    //init handles
+    //init handles,reset bMatch
     for (i = 0; i < MAX_VIDEO_SOURCE; i++)
     {
         handles[i]=NULL;
+
+        if(context->video_info[i].bMatch)
+            context->video_info[i].bMatch=false;
     }
 
     //count video sources
@@ -2111,10 +2114,16 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
     {
         struct private_handle_t * handle = (struct private_handle_t *) list->hwLayers[i].handle;
 
+#if 0
+        if(handle)
+            ALOGV("layer name=%s,format=%d",list->hwLayers[i].LayerName,GPU_FORMAT);
+#endif
+
         if(handle && GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
         {
             tVPU_FRAME vpu_hd;
-            int stride_gr;            
+            int stride_gr;
+            bool bUpdate=false;
             video_mode = true;
 
             ALOGV("video");
@@ -2125,6 +2134,18 @@ FindMatchVideo:
                 ALOGV("m=%d,[%p,%p],[%p,%p]",m,context->video_info[m].video_hd,handle, context->video_info[m].video_base,(void*)handle->base);
                 if( (context->video_info[m].video_hd == handle) && (context->video_info[m].video_base == (void*)handle->base) )
                 {
+                #if 1
+                    //match video,but handle info been update
+                    memcpy(&vpu_hd,(void*)handle->base,sizeof(tVPU_FRAME));
+                    if(vpu_hd.width>0 && vpu_hd.width<=4096 && vpu_hd.height>0 && vpu_hd.height<=4096)
+                    {
+                        int w=context->video_info[m].video_hd->video_width;
+                        int h=context->video_info[m].video_hd->video_height;
+                        bUpdate=true;
+                        ALOGD("match video,but handle info been update w:%d=>%d,h:%d=>%d",w,vpu_hd.width,h,vpu_hd.width);
+                        break;
+                    }
+                #endif
                     context->video_info[m].bMatch=true;
                     break;
                 }
@@ -2132,13 +2153,14 @@ FindMatchVideo:
             }
 
             //if can't find any match video in back video source,then update handle
-            if(m == iVideoSources)
+            if(m == iVideoSources || bUpdate)
             {
-                memcpy(&vpu_hd,(void*)handle->base,sizeof(tVPU_FRAME));
+                if(m == iVideoSources)
+                    memcpy(&vpu_hd,(void*)handle->base,sizeof(tVPU_FRAME));
 
                 //if find invalid params,then increase iVideoSources and try again.
                 if(vpu_hd.width>4096 || vpu_hd.width <=0 || \
-                    vpu_hd.height>4096 || vpu_hd.height<= 0)
+                    vpu_hd.height>4096 || vpu_hd.height<=0)
                 {
                     ALOGV("invalid video(w=%d,h=%d)",vpu_hd.width,vpu_hd.height);
                     iTryTimes--;
@@ -2202,7 +2224,7 @@ FindMatchVideo:
             //save handle into video_info which doesn't match before.
             if(!context->video_info[m].bMatch)
             {
-                ALOGV("save handle=%p,base=%p",handle,handle->base);
+                ALOGV("save handle=%p,base=%p,w=%d,h=%d",handle,handle->base,handle->video_width,handle->video_height);
                 context->video_info[m].video_hd = handle ;
                 context->video_info[m].video_base = (void*)handle->base;
                 context->video_info[m].bMatch=true;
@@ -2236,12 +2258,6 @@ FindMatchVideo:
         }
     }
 
-    //reset bMatch
-    for(m=0;m<MAX_VIDEO_SOURCE;m++)
-    {
-        if(context->video_info[m].bMatch)
-            context->video_info[m].bMatch=false;
-    }
 
     // free video gralloc buffer in ui mode
     if(!video_mode && context->fd_video_bk[0] > 0)
@@ -2267,7 +2283,7 @@ FindMatchVideo:
              check_layer(context, list->numHwLayers - 1, i, layer);
 
         if (compositionType == HWC_FRAMEBUFFER)
-        {          
+        {
             break;
         }
     }
@@ -2318,7 +2334,7 @@ FindMatchVideo:
             goto GpuComP; 
         }
     
-    }            
+    }
     return 0;
 GpuComP   :
 
