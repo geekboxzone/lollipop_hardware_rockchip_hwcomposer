@@ -3977,7 +3977,7 @@ hwc_device_open(
     context->fb_fps = refreshRate / 1000.0f;
 
     context->fbPhysical = fixInfo.smem_start;
-    context->fbStride   = gcmALIGN(info.xres,16)*info.bits_per_pixel/8;//fixInfo.line_length;
+    context->fbStride   = fixInfo.line_length;
 	context->fbhandle.width = info.xres;
 	context->fbhandle.height = info.yres;
     context->fbhandle.format = info.nonstd & 0xff;
