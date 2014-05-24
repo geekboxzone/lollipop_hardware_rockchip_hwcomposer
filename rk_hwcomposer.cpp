@@ -3348,7 +3348,7 @@ int hwc_set_virtual(hwc_composer_device_1_t * dev, hwc_display_contents_1_t  **c
 
 	gettimeofday(&tpend2,NULL);
 	usec1 = 1000*(tpend2.tv_sec - tpend1.tv_sec) + (tpend2.tv_usec- tpend1.tv_usec)/1000;
-	ALOGD("hwc use time=%ld ms",usec1);
+	ALOGV("hwc use time=%ld ms",usec1);
 	return 0;
 }
 static int hwc_set_external(hwc_composer_device_1_t *dev, hwc_display_contents_1_t* list, int dpy)
