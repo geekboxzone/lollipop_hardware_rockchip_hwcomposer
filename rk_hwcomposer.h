@@ -139,6 +139,8 @@ typedef struct _ZoneInfo
 	int         zone_alpha;
 	int         blend;
 	bool        is_stretch;
+	int         is_large;
+	float       hfactor;
 	int         format;
 	int         zone_index;
 	int         layer_index;
