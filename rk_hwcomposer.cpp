@@ -451,6 +451,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
             return -1;
         
         }
+        //ALOGD("name=%s,hfactor =%f,vfactor =%f",layer->LayerName,hfactor,vfactor );
         is_stretch = (hfactor != 1.0) || (vfactor != 1.0);
         int left_min ; 
         int top_min ;
@@ -1151,12 +1152,14 @@ int try_wins_dispatch_mix (hwcContext * Context,hwc_display_contents_1_t * list)
     }
     if(hfactor_max >=1.4)
     {
-        bw += bw *j ;
+        bw += (j + 1);
+        
     }
     if(isyuv)
     {
         bw +=5;
     }
+    //ALOGD("large_cnt =%d,bw=%d",large_cnt , bw);
     if((large_cnt + bw) >= 5)    
     {       
         ALOGV("lagre win > 2,and Scale-down 1.5 multiple,lcdc no support");
@@ -1358,10 +1361,11 @@ check_layer(
         || handle == NULL
         ||((Layer->transform != 0)&&(handle->format != HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO))
         || skip_count<5
+        //|| handle->type == 1
         )
     {
         /* We are forbidden to handle this layer. */
-        LOGV("%s(%d):Will not handle layer %s: SKIP_LAYER,Layer->transform=%d,Layer->flags=%d",
+        LOGV("%s(%d):Will not handle layer %s: SKIP_LAYER,Layer->transform=%d,Layer->flags=%d,iontype=%d",
              __FUNCTION__, __LINE__, Layer->LayerName,Layer->transform,Layer->flags);
         Layer->compositionType = HWC_FRAMEBUFFER;
         if (skip_count<5)
@@ -3457,6 +3461,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
                 fb_info.win_par[i].area_par[j].xvir < 0 ||  fb_info.win_par[i].area_par[j].yvir < 0 ||
                 fb_info.win_par[i].area_par[j].xvir > 4096 || fb_info.win_par[i].area_par[j].yvir > 4096 ||
                 fb_info.win_par[i].area_par[j].ion_fd < 0)
+                
                 ALOGE("par[%d],area[%d],z_win_galp[%d,%d,%x],[%d,%d,%d,%d]=>[%d,%d,%d,%d],w_h_f[%d,%d,%d],acq_fence_fd=%d,fd=%d,addr=%x",
                         i,j,
                         fb_info.win_par[i].z_order,
@@ -4438,6 +4443,7 @@ hwc_device_open(
     ALOGE_IF(err, "FATAL: can't find the %s module", GRALLOC_HARDWARE_MODULE_ID);
     if (err == 0) {
         gralloc_open(module_gr, &context->mAllocDev);
+        
         for(i=0;i<bakupbufsize;i++)
         {
             err = context->mAllocDev->alloc(context->mAllocDev, context->fbhandle.width,\
@@ -4470,6 +4476,7 @@ hwc_device_open(
             ALOGE("hwc alloc[%d] faild",i);
             goto OnError;
         }
+        
                                         
         
     }   
