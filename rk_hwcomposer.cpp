@@ -41,6 +41,7 @@
 #include <hardware/rk_fh.h>
 #include <linux/ion.h>
 #include <ion/ion.h>
+#include <ion/rockchip_ion.h>
 
 #define MAX_DO_SPECIAL_COUNT        8
 #define RK_FBIOSET_ROTATE            0x5003 
@@ -1361,12 +1362,17 @@ check_layer(
         || handle == NULL
         ||((Layer->transform != 0)&&(handle->format != HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO))
         || skip_count<5
-        //|| handle->type == 1
+        || handle->type == 1
         )
     {
         /* We are forbidden to handle this layer. */
-        LOGV("%s(%d):Will not handle layer %s: SKIP_LAYER,Layer->transform=%d,Layer->flags=%d,iontype=%d",
+        LOGV("%s(%d):Will not handle layer %s: SKIP_LAYER,Layer->transform=%d,Layer->flags=%d",
              __FUNCTION__, __LINE__, Layer->LayerName,Layer->transform,Layer->flags);
+        if(handle )     
+        {
+            LOGV("%s(%d):Will not handle layer %s,handle_type=%d",
+                __FUNCTION__, __LINE__, Layer->LayerName,handle->type);
+        }
         Layer->compositionType = HWC_FRAMEBUFFER;
         if (skip_count<5)
         {
@@ -1375,7 +1381,7 @@ check_layer(
         return HWC_FRAMEBUFFER;
     }
 
-    /* Check whether this layer can be handled by Vivante 2D. */
+    
     do
     {
         RgaSURF_FORMAT format = RK_FORMAT_UNKNOWN;
@@ -2496,7 +2502,7 @@ FindMatchVideo:
                         int w=context->video_info[m].video_hd->video_width;
                         int h=context->video_info[m].video_hd->video_height;
                         bUpdate=true;
-                        ALOGD("match video,but handle info been update w:%d=>%d,h:%d=>%d",w,vpu_hd.width,h,vpu_hd.width);
+                        ALOGV("match video,but handle info been update w:%d=>%d,h:%d=>%d",w,vpu_hd.width,h,vpu_hd.width);
                         break;
                     }
                 #endif
@@ -3441,12 +3447,14 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
     }
     #endif
 #if DEBUG_CHECK_WIN_CFG_DATA
+//#if 1
     for(i = 0;i<4;i++)
     {
         for(j=0;j<4;j++)
         {
             if(fb_info.win_par[i].area_par[j].ion_fd || fb_info.win_par[i].area_par[j].phy_addr)
             {
+                
                 if(fb_info.win_par[i].z_order<0 ||
                 fb_info.win_par[i].win_id < 0 || fb_info.win_par[i].win_id > 4 ||
                 fb_info.win_par[i].g_alpha_val < 0 || fb_info.win_par[i].g_alpha_val > 0xFF ||
@@ -3460,8 +3468,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
                 fb_info.win_par[i].area_par[j].xsize > 4096 || fb_info.win_par[i].area_par[j].ysize > 4096 ||
                 fb_info.win_par[i].area_par[j].xvir < 0 ||  fb_info.win_par[i].area_par[j].yvir < 0 ||
                 fb_info.win_par[i].area_par[j].xvir > 4096 || fb_info.win_par[i].area_par[j].yvir > 4096 ||
-                fb_info.win_par[i].area_par[j].ion_fd < 0)
-                
+                fb_info.win_par[i].area_par[j].ion_fd < 0)                
                 ALOGE("par[%d],area[%d],z_win_galp[%d,%d,%x],[%d,%d,%d,%d]=>[%d,%d,%d,%d],w_h_f[%d,%d,%d],acq_fence_fd=%d,fd=%d,addr=%x",
                         i,j,
                         fb_info.win_par[i].z_order,
