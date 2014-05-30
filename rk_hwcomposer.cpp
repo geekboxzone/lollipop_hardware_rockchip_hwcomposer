@@ -1001,7 +1001,7 @@ int try_wins_dispatch_mix (hwcContext * Context,hwc_display_contents_1_t * list)
                 layer->compositionType = HWC_FRAMEBUFFER;
                 layer = &list->hwLayers[1];
                 layer->compositionType = HWC_FRAMEBUFFER;                
-                ALOGD(" need draw by gpu");
+                ALOGV(" need draw by gpu");
             }
             cntfb ++;
         }
