@@ -2962,7 +2962,9 @@ static int hwc_primary_Post( hwcContext * context,hwc_display_contents_1_t* list
         for(int k=0;k<RK_MAX_BUF_NUM;k++)
         {
             if(fb_info.rel_fence_fd[k]!= -1)
-                close(fb_info.rel_fence_fd[k]);
+               // close(fb_info.rel_fence_fd[k]);
+               fbLayer->releaseFenceFd = fb_info.rel_fence_fd[k];
+
         }
 
         list->retireFenceFd = fb_info.ret_fence_fd;

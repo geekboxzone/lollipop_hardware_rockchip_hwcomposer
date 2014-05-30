@@ -139,7 +139,9 @@ hwcGetFormat(
         case HAL_PIXEL_FORMAT_RGB_565:
             *Format = RK_FORMAT_RGB_565;
             break;
-
+        case HAL_PIXEL_FORMAT_RGB_888:
+            *Format = RK_FORMAT_RGB_888;
+            break;
         case HAL_PIXEL_FORMAT_RGBA_8888:
             *Format = RK_FORMAT_RGBA_8888;
             break;
