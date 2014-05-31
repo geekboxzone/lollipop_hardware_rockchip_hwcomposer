@@ -987,6 +987,11 @@ int try_wins_dispatch_mix (hwcContext * Context,hwc_display_contents_1_t * list)
            )    
         {
             hwc_layer_1_t * layer = &list->hwLayers[pzone_mag->zone_info[i].layer_index];
+            if(pzone_mag->zone_info[i].format == HAL_PIXEL_FORMAT_YCrCb_NV12)
+            {
+                ALOGV("Donot support video ");
+                return -1;
+            }    
             if(gpu_draw_fd[pzone_mag->zone_info[i].layer_index] != pzone_mag->zone_info[i].layer_fd)
             {
                 gpu_draw = 1;
