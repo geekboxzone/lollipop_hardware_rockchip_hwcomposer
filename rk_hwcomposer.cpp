@@ -49,6 +49,7 @@
 #define BOTTOM_LAYER_NAME           "NavigationBar"
 #define TOP_LAYER_NAME              "StatusBar"
 #define WALLPAPER                   "ImageWallpaper"
+#define RK_QUEDDR_FREQ              0x8000 
 
 //#define ENABLE_HDMI_APP_LANDSCAP_TO_PORTRAIT
 static int SkipFrameCount = 0;
@@ -324,6 +325,12 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
     RGA_set_bitblt_mode(&Rga_Request, 0, RotateMode,Rotation,0,0,0);    
     RGA_set_src_act_info(&Rga_Request,SrcActW,SrcActH, 0,0);
     RGA_set_dst_act_info(&Rga_Request,DstActW,DstActH, xoffset,yoffset);
+    if( handle->type == 1)
+    {
+        RGA_set_dst_vir_info(&Rga_Request, fd_dst,handle->base, 0,DstVirW,DstVirH,&clip, Dstfmt, 0);    
+        RGA_set_mmu_info(&Rga_Request, 1, 0, 0, 0, 0, 2);
+        Rga_Request.mmu_info.mmu_flag |= (1<<31) | (1<<10);
+    }
 
     if(ioctl(rga_fd, RGA_BLIT_SYNC, &Rga_Request) != 0) {
         LOGE(" %s(%d) RGA_BLIT fail",__FUNCTION__, __LINE__);
@@ -354,7 +361,15 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
     return 0;
 }
 
+static int is_out_log( void )
+{
+    char value[PROPERTY_VALUE_MAX];
+    int new_value = 0;
 
+    property_get("sys.hwc.log", value, "0");
+    new_value = atoi(value); 
+    return new_value;
+}
 int is_x_intersect(hwc_rect_t * rec,hwc_rect_t * rec2)
 {
     if(rec2->top == rec->top)
@@ -405,6 +420,8 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
 {
     size_t i,j;
     bool haveStartwin = false;
+    int tsize = 0;
+    int factor =1;
     for (i = 0,j=0; i < (list->numHwLayers - 1) ; i++,j++)
     {
         hwc_layer_1_t * layer = &list->hwLayers[i];
@@ -673,7 +690,14 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
         int bpp = android::bytesPerPixel(Context->zone_manager.zone_info[j].format);
         if(Context->zone_manager.zone_info[j].format == HAL_PIXEL_FORMAT_YCrCb_NV12 )
             bpp = 2;
-        if((srcw*srch*bpp) > (Context->fbhandle.width * Context->fbhandle.height*3) )
+        Context->zone_manager.zone_info[j].size = srcw*srch*bpp;
+        if(Context->zone_manager.zone_info[j].hfactor > 1.0)
+            factor = 2;
+        else
+            factor = 1;
+        tsize += (Context->zone_manager.zone_info[j].size *factor);
+        if(Context->zone_manager.zone_info[j].size > \
+            (Context->fbhandle.width * Context->fbhandle.height*3) )  // w*h*4*3/4
         {
             Context->zone_manager.zone_info[j].is_large = 1; 
         }        
@@ -682,6 +706,17 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
 
     }
     Context->zone_manager.zone_cnt = j;
+    if(tsize)
+        tsize = tsize / (1024 *1024) * 60 ;// MB
+    // query ddr is enough ,if dont enough back to gpu composer
+    //ALOGD("tsize=%dMB,Context->ddrFd=%d,RK_QUEDDR_FREQ",tsize,Context->ddrFd);
+#if USE_QUEUE_DDRFREQ    
+    if(ioctl(Context->ddrFd, RK_QUEDDR_FREQ, &tsize))
+    {
+        if(is_out_log())
+            ALOGD("tatal_data=%dMB too large ,lcdc not support",tsize);
+    }
+#endif    
     for(i=0;i<j;i++)
     {
            
@@ -787,7 +822,8 @@ int try_wins_dispatch_hor(hwcContext * Context)
     }
     if(sort >4)  // lcdc dont support 5 wins
     {
-        ALOGV("lcdc dont support 5 wins");
+        if(is_out_log())
+            ALOGD("lcdc dont support 5 wins");
         return -1;
     }    
 
@@ -843,7 +879,8 @@ int try_wins_dispatch_hor(hwcContext * Context)
     }    
     if((large_cnt + bw ) > 5 )
     {
-        ALOGV("data too large ,lcdc not support");
+        if(is_out_log())
+            ALOGD("data too large ,lcdc not support");
         return -1;
     }
     // first dispatch more zones win
@@ -989,7 +1026,8 @@ int try_wins_dispatch_mix (hwcContext * Context,hwc_display_contents_1_t * list)
             hwc_layer_1_t * layer = &list->hwLayers[pzone_mag->zone_info[i].layer_index];
             if(pzone_mag->zone_info[i].format == HAL_PIXEL_FORMAT_YCrCb_NV12)
             {
-                ALOGV("Donot support video ");
+                if(is_out_log())
+                    ALOGD("Donot support video ");
                 return -1;
             }    
             if(gpu_draw_fd[pzone_mag->zone_info[i].layer_index] != pzone_mag->zone_info[i].layer_fd)
@@ -1090,6 +1128,7 @@ int try_wins_dispatch_mix (hwcContext * Context,hwc_display_contents_1_t * list)
     }
     if(sort >3)  // lcdc dont support 5 wins
     {
+        if(is_out_log())
         ALOGD("lcdc dont support 5 wins");
         return -1;
     }    
@@ -1168,7 +1207,8 @@ int try_wins_dispatch_mix (hwcContext * Context,hwc_display_contents_1_t * list)
     //ALOGD("large_cnt =%d,bw=%d",large_cnt , bw);
     if((large_cnt + bw) >= 5)    
     {       
-        ALOGV("lagre win > 2,and Scale-down 1.5 multiple,lcdc no support");
+        if(is_out_log())    
+            ALOGD("lagre win > 2,and Scale-down 1.5 multiple,lcdc no support");
         return -1;
     }
     for(i=0;i<3;i++)    
@@ -4294,7 +4334,18 @@ hwc_device_open(
     {
          hwcONERROR(hwcSTATUS_IO_ERR);
     }
-
+#if USE_QUEUE_DDRFREQ    
+    context->ddrFd = open("/dev/ddr_freq", O_RDWR, 0);
+    if(context->ddrFd < 0)
+    {
+         ALOGE("/dev/ddr_freq open failed !!!!!");
+         hwcONERROR(hwcSTATUS_IO_ERR);
+    }
+    else
+    {
+        ALOGD("context->ddrFd ok");
+    }
+#endif    
     rel = ioctl(context->fbFd, FBIOGET_FSCREENINFO, &fixInfo);
     if (rel != 0)
     {

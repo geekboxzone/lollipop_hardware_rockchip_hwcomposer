@@ -39,6 +39,7 @@
 #define  ENABLE_HWC_WORMHOLE     1
 #define  DUMP_SPLIT_AREA   0
 #define USE_HWC_FENCE               		1
+#define USE_QUEUE_DDRFREQ   0
 #define FB1_IOCTL_SET_YUV_ADDR	0x5002
 #define RK_FBIOSET_VSYNC_ENABLE     0x4629
 #define RK_FBIOSET_DMABUF_FD	 0x5004
@@ -140,6 +141,7 @@ typedef struct _ZoneInfo
 	int         blend;
 	bool        is_stretch;
 	int         is_large;
+	int         size;
 	float       hfactor;
 	int         format;
 	int         zone_index;
@@ -293,6 +295,7 @@ typedef struct _hwcContext
     int       fbFd;
     int       fbFd1;
     int       vsync_fd;
+    int       ddrFd;
     videoCacheInfo video_info[MAX_VIDEO_SOURCE];
     int vui_fd;
     int vui_hide;
