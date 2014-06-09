@@ -49,6 +49,7 @@
 #define BOTTOM_LAYER_NAME           "NavigationBar"
 #define TOP_LAYER_NAME              "StatusBar"
 #define WALLPAPER                   "ImageWallpaper"
+#define VIDEO_PLAY_ACTIVITY_LAYER_NAME "android.rk.RockVideoPlayer/android.rk.RockVideoPlayer.VideoP"
 #define RK_QUEDDR_FREQ              0x8000 
 
 //#define ENABLE_HDMI_APP_LANDSCAP_TO_PORTRAIT
@@ -556,7 +557,15 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
         Context->zone_manager.zone_info[j].disp_rect.left = dstRects[0].left;
         Context->zone_manager.zone_info[j].disp_rect.top = dstRects[0].top;
         Context->zone_manager.zone_info[j].disp_rect.right = dstRects[0].right;
-        Context->zone_manager.zone_info[j].disp_rect.bottom = dstRects[0].bottom;  
+        //zxl:Temporary solution to fix blank bar bug when wake up.
+        if(!strcmp(layer->LayerName,VIDEO_PLAY_ACTIVITY_LAYER_NAME))
+        {
+            Context->zone_manager.zone_info[j].disp_rect.bottom = SrcHnd->height;
+        }
+        else
+        {
+            Context->zone_manager.zone_info[j].disp_rect.bottom = dstRects[0].bottom;
+        }
 #ifdef USE_HWC_FENCE
 	        Context->zone_manager.zone_info[j].acq_fence_fd =layer->acquireFenceFd;
 #endif
@@ -675,8 +684,16 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                 - (int) ((DstRect->top    - dstRects[0].top)    * vfactor)),0);
                 Context->zone_manager.zone_info[j].src_rect.right  = SrcRect->right \
                 - (int) ((DstRect->right  - dstRects[0].right)  * hfactor);
-                Context->zone_manager.zone_info[j].src_rect.bottom = SrcRect->bottom \
-                - (int) ((DstRect->bottom - dstRects[0].bottom) * vfactor); 
+                //zxl:Temporary solution to fix blank bar bug when wake up.
+                if(!strcmp(layer->LayerName,VIDEO_PLAY_ACTIVITY_LAYER_NAME))
+                {
+                    Context->zone_manager.zone_info[j].src_rect.bottom = SrcHnd->height;
+                }
+                else
+                {
+                    Context->zone_manager.zone_info[j].src_rect.bottom = SrcRect->bottom \
+                    - (int) ((DstRect->bottom - dstRects[0].bottom) * vfactor);
+                }
                 Context->zone_manager.zone_info[j].format = SrcHnd->format;
                 Context->zone_manager.zone_info[j].width = SrcHnd->width;
                 Context->zone_manager.zone_info[j].height = SrcHnd->height;
@@ -2547,7 +2564,7 @@ FindMatchVideo:
                         int w=context->video_info[m].video_hd->video_width;
                         int h=context->video_info[m].video_hd->video_height;
                         bUpdate=true;
-                        ALOGV("match video,but handle info been update w:%d=>%d,h:%d=>%d",w,vpu_hd.width,h,vpu_hd.width);
+                        ALOGV("match video,but handle info been update w:%d=>%d,h:%d=>%d",w,vpu_hd.width,h,vpu_hd.height);
                         break;
                     }
                 #endif
