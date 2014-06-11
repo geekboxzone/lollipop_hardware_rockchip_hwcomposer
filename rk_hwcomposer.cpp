@@ -231,6 +231,8 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
     {
         return -1;
     }
+
+    pthread_mutex_lock(&_contextAnchor->lock);
     memset(&Rga_Request, 0x0, sizeof(Rga_Request));
     clip.xmin = 0;
     clip.xmax = handle->height - 1;
@@ -340,6 +342,8 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
         ALOGE("err dst fd=[%x],w-h[%d,%d],act[%d,%d][f=%d],rot=%d,rot_mod=%d",
             fd_dst, DstVirW, DstVirH,DstActW,DstActH,Dstfmt,Rotation,RotateMode);
     }
+
+    pthread_mutex_unlock(&_contextAnchor->lock);
 
 #if 0
     FILE * pfile = NULL;
@@ -566,13 +570,15 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
         {
             Context->zone_manager.zone_info[j].disp_rect.bottom = dstRects[0].bottom;
         }
-#ifdef USE_HWC_FENCE
+#if USE_HWC_FENCE
 	        Context->zone_manager.zone_info[j].acq_fence_fd =layer->acquireFenceFd;
 #endif
             if(SrcHnd->format == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
             {
                 int w_valid = 0 ,h_valid = 0;
+#if USE_VIDEO_BACK_BUFFERS
                 int index_v = Context->mCurVideoIndex%MaxVideoBackBuffers;
+#endif
     		    hwc_rect_t * psrc_rect = &(Context->zone_manager.zone_info[j].src_rect);            
                 Context->zone_manager.zone_info[j].format = Context->video_fmt;//HAL_PIXEL_FORMAT_YCrCb_NV12;
                 ALOGV("HAL_PIXEL_FORMAT_YCrCb_NV12 transform=%d, addr[%x][%dx%d],ori_fd[%d][%dx%d]",
@@ -611,7 +617,11 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                         + (int) ((dstRects[0].right  - dstRects[0].left) * hfactor);
                         h_valid = psrc_rect->bottom - psrc_rect->top;
                         w_valid = psrc_rect->right - psrc_rect->left;
+#if USE_VIDEO_BACK_BUFFERS
                         Context->zone_manager.zone_info[j].layer_fd = Context->fd_video_bk[index_v];
+#else
+                        Context->zone_manager.zone_info[j].layer_fd = SrcHnd->share_fd;
+#endif
                         Context->zone_manager.zone_info[j].width = w_valid;
                         Context->zone_manager.zone_info[j].height = gcmALIGN(h_valid,8);
                         Context->zone_manager.zone_info[j].stride = w_valid;                                                    
@@ -633,7 +643,11 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                         + (int) ((dstRects[0].right  - dstRects[0].left) * hfactor);
                         h_valid = psrc_rect->bottom - psrc_rect->top;
                         w_valid = psrc_rect->right - psrc_rect->left;
+#if USE_VIDEO_BACK_BUFFERS
                         Context->zone_manager.zone_info[j].layer_fd = Context->fd_video_bk[index_v];
+#else
+                        Context->zone_manager.zone_info[j].layer_fd = SrcHnd->share_fd;
+#endif
                         Context->zone_manager.zone_info[j].width = w_valid;
                         Context->zone_manager.zone_info[j].height = gcmALIGN(h_valid,8); ;
                         Context->zone_manager.zone_info[j].stride = w_valid;   
@@ -654,7 +668,11 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                         + (int) ((dstRects[0].bottom - dstRects[0].top) * vfactor);
                         w_valid = psrc_rect->right - psrc_rect->left;
                         h_valid = psrc_rect->bottom - psrc_rect->top;   
+#if USE_VIDEO_BACK_BUFFERS
                         Context->zone_manager.zone_info[j].layer_fd = Context->fd_video_bk[index_v];
+#else
+                        Context->zone_manager.zone_info[j].layer_fd = SrcHnd->share_fd;
+#endif
                         Context->zone_manager.zone_info[j].width = w_valid;
                         Context->zone_manager.zone_info[j].height = h_valid;
                         Context->zone_manager.zone_info[j].stride = w_valid;                                                    
@@ -663,11 +681,13 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                     default:
                         break;
                 }   
-                //ALOGD("layer->transform=%d",layer->transform);
+                ALOGV("layer->transform=%d",layer->transform);
                 if(layer->transform)
                 {
-                    rga_video_copybit(SrcHnd,layer->transform,w_valid,h_valid,Context->fd_video_bk[index_v]);
+                    rga_video_copybit(SrcHnd,layer->transform,w_valid,h_valid,Context->zone_manager.zone_info[j].layer_fd);
+#if USE_VIDEO_BACK_BUFFERS
                     Context->mCurVideoIndex++;  //update video buffer index
+#endif
                 }
 
     			psrc_rect->left = psrc_rect->left - psrc_rect->left%2;
@@ -1394,9 +1414,8 @@ check_layer(
 {
     struct private_handle_t * handle =
         (struct private_handle_t *) Layer->handle;
-
   
-    (void) Context;
+    //(void) Context;
     (void) Count;
     (void) Index;
 #if 0    
@@ -1418,6 +1437,11 @@ check_layer(
     }
     ALOGD("[%f,%f],name[%d]=%s",hfactor,vfactor,Index,Layer->LayerName);
 #endif    
+    if(Context->mVideoMode && Layer->transform != 0)
+        Context->mVideoRotate=true;
+    else
+        Context->mVideoRotate=false;
+
     if ((Layer->flags & HWC_SKIP_LAYER)
        // ||(hfactor != 1.0f)  // because rga scale down too slowly,so return to opengl  ,huangds modify
        // ||(vfactor != 1.0f)  // because rga scale down too slowly,so return to opengl ,huangds modify
@@ -1992,12 +2016,12 @@ hwc_buff_recover(
         fb_info.win_par[0].area_par[0].yact = bkupmanage.bkupinfo[0].h_vir;
         fb_info.win_par[0].area_par[0].xvir = bkupmanage.bkupinfo[0].w_vir;
         fb_info.win_par[0].area_par[0].yvir = bkupmanage.bkupinfo[0].h_vir;
-#ifdef USE_HWC_FENCE
+#if USE_HWC_FENCE
         fb_info.wait_fs = 1;
 #endif
         ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info);
 
-#ifdef USE_HWC_FENCE
+#if USE_HWC_FENCE
 	for(int k=0;k<RK_MAX_BUF_NUM;k++)
 	{
 	    if(fb_info.rel_fence_fd[k]!= -1)
@@ -2451,7 +2475,7 @@ int hwc_prepare_virtual(hwc_composer_device_1_t * dev, hwc_display_contents_1_t 
 
 		if (handle && GPU_FORMAT==HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
 		{
-			ALOGD("WFD rga_video_copybit,%x,w=%d,h=%d",\
+			ALOGV("WFD rga_video_copybit,%x,w=%d,h=%d",\
 				GPU_BASE,GPU_WIDTH,GPU_HEIGHT);
 			if (context->wfdOptimize==0)
 			{
@@ -2482,7 +2506,6 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
 #endif
     char value[PROPERTY_VALUE_MAX];
     int new_value = 0;
-    bool video_mode = false;
     struct private_handle_t * handles[MAX_VIDEO_SOURCE];
     int index=0;
     int video_sources=0;
@@ -2532,6 +2555,7 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
     video_sources = (video_sources>MAX_VIDEO_SOURCE) ? MAX_VIDEO_SOURCE:video_sources;
     iVideoSources = video_sources;
 
+    context->mVideoMode=false;
     for (i = 0; i < (list->numHwLayers - 1); i++)
     {
         struct private_handle_t * handle = (struct private_handle_t *) list->hwLayers[i].handle;
@@ -2546,7 +2570,7 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
             tVPU_FRAME vpu_hd;
             int stride_gr;
             bool bUpdate=false;
-            video_mode = true;
+            context->mVideoMode = true;
 
             ALOGV("video");
 
@@ -2605,6 +2629,7 @@ FindMatchVideo:
                 ALOGV("context->video_fmt =%d",context->video_fmt);
             }
 
+#if USE_VIDEO_BACK_BUFFERS
             //alloc video gralloc buffer in video mode
             if(context->fd_video_bk[0] == -1)
             {
@@ -2626,6 +2651,7 @@ FindMatchVideo:
                     }
                 }
             }
+#endif
         }
         if(list->hwLayers[i].realtransform == HAL_TRANSFORM_ROT_90
             || list->hwLayers[i].realtransform == HAL_TRANSFORM_ROT_270 )
@@ -2681,8 +2707,9 @@ FindMatchVideo:
     }
 
 
+#if USE_VIDEO_BACK_BUFFERS
     // free video gralloc buffer in ui mode
-    if(!video_mode && context->fd_video_bk[0] > 0)
+    if(!context->mVideoMode && context->fd_video_bk[0] > 0)
     {
         for(i=0;i<MaxVideoBackBuffers;i++)
         {
@@ -2695,7 +2722,8 @@ FindMatchVideo:
             ALOGW_IF(err, "free(...) failed %d (%s)", err, strerror(-err));
         }
     }
-    
+#endif
+
     /* Check all layers: tag with different compositionType. */
     for (i = 0; i < (list->numHwLayers - 1); i++)
     {
@@ -3008,7 +3036,7 @@ static int hwc_primary_Post( hwcContext * context,hwc_display_contents_1_t* list
         fb_info.win_par[0].win_id = 0;
         fb_info.win_par[0].z_order = 0;
         fb_info.win_par[0].area_par[0].ion_fd = handle->share_fd;
-#ifdef USE_HWC_FENCE
+#if USE_HWC_FENCE
         fb_info.win_par[0].area_par[0].acq_fence_fd = fbLayer->acquireFenceFd;
 #else
         fb_info.win_par[0].area_par[0].acq_fence_fd = -1;
@@ -3023,13 +3051,18 @@ static int hwc_primary_Post( hwcContext * context,hwc_display_contents_1_t* list
         fb_info.win_par[0].area_par[0].yact = handle->height;
         fb_info.win_par[0].area_par[0].xvir = handle->stride;
         fb_info.win_par[0].area_par[0].yvir = handle->height;
-#ifdef USE_HWC_FENCE
+#if USE_HWC_FENCE
+#if SYNC_IN_VIDEO
+    if(context->mVideoMode)
+        fb_info.wait_fs=1;
+    else
+#endif
 	    fb_info.wait_fs=0;
 #endif
 
         ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info);
 
-#ifdef USE_HWC_FENCE
+#if USE_HWC_FENCE
 
         for(int k=0;k<RK_MAX_BUF_NUM;k++)
         {
@@ -3437,7 +3470,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
                         pzone_mag->zone_info[i].direct_fd ? \
                         pzone_mag->zone_info[i].direct_fd: pzone_mag->zone_info[i].layer_fd;     
         fb_info.win_par[win_no-1].area_par[area_no].phy_addr = pzone_mag->zone_info[i].addr;
-#ifdef USE_HWC_FENCE
+#if USE_HWC_FENCE
         fb_info.win_par[win_no-1].area_par[area_no].acq_fence_fd = pzone_mag->zone_info[i].acq_fence_fd;
 #else
         fb_info.win_par[win_no-1].area_par[area_no].acq_fence_fd = -1;
@@ -3556,8 +3589,13 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
     }    
 #endif
 
-#ifdef USE_HWC_FENCE
-	fb_info.wait_fs=0; //not wait acquire fence temp(wait in hwc)
+#if USE_HWC_FENCE
+#if SYNC_IN_VIDEO
+    if(context->mVideoMode)
+        fb_info.wait_fs=1;
+    else
+#endif
+        fb_info.wait_fs=0;  //not wait acquire fence temp(wait in hwc)
 #endif
     if(mix_flag)
     {      
@@ -3582,7 +3620,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
         fb_info.win_par[win_no-1].win_id = 3;
         fb_info.win_par[win_no-1].z_order = 0;
         fb_info.win_par[win_no-1].area_par[0].ion_fd = handle->share_fd;
-#ifdef USE_HWC_FENCE
+#if USE_HWC_FENCE
         fb_info.win_par[win_no-1].area_par[0].acq_fence_fd = fbLayer->acquireFenceFd;
 #else
         fb_info.win_par[win_no-1].area_par[0].acq_fence_fd = -1;
@@ -3597,8 +3635,13 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
         fb_info.win_par[win_no-1].area_par[0].yact = handle->height;
         fb_info.win_par[win_no-1].area_par[0].xvir = handle->stride;
         fb_info.win_par[win_no-1].area_par[0].yvir = handle->height;
-#ifdef USE_HWC_FENCE
-	    fb_info.wait_fs=0;
+#if USE_HWC_FENCE
+#if SYNC_IN_VIDEO
+    if(context->mVideoMode)
+        fb_info.wait_fs=1;
+    else
+#endif
+        fb_info.wait_fs=0;
 #endif
         for(int i = 0;i<4;i++)
         {
@@ -3632,7 +3675,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
             ALOGE("RK_FBIOSET_CONFIG_DONE err line=%d !",__LINE__);
         }           
 
-#ifdef USE_HWC_FENCE
+#if USE_HWC_FENCE
     	for(i=0;i<RK_MAX_BUF_NUM;i++)
     	{
             //ALOGD("rel_fence_fd[%d] = %d", i, fb_info.rel_fence_fd[i]);
@@ -4431,6 +4474,7 @@ hwc_device_open(
     context->device.dump = hwc_dump;
     context->device.layer_recover   = hwc_layer_recover;
 
+#if USE_VIDEO_BACK_BUFFERS
     /* initialize params of video buffers*/
     for(i=0;i<MaxVideoBackBuffers;i++)
     {
@@ -4438,7 +4482,11 @@ hwc_device_open(
         context->pbvideo_bk[i] = NULL;
     }
     context->mCurVideoIndex= 0;
+#endif
+
     context->mSkipFlag = 0;
+    context->mVideoMode = false;
+    context->mVideoRotate = false;
 
     /* initialize params of video source info*/
     for(i=0;i<MAX_VIDEO_SOURCE;i++)

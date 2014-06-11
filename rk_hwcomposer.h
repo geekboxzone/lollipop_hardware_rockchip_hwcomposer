@@ -31,32 +31,43 @@
 #include <linux/fb.h>
 #include <hardware/gralloc.h>
 #include "../libgralloc_ump/gralloc_priv.h"
-#define hwcDEBUG 0
-#define hwcUseTime 0
-#define hwcBlitUseTime 0
-#define hwcDumpSurface 0
-#define DEBUG_CHECK_WIN_CFG_DATA  0     //check rk_fb_win_cfg_data for lcdc
-#define  ENABLE_HWC_WORMHOLE     1
-#define  DUMP_SPLIT_AREA   0
-#define USE_HWC_FENCE               		1
-#define USE_QUEUE_DDRFREQ   0
-#define FB1_IOCTL_SET_YUV_ADDR	0x5002
+
+//Control macro
+#define hwcDEBUG                    0
+#define hwcUseTime                  0
+#define hwcBlitUseTime              0
+#define hwcDumpSurface              0
+#define DEBUG_CHECK_WIN_CFG_DATA    0     //check rk_fb_win_cfg_data for lcdc
+#define ENABLE_HWC_WORMHOLE         1
+#define DUMP_SPLIT_AREA             0
+#define SYNC_IN_VIDEO               1
+#define USE_HWC_FENCE               1
+#define USE_QUEUE_DDRFREQ           0
+#define USE_VIDEO_BACK_BUFFERS      1
+#define USE_HW_VSYNC                1
+
+//Command macro
+#define FB1_IOCTL_SET_YUV_ADDR	    0x5002
 #define RK_FBIOSET_VSYNC_ENABLE     0x4629
-#define RK_FBIOSET_DMABUF_FD	 0x5004
-#define RK_FBIOGET_DSP_FD     	0x4630
+#define RK_FBIOSET_DMABUF_FD	    0x5004
+#define RK_FBIOGET_DSP_FD     	    0x4630
 #define RK_FBIOGET_LIST_STAT   		0X4631
 //#define USE_LCDC_COMPOSER
-#define USE_HW_VSYNC        1
 #define FBIOSET_OVERLAY_STATE     	0x5018
-#define MaxZones 10
-#define bakupbufsize 4
-#define MaxVideoBackBuffers     (2)
-#define MAX_VIDEO_SOURCE        (5)
-#define GPU_BASE    handle->base
-#define GPU_WIDTH   handle->width
-#define GPU_HEIGHT  handle->height
-#define GPU_FORMAT  handle->format
+
+//Amount macro
+#define MaxZones                    10
+#define bakupbufsize                4
+#define MaxVideoBackBuffers         (2)
+#define MAX_VIDEO_SOURCE            (5)
+
+//Other macro
+#define GPU_BASE        handle->base
+#define GPU_WIDTH       handle->width
+#define GPU_HEIGHT      handle->height
+#define GPU_FORMAT      handle->format
 #define GPU_DST_FORMAT  DstHandle->format
+
 /* Set it to 1 to enable swap rectangle optimization;
  * Set it to 0 to disable. */
 /* Set it to 1 to enable pmem cache flush.
@@ -335,12 +346,17 @@ typedef struct _hwcContext
      int      mSkipFlag;
      int      flag;
      int      fb_blanked;
+
+    /* video flag */
+     bool      mVideoMode;
+     bool      mVideoRotate;
+
+#if USE_VIDEO_BACK_BUFFERS
      /* The index of video buffer will be used */
      int      mCurVideoIndex;
      int      fd_video_bk[MaxVideoBackBuffers];
      buffer_handle_t pbvideo_bk[MaxVideoBackBuffers];
-     
-
+#endif
 }
 hwcContext;
 #define gcmALIGN(n, align) \
