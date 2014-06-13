@@ -2651,6 +2651,7 @@ FindMatchVideo:
                 context->video_info[m].video_hd = handle ;
                 context->video_info[m].video_base = (void*)handle->base;
                 context->video_info[m].bMatch=true;
+                vinfo_cnt++;
                 break;
             }
          }
