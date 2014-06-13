@@ -2657,16 +2657,18 @@ FindMatchVideo:
          }
     }
 
-    for(m=vinfo_cnt;m<MAX_VIDEO_SOURCE;m++)
+    if(vinfo_cnt > 0)
     {
-        //save handle into video_info which doesn't match before.
-   
-        ALOGV("save handle=%p,base=%p,w=%d,h=%d",handle,handle->base,handle->video_width,handle->video_height);
-        context->video_info[m].video_hd = NULL ;
-        context->video_info[m].video_base = NULL;
-       /// context->video_info[m].bMatch=true;           
-     }
-
+        for(m=vinfo_cnt;m<MAX_VIDEO_SOURCE;m++)
+        {
+            //save handle into video_info which doesn't match before.
+       
+            ALOGV("save handle=%p,base=%p,w=%d,h=%d",handle,handle->base,handle->video_width,handle->video_height);
+            context->video_info[m].video_hd = NULL ;
+            context->video_info[m].video_base = NULL;
+           /// context->video_info[m].bMatch=true;           
+        }
+    }
 
 
 #if USE_VIDEO_BACK_BUFFERS
