@@ -349,6 +349,7 @@ typedef struct _hwcContext
 
     /* video flag */
      bool      mVideoMode;
+     bool      mIsMediaView;
      bool      mVideoRotate;
 
 #if USE_VIDEO_BACK_BUFFERS

@@ -238,7 +238,7 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
         return -1;
     }
 
-    pthread_mutex_lock(&_contextAnchor->lock);
+    //pthread_mutex_lock(&_contextAnchor->lock);
     memset(&Rga_Request, 0x0, sizeof(Rga_Request));
     clip.xmin = 0;
     clip.xmax = handle->height - 1;
@@ -349,7 +349,7 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
             fd_dst, DstVirW, DstVirH,DstActW,DstActH,Dstfmt,Rotation,RotateMode);
     }
 
-    pthread_mutex_unlock(&_contextAnchor->lock);
+  //  pthread_mutex_unlock(&_contextAnchor->lock);
 
 #if 0
     FILE * pfile = NULL;
@@ -1443,7 +1443,7 @@ check_layer(
     }
     ALOGD("[%f,%f],name[%d]=%s",hfactor,vfactor,Index,Layer->LayerName);
 #endif    
-    if(Context->mVideoMode && Layer->transform != 0)
+    if(handle != NULL && handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO && Layer->transform != 0)
         Context->mVideoRotate=true;
     else
         Context->mVideoRotate=false;
@@ -2518,7 +2518,8 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
     int iVideoSources;
     int m,n;
     int vinfo_cnt = 0;
-
+    bool bIsMediaView=false;
+ 
     /* Check layer list. */
     if (list == NULL
         ||(list->numHwLayers  == 0)
@@ -2546,6 +2547,7 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
 
 
     context->mVideoMode=false;
+    context->mIsMediaView=false;
     for (i = 0; i < (list->numHwLayers - 1); i++)
     {
         struct private_handle_t * handle = (struct private_handle_t *) list->hwLayers[i].handle;
@@ -2554,6 +2556,8 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
         if(handle)
             ALOGV("layer name=%s,format=%d",list->hwLayers[i].LayerName,GPU_FORMAT);
 #endif
+        if(!strcmp(list->hwLayers[i].LayerName,"MediaView"))
+            context->mIsMediaView=true;
 
         if(handle && GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
         {
@@ -3011,7 +3015,7 @@ static int hwc_primary_Post( hwcContext * context,hwc_display_contents_1_t* list
         fb_info.win_par[0].area_par[0].yvir = handle->height;
 #if USE_HWC_FENCE
 #if SYNC_IN_VIDEO
-    if(context->mVideoMode)
+    if(context->mVideoMode && !context->mIsMediaView)
         fb_info.wait_fs=1;
     else
 #endif
@@ -3549,7 +3553,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
 
 #if USE_HWC_FENCE
 #if SYNC_IN_VIDEO
-    if(context->mVideoMode)
+    if(context->mVideoMode && !context->mIsMediaView)
         fb_info.wait_fs=1;
     else
 #endif
@@ -3595,7 +3599,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
         fb_info.win_par[win_no-1].area_par[0].yvir = handle->height;
 #if USE_HWC_FENCE
 #if SYNC_IN_VIDEO
-    if(context->mVideoMode)
+    if(context->mVideoMode && !context->mIsMediaView)
         fb_info.wait_fs=1;
     else
 #endif
@@ -4438,6 +4442,7 @@ hwc_device_open(
 
     context->mSkipFlag = 0;
     context->mVideoMode = false;
+    context->mIsMediaView = false;
     context->mVideoRotate = false;
 
     /* initialize params of video source info*/
