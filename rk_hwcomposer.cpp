@@ -2517,6 +2517,7 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
     int video_sources=0;
     int iVideoSources;
     int m,n;
+    int vinfo_cnt = 0;
 
     /* Check layer list. */
     if (list == NULL
@@ -2540,9 +2541,7 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
     for (i = 0; i < MAX_VIDEO_SOURCE; i++)
     {
         handles[i]=NULL;
-
-        if(context->video_info[i].bMatch)
-            context->video_info[i].bMatch=false;
+        context->video_info[i].bMatch=false;
     }
 
 
@@ -2582,7 +2581,7 @@ FindMatchVideo:
             //if can't find any match video in back video source,then update handle
             if(m == MAX_VIDEO_SOURCE )
             {
-                    memcpy(&vpu_hd,(void*)handle->base,sizeof(tVPU_FRAME));
+                memcpy(&vpu_hd,(void*)handle->base,sizeof(tVPU_FRAME));
 
                 //if find invalid params,then increase iVideoSources and try again.
                 if(vpu_hd.width>4096 || vpu_hd.width <=0 || \
@@ -2657,6 +2656,15 @@ FindMatchVideo:
          }
     }
 
+    for(m=vinfo_cnt;m<MAX_VIDEO_SOURCE;m++)
+    {
+        //save handle into video_info which doesn't match before.
+   
+        ALOGV("save handle=%p,base=%p,w=%d,h=%d",handle,handle->base,handle->video_width,handle->video_height);
+        context->video_info[m].video_hd = NULL ;
+        context->video_info[m].video_base = NULL;
+       /// context->video_info[m].bMatch=true;           
+     }
 
 
 
