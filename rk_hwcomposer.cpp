@@ -231,6 +231,12 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
     {
         return -1;
     }
+    if(handle->video_width <= 0 || handle->video_height <= 0 ||
+       handle->video_width >= 8192 || handle->video_height >= 4096 )
+    {
+        ALOGE("rga invalid w_h[%d,%d]",handle->video_width , handle->video_height);
+        return -1;
+    }
 
     pthread_mutex_lock(&_contextAnchor->lock);
     memset(&Rga_Request, 0x0, sizeof(Rga_Request));
@@ -357,10 +363,9 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
     pfile = fopen(layername,"wb");
     if(pfile)
     {
-    fwrite((const void *)src_handle->base,(size_t)(2 * src_handle->stride*src_handle->height),1,pfile);
+    fwrite((const void *)src_handle->base,(size_t)(3 * src_handle->stride*src_handle->height /2),1,pfile);
     fclose(pfile);
     }
-    layer_seq++;
 #endif
    
     return 0;
@@ -752,6 +757,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
     {
         if(is_out_log())
             ALOGD("tatal_data=%dMB too large ,lcdc not support",tsize);
+        return -1;    
     }
 #endif    
     for(i=0;i<j;i++)
@@ -2509,7 +2515,6 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
     struct private_handle_t * handles[MAX_VIDEO_SOURCE];
     int index=0;
     int video_sources=0;
-    int iTryTimes=1;
     int iVideoSources;
     int m,n;
 
@@ -2540,20 +2545,6 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
             context->video_info[i].bMatch=false;
     }
 
-    //count video sources
-    for (i = 0; i < (list->numHwLayers - 1); i++)
-    {
-        struct private_handle_t * handle = (struct private_handle_t *) list->hwLayers[i].handle;
-
-        if(handle && GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
-        {
-            video_sources++;
-        }
-    }
-
-    //make sure video_sources <= MAX_VIDEO_SOURCE
-    video_sources = (video_sources>MAX_VIDEO_SOURCE) ? MAX_VIDEO_SOURCE:video_sources;
-    iVideoSources = video_sources;
 
     context->mVideoMode=false;
     for (i = 0; i < (list->numHwLayers - 1); i++)
@@ -2569,29 +2560,19 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
         {
             tVPU_FRAME vpu_hd;
             int stride_gr;
-            bool bUpdate=false;
             context->mVideoMode = true;
 
             ALOGV("video");
 
 FindMatchVideo:
-            for(m=0;m<iVideoSources;m++)
+            for(m=0;m<MAX_VIDEO_SOURCE;m++)
             {
-                ALOGV("m=%d,[%p,%p],[%p,%p]",m,context->video_info[m].video_hd,handle, context->video_info[m].video_base,(void*)handle->base);
-                if( (context->video_info[m].video_hd == handle) && (context->video_info[m].video_base == (void*)handle->base) )
+               // ALOGD("m=%d,[%p,%p],[%p,%p]",m,context->video_info[m].video_hd,handle, context->video_info[m].video_base,(void*)handle->base);
+                if( (context->video_info[m].video_hd == handle)
+                    && (context->video_info[m].video_base == (void*)handle->base)
+                    && handle->video_width != 0)
                 {
-                #if 1
                     //match video,but handle info been update
-                    memcpy(&vpu_hd,(void*)handle->base,sizeof(tVPU_FRAME));
-                    if(vpu_hd.width>0 && vpu_hd.width<=4096 && vpu_hd.height>0 && vpu_hd.height<=4096)
-                    {
-                        int w=context->video_info[m].video_hd->video_width;
-                        int h=context->video_info[m].video_hd->video_height;
-                        bUpdate=true;
-                        ALOGV("match video,but handle info been update w:%d=>%d,h:%d=>%d",w,vpu_hd.width,h,vpu_hd.height);
-                        break;
-                    }
-                #endif
                     context->video_info[m].bMatch=true;
                     break;
                 }
@@ -2599,20 +2580,15 @@ FindMatchVideo:
             }
 
             //if can't find any match video in back video source,then update handle
-            if(m == iVideoSources || bUpdate)
+            if(m == MAX_VIDEO_SOURCE )
             {
-                if(m == iVideoSources)
                     memcpy(&vpu_hd,(void*)handle->base,sizeof(tVPU_FRAME));
 
                 //if find invalid params,then increase iVideoSources and try again.
                 if(vpu_hd.width>4096 || vpu_hd.width <=0 || \
                     vpu_hd.height>4096 || vpu_hd.height<=0)
                 {
-                    ALOGV("invalid video(w=%d,h=%d)",vpu_hd.width,vpu_hd.height);
-                    iTryTimes--;
-                    iVideoSources=MAX_VIDEO_SOURCE;
-                    if(iTryTimes>=0)
-                        goto FindMatchVideo;
+                    ALOGE("invalid video(w=%d,h=%d)",vpu_hd.width,vpu_hd.height);
                 }
 
                 handle->video_addr = vpu_hd.videoAddr[0];
@@ -2667,7 +2643,7 @@ FindMatchVideo:
         if(handle == NULL)
             continue;
 
-        for(m=0;m<video_sources;m++)
+        for(m=0;m<MAX_VIDEO_SOURCE;m++)
         {
             //save handle into video_info which doesn't match before.
             if(!context->video_info[m].bMatch)
@@ -2682,29 +2658,6 @@ FindMatchVideo:
     }
 
 
-    //if "goto FindMatchVideo" occurs,then find out match video and move it to the location before it.
-    if(iTryTimes<1)
-    {
-        for(m=1;m<iVideoSources;m++)
-        {
-            if(context->video_info[m].bMatch)
-            {
-               for(n=0;n<m;n++)
-                {
-                    if(!context->video_info[n].bMatch)
-                    {
-                        ALOGV("replace %d(handle=%p,base=%p)=>%d(handle=%p,base=%p)",\
-                            n,context->video_info[n].video_hd,context->video_info[n].video_base,\
-                            m,context->video_info[m].video_hd,context->video_info[m].video_base);
-                        context->video_info[n].video_hd = context->video_info[m].video_hd ;
-                        context->video_info[n].video_base = context->video_info[m].video_base;
-                        context->video_info[m].video_hd=NULL;
-                        context->video_info[m].video_base=NULL;
-                    }
-                }
-            }
-        }
-    }
 
 
 #if USE_VIDEO_BACK_BUFFERS
@@ -2814,12 +2767,6 @@ GpuComP   :
         {
             ALOGV("rga_video_copybit,handle=%x,base=%x,w=%d,h=%d,video(w=%d,h=%d)",\
                             handle,GPU_BASE,GPU_WIDTH,GPU_HEIGHT,handle->video_width,handle->video_height);
-            if(handle->video_width <= 0 || handle->video_height <= 0)
-            {
-                ALOGV("skip error frame video(w=%d,h=%d)",handle->video_width,handle->video_height);
-                context->mSkipFlag=1;
-                return -1;
-            }
             rga_video_copybit(handle,0,0,0,handle->share_fd);
         }
     }
@@ -3761,16 +3708,10 @@ static int hwc_set_primary(hwc_composer_device_1 *dev, hwc_display_contents_1_t 
     if (list == NULL 
         || list->numHwLayers == 0)
     {
+        LOGE("%s(%d): list=NULL list->numHwLayers =%d", __FUNCTION__, __LINE__,list->numHwLayers);
         /* Reset swap rectangles. */
-        return 0;
-    }
 
-    if(list->skipflag || context->mSkipFlag)
-    {
-        hwc_sync_release(list);
 
-        if(context->mSkipFlag == 1)
-            context->mSkipFlag=0;
  
         return 0;
     }
