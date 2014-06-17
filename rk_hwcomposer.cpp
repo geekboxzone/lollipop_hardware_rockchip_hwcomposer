@@ -2661,16 +2661,14 @@ FindMatchVideo:
          }
     }
 
-    if(vinfo_cnt > 0)
+    for(m=0;m<MAX_VIDEO_SOURCE;m++)
     {
-        for(m=vinfo_cnt;m<MAX_VIDEO_SOURCE;m++)
+        //clear handle into video_info which doesn't match before.
+        ALOGD("cancel m=%d,handle=%p,base=%p",m,context->video_info[m].video_hd,context->video_info[m].video_base);
+        if(!context->video_info[m].bMatch)
         {
-            //save handle into video_info which doesn't match before.
-       
-            ALOGV("save handle=%p,base=%p,w=%d,h=%d",handle,handle->base,handle->video_width,handle->video_height);
-            context->video_info[m].video_hd = NULL ;
+            context->video_info[m].video_hd = NULL;
             context->video_info[m].video_base = NULL;
-           /// context->video_info[m].bMatch=true;           
         }
     }
 
@@ -2943,7 +2941,7 @@ static int hwc_primary_Post( hwcContext * context,hwc_display_contents_1_t* list
     {
        return -1;
     }    
-    if (context->fbFd>0)
+    if (context->fbFd>0 && !context->fb_blanked)
     {      
         struct fb_var_screeninfo info;
         struct rk_fb_win_cfg_data fb_info;
