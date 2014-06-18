@@ -2567,7 +2567,6 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
 
             ALOGV("video");
 
-FindMatchVideo:
             for(m=0;m<MAX_VIDEO_SOURCE;m++)
             {
                // ALOGD("m=%d,[%p,%p],[%p,%p]",m,context->video_info[m].video_hd,handle, context->video_info[m].video_base,(void*)handle->base);
@@ -2664,7 +2663,7 @@ FindMatchVideo:
     for(m=0;m<MAX_VIDEO_SOURCE;m++)
     {
         //clear handle into video_info which doesn't match before.
-        ALOGD("cancel m=%d,handle=%p,base=%p",m,context->video_info[m].video_hd,context->video_info[m].video_base);
+        ALOGV("cancel m=%d,handle=%p,base=%p",m,context->video_info[m].video_hd,context->video_info[m].video_base);
         if(!context->video_info[m].bMatch)
         {
             context->video_info[m].video_hd = NULL;
@@ -2704,7 +2703,7 @@ FindMatchVideo:
         }
     }
 
-    property_get("sys.hwc.diable", value, "0");
+    property_get("sys.hwc.disable", value, "0");
     new_value = atoi(value); 
     if(new_value == 1)
         goto GpuComP;
