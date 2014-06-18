@@ -2996,7 +2996,7 @@ static int hwc_primary_Post( hwcContext * context,hwc_display_contents_1_t* list
         fb_info.win_par[0].z_order = 0;
         fb_info.win_par[0].area_par[0].ion_fd = handle->share_fd;
 #if USE_HWC_FENCE
-        fb_info.win_par[0].area_par[0].acq_fence_fd = fbLayer->acquireFenceFd;
+        fb_info.win_par[0].area_par[0].acq_fence_fd = -1;//fbLayer->acquireFenceFd;
 #else
         fb_info.win_par[0].area_par[0].acq_fence_fd = -1;
 #endif
@@ -3430,7 +3430,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
                         pzone_mag->zone_info[i].direct_fd: pzone_mag->zone_info[i].layer_fd;     
         fb_info.win_par[win_no-1].area_par[area_no].phy_addr = pzone_mag->zone_info[i].addr;
 #if USE_HWC_FENCE
-        fb_info.win_par[win_no-1].area_par[area_no].acq_fence_fd = pzone_mag->zone_info[i].acq_fence_fd;
+        fb_info.win_par[win_no-1].area_par[area_no].acq_fence_fd = -1;//pzone_mag->zone_info[i].acq_fence_fd;
 #else
         fb_info.win_par[win_no-1].area_par[area_no].acq_fence_fd = -1;
 #endif
@@ -3580,7 +3580,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
         fb_info.win_par[win_no-1].z_order = 0;
         fb_info.win_par[win_no-1].area_par[0].ion_fd = handle->share_fd;
 #if USE_HWC_FENCE
-        fb_info.win_par[win_no-1].area_par[0].acq_fence_fd = fbLayer->acquireFenceFd;
+        fb_info.win_par[win_no-1].area_par[0].acq_fence_fd = -1;//fbLayer->acquireFenceFd;
 #else
         fb_info.win_par[win_no-1].area_par[0].acq_fence_fd = -1;
 #endif
@@ -3702,7 +3702,7 @@ static int hwc_set_primary(hwc_composer_device_1 *dev, hwc_display_contents_1_t 
     hwc_display_t dpy = NULL;
     hwc_surface_t surf = NULL;
 
-    //hwc_sync(list);
+    hwc_sync(list);
     if (list != NULL) {
         dpy = list->dpy;
         surf = list->sur;        
@@ -3728,10 +3728,10 @@ static int hwc_set_primary(hwc_composer_device_1 *dev, hwc_display_contents_1_t 
         return 0;
     }
 
-    LOGV("%s(%d):>>> Set start %d layers <<<",
+    LOGV("%s(%d):>>> Set start %d layers <<<,mode=%d",
          __FUNCTION__,
          __LINE__,
-         list->numHwLayers);
+         list->numHwLayers,context->zone_manager.composter_mode);
 
 
 
@@ -3807,6 +3807,7 @@ static int hwc_set_primary(hwc_composer_device_1 *dev, hwc_display_contents_1_t 
 #endif
 
     hwc_sync_release(list);
+    //ALOGD("set end");
     return 0; //? 0 : HWC_EGL_ERROR;
 }        
 
