@@ -130,6 +130,37 @@ hwc_module_t HAL_MODULE_INFO_SYM =
     }
 };
 
+//return property value of pcProperty
+static int hwc_get_int_property(const char* pcProperty,const char* default_value)
+{
+    char value[PROPERTY_VALUE_MAX];
+    int new_value = 0;
+
+    if(pcProperty == NULL || default_value == NULL)
+    {
+        ALOGE("hwc_get_int_property: invalid param");
+        return -1;
+    }
+
+    property_get(pcProperty, value, default_value);
+    new_value = atoi(value);
+
+    return new_value;
+}
+
+static int hwc_get_string_property(const char* pcProperty,const char* default_value,char* retult)
+{
+    if(pcProperty == NULL || default_value == NULL || retult == NULL)
+    {
+        ALOGE("hwc_get_string_property: invalid param");
+        return -1;
+    }
+
+    property_get(pcProperty, retult, default_value);
+
+    return 0;
+}
+
 static int LayerZoneCheck( hwc_layer_1_t * Layer)
 {
     hwc_region_t * Region = &(Layer->visibleRegionScreen);
@@ -308,22 +339,22 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
 			//if(fmtflag == 1)
                // Dstfmt = RK_FORMAT_RGB_565;
 			//else 
-               // Dstfmt = RK_FORMAT_RGBA_8888;        
+               // Dstfmt = RK_FORMAT_RGBA_8888;
             SrcVirW = handle->video_width;
             SrcVirH = handle->video_height;
-            SrcActW = handle->width;
-            SrcActH = handle->height;
+            SrcActW = handle->video_disp_width;
+            SrcActH = handle->video_disp_height;
             DstVirW = handle->width;
             DstVirH = handle->height;
-            DstActW = handle->width;
-            DstActH = handle->height;
+            DstActW = handle->video_disp_width;
+            DstActH = handle->video_disp_height;
             clip.xmin = 0;
             clip.xmax =  handle->width - 1;
             clip.ymin = 0;
-            clip.ymax = handle->height - 1;                
-            Dstfmt = RK_FORMAT_YCbCr_420_SP;   
+            clip.ymax = handle->height - 1;
+            Dstfmt = RK_FORMAT_YCbCr_420_SP;
             break;
-    }        
+        }
     }       
     ALOGV("src addr=[%x],w-h[%d,%d],act[%d,%d][f=%d]",
         handle->video_addr, SrcVirW, SrcVirH,SrcActW,SrcActH,RK_FORMAT_YCbCr_420_SP);
@@ -351,35 +382,37 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
 
   //  pthread_mutex_unlock(&_contextAnchor->lock);
 
-#if 0
+#if DUMP_AFTER_RGA_COPY_IN_GPU_CASE
     FILE * pfile = NULL;
-    int srcStride = android::bytesPerPixel(src_handle->format);
+    int srcStride = android::bytesPerPixel(handle->format);
     char layername[100];
-    memset(layername,0,sizeof(layername));
-    system("mkdir /data/dumplayer/ && chmod /data/dumplayer/ 777 ");
-    sprintf(layername,"/data/dumplayer/dmlayer%d_%d_%d_%d.bin",\
-           layer_seq,src_handle->stride,src_handle->height,srcStride);
 
-    pfile = fopen(layername,"wb");
-    if(pfile)
+    if(hwc_get_int_property("sys.hwc.dump_after_rga_copy","0"))
     {
-    fwrite((const void *)src_handle->base,(size_t)(3 * src_handle->stride*src_handle->height /2),1,pfile);
-    fclose(pfile);
+        memset(layername,0,sizeof(layername));
+        system("mkdir /data/dumplayer/ && chmod /data/dumplayer/ 777 ");
+        sprintf(layername,"/data/dumplayer/dmlayer%d_%d_%d.bin",\
+               handle->stride,handle->height,srcStride);
+
+        pfile = fopen(layername,"wb");
+        if(pfile)
+        {
+            fwrite((const void *)handle->base,(size_t)(3 * handle->stride*handle->height /2),1,pfile);
+            fclose(pfile);
+        }
     }
 #endif
    
     return 0;
 }
 
+
+
 static int is_out_log( void )
 {
-    char value[PROPERTY_VALUE_MAX];
-    int new_value = 0;
-
-    property_get("sys.hwc.log", value, "0");
-    new_value = atoi(value); 
-    return new_value;
+    return hwc_get_int_property("sys.hwc.log","0");
 }
+
 int is_x_intersect(hwc_rect_t * rec,hwc_rect_t * rec2)
 {
     if(rec2->top == rec->top)
@@ -514,11 +547,22 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
         rect_merge.top = top_min;
         rect_merge.right = right_max;
         rect_merge.bottom = bottom_max;
-        dstRects[0].left   = hwcMAX(DstRect->left,   rect_merge.left);
-        dstRects[0].top    = hwcMAX(DstRect->top,    rect_merge.top);
-        dstRects[0].right  = hwcMIN(DstRect->right,  rect_merge.right);
-        dstRects[0].bottom = hwcMIN(DstRect->bottom, rect_merge.bottom);
 
+        //zxl:If in video mode,then use all area.
+        if(SrcHnd->format == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
+        {
+            dstRects[0].left   = DstRect->left;
+            dstRects[0].top    = DstRect->top;
+            dstRects[0].right  = DstRect->right;
+            dstRects[0].bottom = DstRect->bottom;
+        }
+        else
+        {
+            dstRects[0].left   = hwcMAX(DstRect->left,   rect_merge.left);
+            dstRects[0].top    = hwcMAX(DstRect->top,    rect_merge.top);
+            dstRects[0].right  = hwcMIN(DstRect->right,  rect_merge.right);
+            dstRects[0].bottom = hwcMIN(DstRect->bottom, rect_merge.bottom);
+        }
 
             /* Check dest area. */
             if ((dstRects[m].right <= dstRects[m].left)
@@ -563,18 +607,20 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
             Context->zone_manager.zone_info[j].transform = layer->transform;
             Context->zone_manager.zone_info[j].realtransform = layer->realtransform;
             strcpy(Context->zone_manager.zone_info[j].LayerName,layer->LayerName);
-        Context->zone_manager.zone_info[j].disp_rect.left = dstRects[0].left;
-        Context->zone_manager.zone_info[j].disp_rect.top = dstRects[0].top;
-        Context->zone_manager.zone_info[j].disp_rect.right = dstRects[0].right;
-        //zxl:Temporary solution to fix blank bar bug when wake up.
-        if(!strcmp(layer->LayerName,VIDEO_PLAY_ACTIVITY_LAYER_NAME))
-        {
-            Context->zone_manager.zone_info[j].disp_rect.bottom = SrcHnd->height;
-        }
-        else
-        {
-            Context->zone_manager.zone_info[j].disp_rect.bottom = dstRects[0].bottom;
-        }
+            Context->zone_manager.zone_info[j].disp_rect.left = dstRects[0].left;
+            Context->zone_manager.zone_info[j].disp_rect.top = dstRects[0].top;
+            Context->zone_manager.zone_info[j].disp_rect.right = dstRects[0].right;
+
+            //zxl:Temporary solution to fix blank bar bug when wake up.
+            if(!strcmp(layer->LayerName,VIDEO_PLAY_ACTIVITY_LAYER_NAME))
+            {
+                Context->zone_manager.zone_info[j].disp_rect.bottom = SrcHnd->height;
+            }
+            else
+            {
+                Context->zone_manager.zone_info[j].disp_rect.bottom = dstRects[0].bottom;
+            }
+
 #if USE_HWC_FENCE
 	        Context->zone_manager.zone_info[j].acq_fence_fd =layer->acquireFenceFd;
 #endif
@@ -671,8 +717,9 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
 
                         psrc_rect->bottom = psrc_rect->top
                         + (int) ((dstRects[0].bottom - dstRects[0].top) * vfactor);
+
                         w_valid = psrc_rect->right - psrc_rect->left;
-                        h_valid = psrc_rect->bottom - psrc_rect->top;   
+                        h_valid = psrc_rect->bottom - psrc_rect->top;
 #if USE_VIDEO_BACK_BUFFERS
                         Context->zone_manager.zone_info[j].layer_fd = Context->fd_video_bk[index_v];
 #else
@@ -1530,7 +1577,7 @@ _Dump(
 {
     size_t i, j;
 
-    for (i = 0; list && (i < list->(numHwLayers - 1)); i++)
+    for (i = 0; list && (i < (list->numHwLayers - 1)); i++)
     {
         hwc_layer_1_t const * l = &list->hwLayers[i];
 
@@ -1541,6 +1588,7 @@ _Dump(
         else
         {
             LOGD("layer=%p, "
+                 "name=%s "
                  "type=%d, "
                  "hints=%08x, "
                  "flags=%08x, "
@@ -1550,6 +1598,7 @@ _Dump(
                  "{%d,%d,%d,%d}, "
                  "{%d,%d,%d,%d}",
                  l,
+                 l->LayerName,
                  l->compositionType,
                  l->hints,
                  l->flags,
@@ -2510,8 +2559,6 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
 #if hwcDumpSurface
     _DumpSurface(list);
 #endif
-    char value[PROPERTY_VALUE_MAX];
-    int new_value = 0;
     struct private_handle_t * handles[MAX_VIDEO_SOURCE];
     int index=0;
     int video_sources=0;
@@ -2533,18 +2580,15 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
          __FUNCTION__,
          __LINE__,
          list->numHwLayers -1);
-#if hwcDEBUG
-    LOGD("%s(%d):Layers to prepare:", __FUNCTION__, __LINE__);
-    _Dump(list);
-#endif
 
+#if GET_VPU_INTO_FROM_HEAD
     //init handles,reset bMatch
     for (i = 0; i < MAX_VIDEO_SOURCE; i++)
     {
         handles[i]=NULL;
         context->video_info[i].bMatch=false;
     }
-
+#endif
 
     context->mVideoMode=false;
     context->mIsMediaView=false;
@@ -2566,10 +2610,10 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
             context->mVideoMode = true;
 
             ALOGV("video");
-
+#if GET_VPU_INTO_FROM_HEAD
             for(m=0;m<MAX_VIDEO_SOURCE;m++)
             {
-               // ALOGD("m=%d,[%p,%p],[%p,%p]",m,context->video_info[m].video_hd,handle, context->video_info[m].video_base,(void*)handle->base);
+                ALOGV("m=%d,[%p,%p],[%p,%p]",m,context->video_info[m].video_hd,handle, context->video_info[m].video_base,(void*)handle->base);
                 if( (context->video_info[m].video_hd == handle)
                     && (context->video_info[m].video_base == (void*)handle->base)
                     && handle->video_width != 0)
@@ -2583,26 +2627,52 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
 
             //if can't find any match video in back video source,then update handle
             if(m == MAX_VIDEO_SOURCE )
+#endif
             {
+#if GET_VPU_INTO_FROM_HEAD
                 memcpy(&vpu_hd,(void*)handle->base,sizeof(tVPU_FRAME));
-
+#else
+                memcpy(&vpu_hd,(void*)handle->base+2*handle->stride*handle->height,sizeof(tVPU_FRAME));
+#endif
                 //if find invalid params,then increase iVideoSources and try again.
-                if(vpu_hd.width>4096 || vpu_hd.width <=0 || \
-                    vpu_hd.height>4096 || vpu_hd.height<=0)
+                if(vpu_hd.FrameWidth>8192 || vpu_hd.FrameWidth <=0 || \
+                    vpu_hd.FrameHeight>8192 || vpu_hd.FrameHeight<=0)
                 {
-                    ALOGE("invalid video(w=%d,h=%d)",vpu_hd.width,vpu_hd.height);
+                    ALOGE("invalid video(w=%d,h=%d)",vpu_hd.FrameWidth,vpu_hd.FrameHeight);
                 }
 
-                handle->video_addr = vpu_hd.videoAddr[0];
-                handle->video_width = vpu_hd.width;
-                handle->video_height = vpu_hd.height;
+                handle->video_addr = vpu_hd.FrameBusAddr[0];
+                handle->video_width = vpu_hd.FrameWidth;
+                handle->video_height = vpu_hd.FrameHeight;
+                handle->video_disp_width = vpu_hd.DisplayWidth;
+                handle->video_disp_height = vpu_hd.DisplayHeight;
+
+#if WRITE_VPU_FRAME_DATA
+                if(hwc_get_int_property("sys.hwc.write_vpu_frame_data","0"))
+                {
+                    static FILE* pOutFile = NULL;
+                    VPUMemLink(&vpu_hd.vpumem);
+                    pOutFile = fopen("/data/raw.yuv", "wb");
+                    if (pOutFile) {
+                        ALOGE("pOutFile open ok!");
+                    } else {
+                        ALOGE("pOutFile open fail!");
+                    }
+                    fwrite(vpu_hd.vpumem.vir_addr,1, vpu_hd.FrameWidth*vpu_hd.FrameHeight*3/2, pOutFile);
+                 }
+#endif
+
+#if GET_VPU_INTO_FROM_HEAD
                 //record handle in handles
                 handles[index]=handle;
                 index++;
-                ALOGV("prepare [%x,%dx%d]",handle->video_addr,handle->video_width,handle->video_height);
-                context->video_fmt = vpu_hd.format;
-                if(vpu_hd.format !=HAL_PIXEL_FORMAT_YCrCb_NV12
-                    && vpu_hd.format !=HAL_PIXEL_FORMAT_YCrCb_NV12_10)
+#endif
+                ALOGV("prepare [%x,%dx%d] active[%d,%d]",handle->video_addr,handle->video_width,\
+                    handle->video_height,vpu_hd.DisplayWidth,vpu_hd.DisplayHeight);
+
+                context->video_fmt = vpu_hd.OutputWidth;
+                if(context->video_fmt !=HAL_PIXEL_FORMAT_YCrCb_NV12
+                    && context->video_fmt !=HAL_PIXEL_FORMAT_YCrCb_NV12_10)
                     context->video_fmt = HAL_PIXEL_FORMAT_YCrCb_NV12;   // Compatible old sf lib 
                 ALOGV("context->video_fmt =%d",context->video_fmt);
             }
@@ -2639,6 +2709,7 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
 
     }
 
+#if GET_VPU_INTO_FROM_HEAD
     for (i = 0; i < index; i++)
     {
         struct private_handle_t * handle = handles[i];
@@ -2670,7 +2741,7 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
             context->video_info[m].video_base = NULL;
         }
     }
-
+#endif
 
 #if USE_VIDEO_BACK_BUFFERS
     // free video gralloc buffer in ui mode
@@ -2703,10 +2774,9 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
         }
     }
 
-    property_get("sys.hwc.disable", value, "0");
-    new_value = atoi(value); 
-    if(new_value == 1)
+    if(hwc_get_int_property("sys.hwc.disable","0")== 1)
         goto GpuComP;
+
     /* Roll back to FRAMEBUFFER if any layer can not be handled. */
     if (i != (list->numHwLayers - 1))
     {
@@ -2773,12 +2843,13 @@ GpuComP   :
     for (j = 0; j <(list->numHwLayers - 1); j++)
     {
         struct private_handle_t * handle = (struct private_handle_t *)list->hwLayers[j].handle;
+
         list->hwLayers[j].compositionType = HWC_FRAMEBUFFER;                
      
         if (handle && GPU_FORMAT==HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
         {
             ALOGV("rga_video_copybit,handle=%x,base=%x,w=%d,h=%d,video(w=%d,h=%d)",\
-                            handle,GPU_BASE,GPU_WIDTH,GPU_HEIGHT,handle->video_width,handle->video_height);
+                  handle,GPU_BASE,GPU_WIDTH,GPU_HEIGHT,handle->video_width,handle->video_height);
             rga_video_copybit(handle,0,0,0,handle->share_fd);
         }
     }
@@ -2797,8 +2868,6 @@ hwc_prepare(
     hwc_display_contents_1_t** displays
     )
 {
-    char value[PROPERTY_VALUE_MAX];
-    int new_value = 0;
     hwcContext * context = _contextAnchor;
     int ret = 0;
     size_t i;
@@ -2817,11 +2886,8 @@ hwc_prepare(
 
     context->zone_manager.composter_mode = HWC_FRAMEBUFFER;
 
-    property_get("sys.hwc.compose_policy", value, "0");
-    new_value = atoi(value); 
-   // new_value = 0;
     /* Roll back to FRAMEBUFFER if any layer can not be handled. */
-    if(new_value <= 0 )
+    if(hwc_get_int_property("sys.hwc.compose_policy","0")<= 0 )
     {
         for (i = 0; i < (list->numHwLayers - 1); i++)
         {
@@ -2829,6 +2895,7 @@ hwc_prepare(
         }
         return 0;
     }
+
 #if hwcDEBUG
     LOGD("%s(%d):Layers to prepare:", __FUNCTION__, __LINE__);
     _Dump(list);
@@ -3450,10 +3517,10 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
         }
         else
         {
-        fb_info.win_par[win_no-1].area_par[area_no].xact = psrc_rect->right- psrc_rect->left;
-        fb_info.win_par[win_no-1].area_par[area_no].yact = psrc_rect->bottom - psrc_rect->top;
-        fb_info.win_par[win_no-1].area_par[area_no].xvir = pzone_mag->zone_info[i].stride;
-        fb_info.win_par[win_no-1].area_par[area_no].yvir = pzone_mag->zone_info[i].height;
+            fb_info.win_par[win_no-1].area_par[area_no].xact = psrc_rect->right- psrc_rect->left;
+            fb_info.win_par[win_no-1].area_par[area_no].yact = psrc_rect->bottom - psrc_rect->top;
+            fb_info.win_par[win_no-1].area_par[area_no].xvir = pzone_mag->zone_info[i].stride;
+            fb_info.win_par[win_no-1].area_par[area_no].yvir = pzone_mag->zone_info[i].height;
         }    
     }    
 
@@ -3500,15 +3567,16 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
        
     }
     #endif
+
 #if DEBUG_CHECK_WIN_CFG_DATA
-//#if 1
     for(i = 0;i<4;i++)
     {
         for(j=0;j<4;j++)
         {
             if(fb_info.win_par[i].area_par[j].ion_fd || fb_info.win_par[i].area_par[j].phy_addr)
             {
-                
+
+                #if 1
                 if(fb_info.win_par[i].z_order<0 ||
                 fb_info.win_par[i].win_id < 0 || fb_info.win_par[i].win_id > 4 ||
                 fb_info.win_par[i].g_alpha_val < 0 || fb_info.win_par[i].g_alpha_val > 0xFF ||
@@ -3522,7 +3590,8 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
                 fb_info.win_par[i].area_par[j].xsize > 4096 || fb_info.win_par[i].area_par[j].ysize > 4096 ||
                 fb_info.win_par[i].area_par[j].xvir < 0 ||  fb_info.win_par[i].area_par[j].yvir < 0 ||
                 fb_info.win_par[i].area_par[j].xvir > 4096 || fb_info.win_par[i].area_par[j].yvir > 4096 ||
-                fb_info.win_par[i].area_par[j].ion_fd < 0)                
+                fb_info.win_par[i].area_par[j].ion_fd < 0)
+                #endif
                 ALOGE("par[%d],area[%d],z_win_galp[%d,%d,%x],[%d,%d,%d,%d]=>[%d,%d,%d,%d],w_h_f[%d,%d,%d],acq_fence_fd=%d,fd=%d,addr=%x",
                         i,j,
                         fb_info.win_par[i].z_order,
@@ -3733,16 +3802,14 @@ static int hwc_set_primary(hwc_composer_device_1 *dev, hwc_display_contents_1_t 
          __LINE__,
          list->numHwLayers,context->zone_manager.composter_mode);
 
-
-
 #if hwcDEBUG
     LOGD("%s(%d):Layers to set:", __FUNCTION__, __LINE__);
     _Dump(list);
 #endif
-    #if hwcUseTime
-    gettimeofday(&tpend1,NULL);
-    #endif
 
+#if hwcUseTime
+    gettimeofday(&tpend1,NULL);
+#endif
 
     if(context->zone_manager.composter_mode == HWC_BLITTER)
     {
@@ -3772,9 +3839,7 @@ static int hwc_set_primary(hwc_composer_device_1 *dev, hwc_display_contents_1_t 
     {
       if (bootanimFinish==0)
       {
-	       char pro_value[16];
-	       property_get("service.bootanim.exit",pro_value,0);
-		   bootanimFinish = atoi(pro_value);
+		   bootanimFinish = hwc_get_int_property("service.bootanim.exit","0")
 		   if (bootanimFinish > 0)
 		   {
 			 usleep(1000000);
@@ -4307,7 +4372,6 @@ hwc_device_open(
     int i;
 
     
-    char pro_value[PROPERTY_VALUE_MAX];
     LOGD("%s(%d):Open hwc device in thread=%d",
          __FUNCTION__, __LINE__, gettid());
 
@@ -4443,6 +4507,8 @@ hwc_device_open(
     context->mIsMediaView = false;
     context->mVideoRotate = false;
 
+
+#if GET_VPU_INTO_FROM_HEAD
     /* initialize params of video source info*/
     for(i=0;i<MAX_VIDEO_SOURCE;i++)
     {
@@ -4450,6 +4516,7 @@ hwc_device_open(
         context->video_info[i].video_hd = NULL;
         context->video_info[i].bMatch=false;
     }
+#endif
 
     /* Get gco2D object pointer. */
     
@@ -4466,10 +4533,7 @@ hwc_device_open(
 	 property_set("sys.enable.wfd.optimize","1");
 #endif
     {
-    	char value[PROPERTY_VALUE_MAX];
-    	memset(value,0,PROPERTY_VALUE_MAX);
-    	property_get("sys.enable.wfd.optimize", value, "0");
-    	int type = atoi(value);
+        int type = hwc_get_int_property("sys.enable.wfd.optimize","0");
         context->wfdOptimize = type;
         init_rga_cfg(context->engine_fd);
         if (type>0 && !is_surport_wfd_optimize())
@@ -4514,7 +4578,7 @@ hwc_device_open(
     context->fbhandle.stride = (info.xres+ 31) & (~31);
     context->pmemPhysical = ~0U;
     context->pmemLength   = 0;
-	property_get("ro.rk.soc",pro_value,"0");
+	//hwc_get_int_property("ro.rk.soc", "0");
     context->fbSize = info.xres*info.yres*4*3;
     context->lcdSize = info.xres*info.yres*4; 
 

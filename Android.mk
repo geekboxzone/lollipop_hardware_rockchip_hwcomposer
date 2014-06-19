@@ -54,7 +54,8 @@ LOCAL_SHARED_LIBRARIES := \
 	libcutils \
 	libion \
 	libhardware_legacy \
-	libsync
+	libsync \
+	libvpu
 
 
 

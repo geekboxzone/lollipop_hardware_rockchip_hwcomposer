@@ -31,12 +31,15 @@
 #include <linux/fb.h>
 #include <hardware/gralloc.h>
 #include "../libgralloc_ump/gralloc_priv.h"
+#include "../libon2/vpu_global.h"
+#include "../libon2/vpu_mem.h"
 
 //Control macro
 #define hwcDEBUG                    0
 #define hwcUseTime                  0
 #define hwcBlitUseTime              0
 #define hwcDumpSurface              0
+#define DUMP_AFTER_RGA_COPY_IN_GPU_CASE 0
 #define DEBUG_CHECK_WIN_CFG_DATA    0     //check rk_fb_win_cfg_data for lcdc
 #define ENABLE_HWC_WORMHOLE         1
 #define DUMP_SPLIT_AREA             0
@@ -45,6 +48,7 @@
 #define USE_QUEUE_DDRFREQ           0
 #define USE_VIDEO_BACK_BUFFERS      1
 #define USE_HW_VSYNC                1
+#define WRITE_VPU_FRAME_DATA        0
 
 //Command macro
 #define FB1_IOCTL_SET_YUV_ADDR	    0x5002
@@ -265,7 +269,7 @@ struct DisplayAttributes {
     bool isPause;
 };
 
-struct tVPU_FRAME
+struct tVPU_FRAME_v2
 {
     uint32_t         videoAddr[2];    // 0: Y address; 1: UV address;
     uint32_t         width;         // 16 aligned frame width
@@ -273,9 +277,11 @@ struct tVPU_FRAME
     uint32_t         format;        // 16 aligned frame height
 };
 
+
+
 typedef struct 
 {
-   tVPU_FRAME vpu_frame;
+   tVPU_FRAME_v2 vpu_frame;
    void*      vpu_handle;
 } vpu_frame_t;
 
