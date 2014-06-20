@@ -371,6 +371,7 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
         RGA_set_dst_vir_info(&Rga_Request, fd_dst,handle->base, 0,DstVirW,DstVirH,&clip, Dstfmt, 0);    
         RGA_set_mmu_info(&Rga_Request, 1, 0, 0, 0, 0, 2);
         Rga_Request.mmu_info.mmu_flag |= (1<<31) | (1<<10);
+        ALOGW("Debugmem mmu_en fd=%d in vmalloc ,base=%p,[%dX%d],fmt=%d,src_addr=%x", fd_dst,handle->base,DstVirW,DstVirH,handle->video_addr);
     }
 
     if(ioctl(rga_fd, RGA_BLIT_SYNC, &Rga_Request) != 0) {
