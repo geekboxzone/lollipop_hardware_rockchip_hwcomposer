@@ -365,6 +365,7 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
     RGA_set_bitblt_mode(&Rga_Request, 0, RotateMode,Rotation,0,0,0);    
     RGA_set_src_act_info(&Rga_Request,SrcActW,SrcActH, 0,0);
     RGA_set_dst_act_info(&Rga_Request,DstActW,DstActH, xoffset,yoffset);
+
     if( handle->type == 1)
     {
         RGA_set_dst_vir_info(&Rga_Request, fd_dst,handle->base, 0,DstVirW,DstVirH,&clip, Dstfmt, 0);    
@@ -2747,9 +2748,11 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
     // free video gralloc buffer in ui mode
     if(!context->mVideoMode && context->fd_video_bk[0] > 0)
     {
+        err = 0;
         for(i=0;i<MaxVideoBackBuffers;i++)
         {
-            err = context->mAllocDev->free(context->mAllocDev, context->pbvideo_bk[i]);
+            if(context->pbvideo_bk[i] > 0)
+                err = context->mAllocDev->free(context->mAllocDev, context->pbvideo_bk[i]);
             if(!err)
             {
                 context->fd_video_bk[i] = -1;
