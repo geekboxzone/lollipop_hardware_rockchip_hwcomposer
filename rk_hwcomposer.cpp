@@ -2762,6 +2762,17 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
             ALOGW_IF(err, "free(...) failed %d (%s)", err, strerror(-err));
         }
     }
+    if(context->mVideoMode)
+    {
+        for(i=0;i<MaxVideoBackBuffers;i++)
+        {
+            if(context->fd_video_bk[i] < 0 )
+            {
+                ALOGW("@video fd[%d]=%d",i,context->fd_video_bk[i]);
+                goto GpuComP;
+            }                
+        }
+    }
 #endif
 
     /* Check all layers: tag with different compositionType. */
@@ -4678,7 +4689,7 @@ hwc_device_open(
          context,
          context->fb_fps);
 
-    property_set("sys.ghwc.version","1.005_32"); 
+    property_set("sys.ghwc.version","1.007_32"); 
 
     char Version[32];
 
