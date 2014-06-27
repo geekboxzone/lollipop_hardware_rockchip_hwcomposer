@@ -798,17 +798,9 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
     }
     Context->zone_manager.zone_cnt = j;
     if(tsize)
-        tsize = tsize / (1024 *1024) * 60 ;// MB
+        Context->zone_manager.bp_size = tsize / (1024 *1024) * 60 ;// MB
     // query ddr is enough ,if dont enough back to gpu composer
     //ALOGD("tsize=%dMB,Context->ddrFd=%d,RK_QUEDDR_FREQ",tsize,Context->ddrFd);
-#if USE_QUEUE_DDRFREQ    
-    if(ioctl(Context->ddrFd, RK_QUEDDR_FREQ, &tsize))
-    {
-        if(is_out_log())
-            ALOGD("tatal_data=%dMB too large ,lcdc not support",tsize);
-        return -1;    
-    }
-#endif    
     for(i=0;i<j;i++)
     {
            
@@ -855,6 +847,9 @@ int try_wins_dispatch_hor(hwcContext * Context)
     int large_cnt = 0;
     int bw = 0;
     bool isyuv = false;
+    BpVopInfo  bpvinfo;    
+    int same_cnt = 0;
+    memset(&bpvinfo,0,sizeof(BpVopInfo));
     ZoneManager* pzone_mag = &(Context->zone_manager);
     // try dispatch stretch wins
     char const* compositionTypeName[] = {
@@ -872,12 +867,13 @@ int try_wins_dispatch_hor(hwcContext * Context)
     pzone_mag->zone_info[0].sort = sort;
     for(i=0;i<(pzone_mag->zone_cnt-1);)
     {
+        bool is_winfull = false;
         pzone_mag->zone_info[i].sort = sort;
         sort_pre  = sort;
         cnt = 0;
 
         //means 4: win2 or win3 most has 4 zones 
-        for(j=1;j<4 && (i+j) < pzone_mag->zone_cnt;j++)
+        for(j=1;j<MOST_WIN_ZONES && (i+j) < pzone_mag->zone_cnt;j++)
         {
             ZoneInfo * next_zf = &(pzone_mag->zone_info[i+j]);
             bool is_combine = false;
@@ -885,13 +881,25 @@ int try_wins_dispatch_hor(hwcContext * Context)
             for(k=0;k<=cnt;k++)  // compare all sorted_zone info
             {
                 ZoneInfo * sorted_zf = &(pzone_mag->zone_info[i+j-1-k]);
-                if(is_zone_combine(sorted_zf,next_zf))
+                if(is_zone_combine(sorted_zf,next_zf)
+                    #if ENBALE_WIN_ANY_ZONES
+                    && same_cnt < 1
+                    #endif
+                   )
                 {
                     is_combine = true;
+                    same_cnt ++;
                 }
                 else
                 {
                     is_combine = false;
+                    #if ENBALE_WIN_ANY_ZONES
+                    if(same_cnt >= 1)
+                    {
+                        is_winfull = true;
+                        same_cnt = 0; 
+                    }   
+                    #endif
                     break;
                 }
             }
@@ -899,17 +907,24 @@ int try_wins_dispatch_hor(hwcContext * Context)
             {
                 pzone_mag->zone_info[i+j].sort = sort;
                 cnt++;
+                ALOGV("combine [%d]=%d,cnt=%d",i+j,sort,cnt);
             }
             else
             {
+                if(!is_winfull)
                 sort++;
                 pzone_mag->zone_info[i+j].sort = sort;
                 cnt++;
+                ALOGV("Not combine [%d]=%d,cnt=%d",i+j,sort,cnt);                
                 break;
             }
         }
         if( sort_pre == sort && (i+cnt) < (pzone_mag->zone_cnt-1) )  // win2 ,4zones ,win3 4zones,so sort ++,but exit not ++
+        {
+            if(!is_winfull)
             sort ++;
+            ALOGV("sort++ =%d,[%d,%d,%d]",sort,i,cnt,pzone_mag->zone_cnt);
+        }    
         i += cnt;      
     }
     if(sort >4)  // lcdc dont support 5 wins
@@ -969,12 +984,14 @@ int try_wins_dispatch_hor(hwcContext * Context)
         else 
             bw += 4;
     }    
+#if !USE_QUEUE_DDRFREQ        
     if((large_cnt + bw ) > 5 )
     {
         if(is_out_log())
             ALOGD("data too large ,lcdc not support");
         return -1;
     }
+#endif    
     // first dispatch more zones win
     j = 0;
     for(i=0;i<4;i++)    
@@ -1056,6 +1073,100 @@ int try_wins_dispatch_hor(hwcContext * Context)
         pzone_mag->zone_info[i].sort);
 
     }
+#if USE_QUEUE_DDRFREQ    
+    for(i=0;i<pzone_mag->zone_cnt;i++)
+    {
+        int area_no = 0;
+        int win_id = 0;
+        ALOGV("Zone[%d]->layer[%d],dispatched=%d,"
+        "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
+        "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],"
+        "layer_fd[%d],addr=%x,acq_fence_fd=%d"
+        "layname=%s",    
+        pzone_mag->zone_info[i].zone_index,
+        pzone_mag->zone_info[i].layer_index,
+        pzone_mag->zone_info[i].dispatched,
+        pzone_mag->zone_info[i].src_rect.left,
+        pzone_mag->zone_info[i].src_rect.top,
+        pzone_mag->zone_info[i].src_rect.right,
+        pzone_mag->zone_info[i].src_rect.bottom,
+        pzone_mag->zone_info[i].disp_rect.left,
+        pzone_mag->zone_info[i].disp_rect.top,
+        pzone_mag->zone_info[i].disp_rect.right,
+        pzone_mag->zone_info[i].disp_rect.bottom,
+        pzone_mag->zone_info[i].width,
+        pzone_mag->zone_info[i].height,
+        pzone_mag->zone_info[i].stride,
+        pzone_mag->zone_info[i].format,
+        pzone_mag->zone_info[i].transform,
+        pzone_mag->zone_info[i].realtransform,
+        pzone_mag->zone_info[i].blend,
+        pzone_mag->zone_info[i].layer_fd,
+        pzone_mag->zone_info[i].addr,
+        pzone_mag->zone_info[i].acq_fence_fd,
+        pzone_mag->zone_info[i].LayerName);
+        switch(pzone_mag->zone_info[i].dispatched) {
+            case win0:
+                bpvinfo.vopinfo[0].state = 1;
+                bpvinfo.vopinfo[0].zone_num ++;                
+               break;
+            case win1:
+                bpvinfo.vopinfo[1].state = 1;
+                bpvinfo.vopinfo[1].zone_num ++;                            
+                break;
+            case win2_0:   
+                bpvinfo.vopinfo[2].state = 1;
+                bpvinfo.vopinfo[2].zone_num ++;                                        
+                break;
+            case win2_1:
+                bpvinfo.vopinfo[2].zone_num ++;                                        
+                break;  
+            case win2_2:
+                bpvinfo.vopinfo[2].zone_num ++;                                        
+                break;
+            case win2_3:
+                bpvinfo.vopinfo[2].zone_num ++;                                                    
+                break;
+            case win3_0:
+                bpvinfo.vopinfo[3].state = 1;
+                bpvinfo.vopinfo[3].zone_num ++;                                                    
+                break;
+            case win3_1:
+                bpvinfo.vopinfo[3].zone_num ++;                                                                
+                break;   
+            case win3_2:
+                bpvinfo.vopinfo[3].zone_num ++;                                                                
+                break;
+            case win3_3:
+                bpvinfo.vopinfo[3].zone_num ++;                                                                
+                break;                 
+             case win_ext:
+                break;
+            default:
+                ALOGE("hwc_dispatch  err!");
+                return -1;
+         }    
+    }     
+    bpvinfo.bp_size = Context->zone_manager.bp_size;
+    bpvinfo.bp_vop_size = Context->zone_manager.bp_size;    
+    for(i= 0;i<4;i++)
+    {
+        ALOGV("RK_QUEDDR_FREQ info win[%d] bo_size=%dMB,bp_vop_size=%dMB,state=%d,num=%d",
+            i,bpvinfo.bp_size,bpvinfo.bp_vop_size,bpvinfo.vopinfo[i].state,bpvinfo.vopinfo[i].zone_num);
+    }    
+    if(ioctl(Context->ddrFd, RK_QUEDDR_FREQ, &bpvinfo))
+    {
+        if(is_out_log())
+        {
+            for(i= 0;i<4;i++)
+            {
+                ALOGD("RK_QUEDDR_FREQ info win[%d] bo_size=%dMB,bp_vop_size=%dMB,state=%d,num=%d",
+                    i,bpvinfo.bp_size,bpvinfo.bp_vop_size,bpvinfo.vopinfo[i].state,bpvinfo.vopinfo[i].zone_num);
+            }    
+        }    
+        return -1;    
+    }
+#endif    
     Context->zone_manager.composter_mode = HWC_LCDC;
 
     return 0;
@@ -1094,6 +1205,9 @@ int try_wins_dispatch_mix (hwcContext * Context,hwc_display_contents_1_t * list)
     int large_cnt = 0;
     bool isyuv = false;
     int bw = 0;
+    BpVopInfo  bpvinfo;    
+    int tsize = 0;
+    memset(&bpvinfo,0,sizeof(BpVopInfo));
     char const* compositionTypeName[] = {
             "win0",
             "win1",
@@ -1226,6 +1340,7 @@ int try_wins_dispatch_mix (hwcContext * Context,hwc_display_contents_1_t * list)
     }    
     for(i=0;i<pzone_mag->zone_cnt;i++)
     {
+        int factor =1;
         ALOGV("sort[%d].type=%d",i,pzone_mag->zone_info[i].sort);
         if( pzone_mag->zone_info[i].sort == 1){
             srot_tal[0][0]++;
@@ -1254,6 +1369,11 @@ int try_wins_dispatch_mix (hwcContext * Context,hwc_display_contents_1_t * list)
         {
             isyuv = true;
         }
+        if(Context->zone_manager.zone_info[i].hfactor > 1.0)
+            factor = 2;
+        else
+            factor = 1;        
+        tsize += (Context->zone_manager.zone_info[i].size *factor);
     }
     j = 0;
     for(i=0;i<3;i++)    
@@ -1297,12 +1417,14 @@ int try_wins_dispatch_mix (hwcContext * Context,hwc_display_contents_1_t * list)
         bw +=5;
     }
     //ALOGD("large_cnt =%d,bw=%d",large_cnt , bw);
+#if !USE_QUEUE_DDRFREQ        
     if((large_cnt + bw) >= 5)    
     {       
         if(is_out_log())    
             ALOGD("lagre win > 2,and Scale-down 1.5 multiple,lcdc no support");
         return -1;
     }
+#endif    
     for(i=0;i<3;i++)    
     {        
         if( srot_tal[i][1] == 0)  // had not dispatched
@@ -1343,6 +1465,90 @@ int try_wins_dispatch_mix (hwcContext * Context,hwc_display_contents_1_t * list)
         compositionTypeName[pzone_mag->zone_info[i].dispatched -1],
         pzone_mag->zone_info[i].sort);
     }
+#if USE_QUEUE_DDRFREQ    
+    for(i=0;i<pzone_mag->zone_cnt;i++)
+    {
+        int area_no = 0;
+        int win_id = 0;
+        ALOGV("Zone[%d]->layer[%d],dispatched=%d,"
+        "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
+        "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],"
+        "layer_fd[%d],addr=%x,acq_fence_fd=%d"
+        "layname=%s",    
+        pzone_mag->zone_info[i].zone_index,
+        pzone_mag->zone_info[i].layer_index,
+        pzone_mag->zone_info[i].dispatched,
+        pzone_mag->zone_info[i].src_rect.left,
+        pzone_mag->zone_info[i].src_rect.top,
+        pzone_mag->zone_info[i].src_rect.right,
+        pzone_mag->zone_info[i].src_rect.bottom,
+        pzone_mag->zone_info[i].disp_rect.left,
+        pzone_mag->zone_info[i].disp_rect.top,
+        pzone_mag->zone_info[i].disp_rect.right,
+        pzone_mag->zone_info[i].disp_rect.bottom,
+        pzone_mag->zone_info[i].width,
+        pzone_mag->zone_info[i].height,
+        pzone_mag->zone_info[i].stride,
+        pzone_mag->zone_info[i].format,
+        pzone_mag->zone_info[i].transform,
+        pzone_mag->zone_info[i].realtransform,
+        pzone_mag->zone_info[i].blend,
+        pzone_mag->zone_info[i].layer_fd,
+        pzone_mag->zone_info[i].addr,
+        pzone_mag->zone_info[i].acq_fence_fd,
+        pzone_mag->zone_info[i].LayerName);
+        switch(pzone_mag->zone_info[i].dispatched) {
+            case win0:
+                bpvinfo.vopinfo[0].state = 1;
+                bpvinfo.vopinfo[0].zone_num ++;                
+               break;
+            case win1:
+                bpvinfo.vopinfo[1].state = 1;
+                bpvinfo.vopinfo[1].zone_num ++;                            
+                break;
+            case win2_0:   
+                bpvinfo.vopinfo[2].state = 1;
+                bpvinfo.vopinfo[2].zone_num ++;                                        
+                break;
+            case win2_1:
+                bpvinfo.vopinfo[2].zone_num ++;                                        
+                break;  
+            case win2_2:
+                bpvinfo.vopinfo[2].zone_num ++;                                        
+                break;
+            case win2_3:
+                bpvinfo.vopinfo[2].zone_num ++;                                                    
+                break;           
+            default:
+                ALOGE("hwc_dispatch_mix  err!");
+                return -1;
+         }    
+    }  
+    bpvinfo.vopinfo[3].state = 1;
+    bpvinfo.vopinfo[3].zone_num ++;                                        
+    bpvinfo.bp_size = Context->zone_manager.bp_size;
+    tsize += Context->fbhandle.width * Context->fbhandle.height*4;
+    if(tsize)
+        tsize = tsize / (1024 *1024) * 60 ;// MB
+    bpvinfo.bp_vop_size = tsize ;  
+    for(i= 0;i<4;i++)
+    {
+        ALOGV("RK_QUEDDR_FREQ mixinfo win[%d] bo_size=%dMB,bp_vop_size=%dMB,state=%d,num=%d",
+            i,bpvinfo.bp_size,bpvinfo.bp_vop_size,bpvinfo.vopinfo[i].state,bpvinfo.vopinfo[i].zone_num);
+    }    
+    if(ioctl(Context->ddrFd, RK_QUEDDR_FREQ, &bpvinfo))
+    {
+        if(is_out_log())
+        {
+            for(i= 0;i<4;i++)
+            {
+                ALOGD("RK_QUEDDR_FREQ mixinfo win[%d] bo_size=%dMB,bp_vop_size=%dMB,state=%d,num=%d",
+                    i,bpvinfo.bp_size,bpvinfo.bp_vop_size,bpvinfo.vopinfo[i].state,bpvinfo.vopinfo[i].zone_num);
+            }    
+        }    
+        return -1;    
+    }
+#endif    
     Context->zone_manager.composter_mode = HWC_MIX;
     return 0;
 }

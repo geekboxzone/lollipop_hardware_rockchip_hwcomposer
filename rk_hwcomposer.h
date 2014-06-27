@@ -49,7 +49,8 @@
 #define USE_VIDEO_BACK_BUFFERS      1
 #define USE_HW_VSYNC                1
 #define WRITE_VPU_FRAME_DATA        0
-
+#define MOST_WIN_ZONES              4
+#define ENBALE_WIN_ANY_ZONES        0
 //Command macro
 #define FB1_IOCTL_SET_YUV_ADDR	    0x5002
 #define RK_FBIOSET_VSYNC_ENABLE     0x4629
@@ -176,11 +177,27 @@ ZoneInfo;
 typedef struct _ZoneManager
 {
     ZoneInfo    zone_info[MaxZones];
+    int         bp_size;
     int         zone_cnt;   
     int         composter_mode;        
 	        
 }
 ZoneManager;
+typedef struct _vop_info
+{
+    int         state;   // 1:on ,0:off
+	int         zone_num;  // nums    
+	int         reserve;
+	int         reserve2;	
+}
+vop_info;
+typedef struct _BpVopInfo
+{
+    vop_info    vopinfo[4];
+    int         bp_size; // toatl size
+    int         bp_vop_size;    // vop size
+}
+BpVopInfo;
 
 typedef struct _hwbkupinfo
 {
