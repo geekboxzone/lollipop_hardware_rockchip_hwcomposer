@@ -45,7 +45,7 @@
 #define DUMP_SPLIT_AREA             0
 #define SYNC_IN_VIDEO               1
 #define USE_HWC_FENCE               1
-#define USE_QUEUE_DDRFREQ           0
+#define USE_QUEUE_DDRFREQ           1
 #define USE_VIDEO_BACK_BUFFERS      1
 #define USE_HW_VSYNC                1
 #define WRITE_VPU_FRAME_DATA        0
