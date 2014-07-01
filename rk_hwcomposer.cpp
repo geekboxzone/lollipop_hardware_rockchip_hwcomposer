@@ -3299,7 +3299,7 @@ static int hwc_primary_Post( hwcContext * context,hwc_display_contents_1_t* list
         fb_info.win_par[0].area_par[0].yvir = handle->height;
 #if USE_HWC_FENCE
 #if SYNC_IN_VIDEO
-    if(context->mVideoMode && !context->mIsMediaView)
+    if(context->mVideoMode && !context->mIsMediaView && !g_hdmi_mode)
         fb_info.wait_fs=1;
     else
 #endif
@@ -3839,7 +3839,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
 
 #if USE_HWC_FENCE
 #if SYNC_IN_VIDEO
-    if(context->mVideoMode && !context->mIsMediaView)
+    if(context->mVideoMode && !context->mIsMediaView && !g_hdmi_mode)
         fb_info.wait_fs=1;
     else
 #endif
@@ -3885,7 +3885,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
         fb_info.win_par[win_no-1].area_par[0].yvir = handle->height;
 #if USE_HWC_FENCE
 #if SYNC_IN_VIDEO
-    if(context->mVideoMode && !context->mIsMediaView)
+    if(context->mVideoMode && !context->mIsMediaView && !g_hdmi_mode)
         fb_info.wait_fs=1;
     else
 #endif
