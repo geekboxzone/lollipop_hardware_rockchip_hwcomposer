@@ -984,14 +984,6 @@ int try_wins_dispatch_hor(hwcContext * Context)
         else 
             bw += 4;
     }    
-#if !USE_QUEUE_DDRFREQ        
-    if((large_cnt + bw ) > 5 )
-    {
-        if(is_out_log())
-            ALOGD("data too large ,lcdc not support");
-        return -1;
-    }
-#endif    
     // first dispatch more zones win
     j = 0;
     for(i=0;i<4;i++)    
@@ -1167,6 +1159,13 @@ int try_wins_dispatch_hor(hwcContext * Context)
         return -1;    
     }
 #endif    
+    if((large_cnt + bw ) > 5 )
+    {
+        if(is_out_log())
+            ALOGD("data too large ,lcdc not support");
+        return -1;
+    }
+
     Context->zone_manager.composter_mode = HWC_LCDC;
 
     return 0;
@@ -1417,14 +1416,7 @@ int try_wins_dispatch_mix (hwcContext * Context,hwc_display_contents_1_t * list)
         bw +=5;
     }
     //ALOGD("large_cnt =%d,bw=%d",large_cnt , bw);
-#if !USE_QUEUE_DDRFREQ        
-    if((large_cnt + bw) >= 5)    
-    {       
-        if(is_out_log())    
-            ALOGD("lagre win > 2,and Scale-down 1.5 multiple,lcdc no support");
-        return -1;
-    }
-#endif    
+  
     for(i=0;i<3;i++)    
     {        
         if( srot_tal[i][1] == 0)  // had not dispatched
@@ -1548,7 +1540,14 @@ int try_wins_dispatch_mix (hwcContext * Context,hwc_display_contents_1_t * list)
         }    
         return -1;    
     }
-#endif    
+#endif   
+    if((large_cnt + bw) >= 5)    
+    {       
+        if(is_out_log())    
+            ALOGD("lagre win > 2,and Scale-down 1.5 multiple,lcdc no support");
+        return -1;
+    }
+
     Context->zone_manager.composter_mode = HWC_MIX;
     return 0;
 }
