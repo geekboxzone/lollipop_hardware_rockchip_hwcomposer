@@ -2772,6 +2772,7 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
     int iVideoSources;
     int m,n;
     int vinfo_cnt = 0;
+    int video_cnt = 0;
     bool bIsMediaView=false;
  
     /* Check layer list. */
@@ -2797,6 +2798,14 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
     }
 #endif
 
+    for (i = 0; i < (list->numHwLayers - 1); i++)
+    {
+        struct private_handle_t * handle = (struct private_handle_t *) list->hwLayers[i].handle;
+        if(handle && GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
+        {
+            video_cnt ++;
+        }
+    }
     context->mVideoMode=false;
     context->mIsMediaView=false;
     for (i = 0; i < (list->numHwLayers - 1); i++)
@@ -2886,7 +2895,7 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
 
 #if USE_VIDEO_BACK_BUFFERS
             //alloc video gralloc buffer in video mode
-            if(context->fd_video_bk[0] == -1)
+            if(context->fd_video_bk[0] == -1 && video_cnt == 1)
             {
                 for(j=0;j<MaxVideoBackBuffers;j++)
                 {
@@ -2952,7 +2961,8 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
 
 #if USE_VIDEO_BACK_BUFFERS
     // free video gralloc buffer in ui mode
-    if(!context->mVideoMode && context->fd_video_bk[0] > 0)
+    if((!context->mVideoMode && context->fd_video_bk[0] > 0)
+        || (video_cnt >1))
     {
         err = 0;
         for(i=0;i<MaxVideoBackBuffers;i++)
@@ -2979,7 +2989,11 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
         }
     }
 #endif
-
+    if(video_cnt >1) // more videos goto gpu cmp
+    {
+        ALOGW("more2 video=%d goto GpuComP",video_cnt);
+        goto GpuComP;
+    }          
     /* Check all layers: tag with different compositionType. */
     for (i = 0; i < (list->numHwLayers - 1); i++)
     {
