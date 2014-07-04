@@ -43,7 +43,7 @@
 #define DEBUG_CHECK_WIN_CFG_DATA    0     //check rk_fb_win_cfg_data for lcdc
 #define ENABLE_HWC_WORMHOLE         1
 #define DUMP_SPLIT_AREA             0
-#define SYNC_IN_VIDEO               1
+#define SYNC_IN_VIDEO               0
 #define USE_HWC_FENCE               1
 #define USE_QUEUE_DDRFREQ           1
 #define USE_VIDEO_BACK_BUFFERS      1
@@ -63,7 +63,7 @@
 //Amount macro
 #define MaxZones                    10
 #define bakupbufsize                4
-#define MaxVideoBackBuffers         (2)
+#define MaxVideoBackBuffers         (3)
 #define MAX_VIDEO_SOURCE            (5)
 
 //Other macro

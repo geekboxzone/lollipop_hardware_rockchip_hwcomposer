@@ -187,7 +187,7 @@ void hwc_sync(hwc_display_contents_1_t  *list)
   {
     return ;
   }
-  
+
   for (int i=0; i<(int)list->numHwLayers; i++)
   {
      if (list->hwLayers[i].acquireFenceFd>0)
@@ -197,6 +197,7 @@ void hwc_sync(hwc_display_contents_1_t  *list)
      }
 
   }
+
 }
 
 #if 0
@@ -250,6 +251,7 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
     int yoffset = 0;
     int Dstfmt = RK_FORMAT_YCbCr_420_SP;
     int   rga_fd = _contextAnchor->engine_fd;
+    
     if (!rga_fd)
     {
        return -1; 
@@ -268,6 +270,7 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
         ALOGE("rga invalid w_h[%d,%d]",handle->video_width , handle->video_height);
         return -1;
     }
+
 
     //pthread_mutex_lock(&_contextAnchor->lock);
     memset(&Rga_Request, 0x0, sizeof(Rga_Request));
@@ -381,6 +384,7 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
         ALOGE("err dst fd=[%x],w-h[%d,%d],act[%d,%d][f=%d],rot=%d,rot_mod=%d",
             fd_dst, DstVirW, DstVirH,DstActW,DstActH,Dstfmt,Rotation,RotateMode);
     }
+
 
   //  pthread_mutex_unlock(&_contextAnchor->lock);
 
@@ -1676,8 +1680,10 @@ check_layer(
         (struct private_handle_t *) Layer->handle;
   
     //(void) Context;
+    
     (void) Count;
     (void) Index;
+    
 #if 0    
     float hfactor = 1;
     float vfactor = 1;
@@ -2900,7 +2906,7 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
                 for(j=0;j<MaxVideoBackBuffers;j++)
                 {
                     err = context->mAllocDev->alloc(context->mAllocDev, handle->video_width, \
-                                                    handle->video_height, context->fbhandle.format, \
+                                                    handle->video_height,HAL_PIXEL_FORMAT_YCrCb_NV12, \
                                                     GRALLOC_USAGE_HW_COMPOSER|GRALLOC_USAGE_HW_RENDER, \
                                                     (buffer_handle_t*)(&(context->pbvideo_bk[j])),&stride_gr);
                     if(!err){
@@ -3997,10 +4003,7 @@ static int hwc_set_primary(hwc_composer_device_1 *dev, hwc_display_contents_1_t 
     struct timeval tpend1, tpend2;
     long usec1 = 0;
 #endif
-#if hwcBlitUseTime
-    struct timeval tpendblit1, tpendblit2;
-    long usec2 = 0;
-#endif
+
 
     hwc_display_t dpy = NULL;
     hwc_surface_t surf = NULL;
@@ -4908,7 +4911,7 @@ hwc_device_open(
          context,
          context->fb_fps);
 
-    property_set("sys.ghwc.version","1.007_32"); 
+    property_set("sys.ghwc.version","2.001"); 
 
     char Version[32];
 
