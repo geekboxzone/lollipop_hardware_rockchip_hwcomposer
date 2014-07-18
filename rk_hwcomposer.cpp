@@ -3943,11 +3943,11 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
     {
         hwc_display_t dpy = NULL;
         hwc_surface_t surf = NULL;
-        //dpy = eglGetCurrentDisplay();
-        //surf = eglGetCurrentSurface(EGL_DRAW);
-        //_eglRenderBufferModifiedANDROID((EGLDisplay) dpy, (EGLSurface) surf);
-       // eglSwapBuffers((EGLDisplay) dpy, (EGLSurface) surf); 
-       
+        dpy = eglGetCurrentDisplay();
+        surf = eglGetCurrentSurface(EGL_DRAW);
+        _eglRenderBufferModifiedANDROID((EGLDisplay) dpy, (EGLSurface) surf);
+        eglSwapBuffers((EGLDisplay) dpy, (EGLSurface) surf); 
+        //ALOGD("lcdc config done");
         if(ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info) == -1)
         {
             ALOGE("RK_FBIOSET_CONFIG_DONE err line=%d !",__LINE__);
@@ -4073,6 +4073,20 @@ static int hwc_set_primary(hwc_composer_device_1 *dev, hwc_display_contents_1_t 
     else if(context->zone_manager.composter_mode == HWC_MIX)
     {
         hwc_set_lcdc(context,list,1);
+    }
+    {
+        static int frame_cnt = 0;
+        char value[PROPERTY_VALUE_MAX];
+        property_get("sys.glib.state", value, "0");
+        int skipcnt = atoi(value);
+        if(skipcnt > 0) {
+            if(((++frame_cnt)%skipcnt) == 0) {
+                _eglRenderBufferModifiedANDROID((EGLDisplay) NULL, (EGLSurface) NULL);
+                eglSwapBuffers((EGLDisplay) NULL, (EGLSurface) NULL); 
+            }
+        } else {
+            frame_cnt = 0;
+        }
     }
     
 #if hwcUseTime
@@ -4890,17 +4904,17 @@ hwc_device_open(
     {
         property_set("sys.display.oritation","2");
     }
-	
-	/*
     _eglRenderBufferModifiedANDROID = (PFNEGLRENDERBUFFERMODIFYEDANDROIDPROC)
                                     eglGetProcAddress("eglRenderBufferModifiedANDROID");
+
     if(_eglRenderBufferModifiedANDROID == NULL)
     {
         LOGE("EGL_ANDROID_buffer_modifyed extension "
              "Not Found for hwcomposer");
+
         hwcONERROR(hwcTHREAD_ERR);
     }
-	*/
+    
 
 #if USE_HW_VSYNC
 
