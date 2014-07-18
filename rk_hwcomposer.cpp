@@ -60,6 +60,7 @@ static hwcContext * _contextAnchor = NULL;
 static int bootanimFinish = 0;
 #endif
 static hwbkupmanage bkupmanage;
+static PFNEGLRENDERBUFFERMODIFYEDANDROIDPROC _eglRenderBufferModifiedANDROID;
 
 int gwin_tab[MaxZones] = {win0,win1,win2_0,win2_1,win2_2,win2_3,win3_0,win3_1,win3_2,win3_3};
 #undef LOGV
@@ -1673,6 +1674,7 @@ check_layer(
     hwcContext * Context,
     uint32_t Count,
     uint32_t Index,
+    bool videomode,
     hwc_layer_1_t * Layer
     )
 {
@@ -1753,10 +1755,11 @@ check_layer(
              return HWC_FRAMEBUFFER;
         }
 
-        LOGV("name[%d]=%s",Index,Layer->LayerName);
+        LOGV("name[%d]=%s,cnt=%d,vodemod=%d",Index,Layer->LayerName,Count ,videomode);
 
         if(            
               (getHdmiMode()==0)            
+              || (Count <= 2 && videomode)
             )  // layer <=3,do special processing
 
         {           
@@ -3006,7 +3009,7 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
         hwc_layer_1_t * layer = &list->hwLayers[i];
 
         uint32_t compositionType =
-             check_layer(context, list->numHwLayers - 1, i, layer);
+             check_layer(context, list->numHwLayers - 1, i,context->mVideoMode, layer);
 
         if (compositionType == HWC_FRAMEBUFFER)
         {
@@ -3938,6 +3941,13 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
     }
     if(!context->fb_blanked)
     {
+        hwc_display_t dpy = NULL;
+        hwc_surface_t surf = NULL;
+        //dpy = eglGetCurrentDisplay();
+        //surf = eglGetCurrentSurface(EGL_DRAW);
+        //_eglRenderBufferModifiedANDROID((EGLDisplay) dpy, (EGLSurface) surf);
+       // eglSwapBuffers((EGLDisplay) dpy, (EGLSurface) surf); 
+       
         if(ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info) == -1)
         {
             ALOGE("RK_FBIOSET_CONFIG_DONE err line=%d !",__LINE__);
@@ -4880,6 +4890,17 @@ hwc_device_open(
     {
         property_set("sys.display.oritation","2");
     }
+	
+	/*
+    _eglRenderBufferModifiedANDROID = (PFNEGLRENDERBUFFERMODIFYEDANDROIDPROC)
+                                    eglGetProcAddress("eglRenderBufferModifiedANDROID");
+    if(_eglRenderBufferModifiedANDROID == NULL)
+    {
+        LOGE("EGL_ANDROID_buffer_modifyed extension "
+             "Not Found for hwcomposer");
+        hwcONERROR(hwcTHREAD_ERR);
+    }
+	*/
 
 #if USE_HW_VSYNC
 
