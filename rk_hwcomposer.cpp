@@ -2910,7 +2910,7 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
                 {
                     err = context->mAllocDev->alloc(context->mAllocDev, handle->video_width, \
                                                     handle->video_height,HAL_PIXEL_FORMAT_YCrCb_NV12, \
-                                                    GRALLOC_USAGE_HW_COMPOSER|GRALLOC_USAGE_HW_RENDER, \
+                                                    GRALLOC_USAGE_HW_COMPOSER|GRALLOC_USAGE_HW_RENDER|GRALLOC_USAGE_HW_VIDEO_ENCODER, \
                                                     (buffer_handle_t*)(&(context->pbvideo_bk[j])),&stride_gr);
                     if(!err){
                         struct private_handle_t*phandle_gr = (struct private_handle_t*)context->pbvideo_bk[j];
