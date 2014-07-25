@@ -513,13 +513,14 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
             vfactor = (float) (SrcRect->bottom - SrcRect->top)
                     / (DstRect->bottom - DstRect->top);
         }
+        
         if(hfactor >= 8.0 || vfactor >= 8.0 || hfactor <= 0.125 || vfactor <= 0.125  )
         {
-            ALOGV("stretch[%f,%f] not support!",hfactor,vfactor);
+            ALOGD("stretch[%f,%f] not support!",hfactor,vfactor);
             return -1;
         
-        }
-        //ALOGD("name=%s,hfactor =%f,vfactor =%f",layer->LayerName,hfactor,vfactor );
+        } 
+        ALOGV("name=%s,hfactor =%f,vfactor =%f",layer->LayerName,hfactor,vfactor );
         is_stretch = (hfactor != 1.0) || (vfactor != 1.0);
         int left_min ; 
         int top_min ;
@@ -1190,7 +1191,16 @@ int is_special_wins(hwcContext * Context)
     return 0;
 }
 #define GPUDRAWCNT 2
-int gpu_draw_fd[GPUDRAWCNT];
+
+typedef struct _mix_info
+{
+    int gpu_draw_fd[GPUDRAWCNT];
+    int alpha[GPUDRAWCNT];
+
+}
+mix_info;
+
+mix_info gmixinfo;
 int try_wins_dispatch_mix (hwcContext * Context,hwc_display_contents_1_t * list)
 {
     int win_disphed_flag[3] = {0,}; // win0, win1, win2, win3 flag which is dispatched
@@ -1240,11 +1250,13 @@ int try_wins_dispatch_mix (hwcContext * Context,hwc_display_contents_1_t * list)
                     ALOGD("Donot support video ");
                 return -1;
             }    
-            if(gpu_draw_fd[pzone_mag->zone_info[i].layer_index] != pzone_mag->zone_info[i].layer_fd)
+            if(gmixinfo.gpu_draw_fd[pzone_mag->zone_info[i].layer_index] != pzone_mag->zone_info[i].layer_fd
+                || gmixinfo.alpha[pzone_mag->zone_info[i].layer_index] != pzone_mag->zone_info[i].zone_alpha)
             {
                 gpu_draw = 1;
                 layer->compositionType = HWC_FRAMEBUFFER;
-                gpu_draw_fd[pzone_mag->zone_info[i].layer_index] = pzone_mag->zone_info[i].layer_fd;                
+                gmixinfo.gpu_draw_fd[pzone_mag->zone_info[i].layer_index] = pzone_mag->zone_info[i].layer_fd;  
+                gmixinfo.alpha[pzone_mag->zone_info[i].layer_index] = pzone_mag->zone_info[i].zone_alpha;
             }    
             else
             {
@@ -3071,14 +3083,14 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
     {
         for(i = 0;i<GPUDRAWCNT;i++)
         {
-            gpu_draw_fd[i] = 0;
+            gmixinfo.gpu_draw_fd[i] = 0;
         }
     }    
     return 0;
 GpuComP   :
     for(i = 0;i<GPUDRAWCNT;i++)
     {
-        gpu_draw_fd[i] = 0;
+        gmixinfo.gpu_draw_fd[i] = 0;
     }
     hwc_LcdcToGpu(list);         //Dont remove
     bkupmanage.dstwinNo = 0xff;  // GPU handle
