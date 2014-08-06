@@ -469,7 +469,6 @@ int is_zone_combine(ZoneInfo * zf,ZoneInfo * zf2)
 int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
 {
     size_t i,j;
-    bool haveStartwin = false;
     int tsize = 0;
     int factor =1;
     for (i = 0,j=0; i < (list->numHwLayers - 1) ; i++,j++)
@@ -488,6 +487,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
         bool is_stretch = 0;
         hwc_rect_t const * rects = Region->rects;
         hwc_rect_t  rect_merge;
+        bool haveStartwin = false;
 
         if(strstr(layer->LayerName,"Starting@# "))
         {
@@ -785,8 +785,10 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
             srch = Context->zone_manager.zone_info[j].src_rect.bottom -  \           
                         Context->zone_manager.zone_info[j].src_rect.top;  
         int bpp = android::bytesPerPixel(Context->zone_manager.zone_info[j].format);
-        if(Context->zone_manager.zone_info[j].format == HAL_PIXEL_FORMAT_YCrCb_NV12 )
+        if(Context->zone_manager.zone_info[j].format == HAL_PIXEL_FORMAT_YCrCb_NV12
+            || haveStartwin)
             bpp = 2;
+       // ALOGD("haveStartwin=%d,bpp=%d",haveStartwin,bpp);    
         Context->zone_manager.zone_info[j].size = srcw*srch*bpp;
         if(Context->zone_manager.zone_info[j].hfactor > 1.0)
             factor = 2;
@@ -2784,9 +2786,6 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
     int ret;
     int err;    
     bool vertical = false;
-#if hwcDumpSurface
-    _DumpSurface(list);
-#endif
     struct private_handle_t * handles[MAX_VIDEO_SOURCE];
     int index=0;
     int video_sources=0;
@@ -3137,6 +3136,9 @@ hwc_prepare(
         return HWC_EGL_ERROR;
     }
 
+#if hwcDumpSurface
+    _DumpSurface(list);
+#endif
 
 
     context->zone_manager.composter_mode = HWC_FRAMEBUFFER;
@@ -3399,7 +3401,10 @@ static int hwc_set_blit(hwcContext * context, hwc_display_contents_1_t *list)
     int blitflag = false;
     EGLBoolean success = EGL_FALSE;
     struct private_handle_t * fbhandle = NULL;
-
+#if hwcBlitUseTime
+    struct timeval tpendblit1, tpendblit2;
+    long usec2 = 0;
+#endif
         /* Prepare. */
     for (i = 0; i < (list->numHwLayers-1); i++)
     {
@@ -3959,7 +3964,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
         surf = eglGetCurrentSurface(EGL_DRAW);
         _eglRenderBufferModifiedANDROID((EGLDisplay) dpy, (EGLSurface) surf);
         eglSwapBuffers((EGLDisplay) dpy, (EGLSurface) surf); 
-        //ALOGD("lcdc config done");
+        ALOGV("lcdc config done");
         if(ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info) == -1)
         {
             ALOGE("RK_FBIOSET_CONFIG_DONE err line=%d !",__LINE__);
