@@ -51,6 +51,7 @@
 #define WRITE_VPU_FRAME_DATA        0
 #define MOST_WIN_ZONES              4
 #define ENBALE_WIN_ANY_ZONES        0
+#define ENABLE_TRANSFORM_BY_RGA     0
 //Command macro
 #define FB1_IOCTL_SET_YUV_ADDR	    0x5002
 #define RK_FBIOSET_VSYNC_ENABLE     0x4629
@@ -470,6 +471,7 @@ hwcGetFormat(
     OUT RgaSURF_FORMAT * Format
     );
 
+int hwChangeRgaFormat(IN int fmt );
 hwcSTATUS
 hwcLockBuffer(
     IN  hwcContext *  Context,

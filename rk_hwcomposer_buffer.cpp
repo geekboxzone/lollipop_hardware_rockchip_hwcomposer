@@ -171,6 +171,28 @@ hwcGetFormat(
     return hwcSTATUS_OK;
 }
 
+int hwChangeRgaFormat(IN int fmt )
+{
+    switch (fmt)
+    {
+    case HAL_PIXEL_FORMAT_RGB_565:
+        return RK_FORMAT_RGB_565;
+    case HAL_PIXEL_FORMAT_RGB_888:
+        return RK_FORMAT_RGB_888;
+    case HAL_PIXEL_FORMAT_RGBA_8888:
+        return RK_FORMAT_RGBA_8888;
+    case HAL_PIXEL_FORMAT_RGBX_8888:
+        return RK_FORMAT_RGBX_8888;
+    case HAL_PIXEL_FORMAT_BGRA_8888:
+        return RK_FORMAT_BGRA_8888;
+    case HAL_PIXEL_FORMAT_YCrCb_NV12:
+        return RK_FORMAT_YCbCr_420_SP;
+	case HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO:
+	   return RK_FORMAT_YCbCr_420_SP;
+    default:
+        return hwcSTATUS_INVALID_ARGUMENT;
+    }
+}
 #if ENABLE_HWC_WORMHOLE
 /*
  * Area spliting feature depends on the following 3 functions:
