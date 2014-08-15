@@ -375,6 +375,7 @@ typedef struct _hwcContext
      bool      mVideoMode;
      bool      mIsMediaView;
      bool      mVideoRotate;
+     int        mtrsformcnt;       
 
 #if USE_VIDEO_BACK_BUFFERS
      /* The index of video buffer will be used */
