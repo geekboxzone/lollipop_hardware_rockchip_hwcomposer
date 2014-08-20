@@ -22,7 +22,6 @@
 
 /* Set 0 to enable LOGV message. See cutils/log.h */
 #include <cutils/log.h>
-
 #include <hardware/hwcomposer.h>
 //#include <ui/android_native_buffer.h>
 
@@ -52,6 +51,8 @@
 #define MOST_WIN_ZONES              4
 #define ENBALE_WIN_ANY_ZONES        0
 #define ENABLE_TRANSFORM_BY_RGA     0
+#define OPTIMIZATION_FOR_TRANSFORM_UI   1
+
 //Command macro
 #define FB1_IOCTL_SET_YUV_ADDR	    0x5002
 #define RK_FBIOSET_VSYNC_ENABLE     0x4629
@@ -66,6 +67,7 @@
 #define bakupbufsize                4
 #define MaxVideoBackBuffers         (3)
 #define MAX_VIDEO_SOURCE            (5)
+#define GPUDRAWCNT                  (10)
 
 //Other macro
 #define GPU_BASE        handle->base
@@ -73,6 +75,17 @@
 #define GPU_HEIGHT      handle->height
 #define GPU_FORMAT      handle->format
 #define GPU_DST_FORMAT  DstHandle->format
+
+#define GHWC_VERSION  "2.002"
+//HWC version Tag
+//Get commit info:  git log --format="Author: %an%nTime:%cd%nCommit:%h%n%n%s%n%n"
+//Get version: busybox strings /system/lib/hw/hwcomposer.rk30board.so | busybox grep HWC_VERSION
+//HWC_VERSION Author:zxl Time:Tue Aug 12 17:27:36 2014 +0800 Version:1.17 Branch&Previous-Commit:rk/rk312x/mid/4.4_r1/develop-9533348.
+#define HWC_VERSION "HWC_VERSION  \
+Author:zxl \
+Previous-Time:Fri Aug 15 14:09:02 2014 +0800 \
+Version:2.002 \
+Branch&Previous-Commit:rk/rk32/mid/4.4_r1/develop-f00a2d3."
 
 /* Set it to 1 to enable swap rectangle optimization;
  * Set it to 0 to disable. */
@@ -104,6 +117,15 @@ enum
     
 };
 
+
+
+typedef struct _mix_info
+{
+    int gpu_draw_fd[GPUDRAWCNT];
+    int alpha[GPUDRAWCNT];
+
+}
+mix_info;
 
 typedef enum _hwcSTATUS
 {
