@@ -2255,7 +2255,7 @@ check_layer(
           )
         #endif
         || skip_count<5
-        || handle->type == 1
+        || (handle->type == 1 && !Context->iommuEn)
         )
     {
         /* We are forbidden to handle this layer. */
@@ -5303,6 +5303,13 @@ hwc_device_open(
         ALOGD("context->ddrFd ok");
     }
 #endif    
+    rel = ioctl(context->fbFd, RK_FBIOGET_IOMMU_STA, &context->iommuEn);	    
+    if (rel != 0)
+    {
+         hwcONERROR(hwcSTATUS_IO_ERR);
+    }
+
+
     rel = ioctl(context->fbFd, FBIOGET_FSCREENINFO, &fixInfo);
     if (rel != 0)
     {
@@ -5460,6 +5467,8 @@ hwc_device_open(
 	//hwc_get_int_property("ro.rk.soc", "0");
     context->fbSize = info.xres*info.yres*4*3;
     context->lcdSize = info.xres*info.yres*4; 
+
+  
 
 
 

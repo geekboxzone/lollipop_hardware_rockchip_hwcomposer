@@ -61,6 +61,7 @@
 #define RK_FBIOGET_LIST_STAT   		0X4631
 //#define USE_LCDC_COMPOSER
 #define FBIOSET_OVERLAY_STATE     	0x5018
+#define RK_FBIOGET_IOMMU_STA        0x4632
 
 //Amount macro
 #define MaxZones                    10
@@ -378,6 +379,7 @@ typedef struct _hwcContext
 	vpu_frame_t  video_frame;
 	unsigned int fbSize;
 	unsigned int lcdSize;
+	int           iommuEn;
     alloc_device_t  *mAllocDev;	
 	ZoneManager  zone_manager;;
 
