@@ -3541,7 +3541,7 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
         goto GpuComP;
     }          
     /* Check all layers: tag with different compositionType. */
-    context->mtrsformcnt  = 0;
+    context->mtrsformcnt  = 0;    
     for (i = 0; i < (list->numHwLayers - 1); i++)
     {
         hwc_layer_1_t * layer = &list->hwLayers[i];
@@ -5478,7 +5478,8 @@ hwc_device_open(
     ALOGE_IF(err, "FATAL: can't find the %s module", GRALLOC_HARDWARE_MODULE_ID);
     if (err == 0) {
         gralloc_open(module_gr, &context->mAllocDev);
-        
+
+        #if  ENABLE_TRANSFORM_BY_RGA
         for(i=0;i<bakupbufsize;i++)
         {
             err = context->mAllocDev->alloc(context->mAllocDev, context->fbhandle.width,\
@@ -5511,7 +5512,7 @@ hwc_device_open(
             ALOGE("hwc alloc[%d] faild",i);
             goto OnError;
         }
-        
+        #endif
                                         
         
     }   
