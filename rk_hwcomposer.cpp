@@ -3353,6 +3353,7 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
         }
     }
     context->mVideoMode=false;
+    context->mNV12_VIDEO_VideoMode=false;
     context->mIsMediaView=false;
     for (i = 0; i < (list->numHwLayers - 1); i++)
     {
@@ -3365,11 +3366,17 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
         if(!strcmp(list->hwLayers[i].LayerName,"MediaView"))
             context->mIsMediaView=true;
 
+        if(handle && GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12)
+        {
+            context->mVideoMode = true;
+        }
+
         if(handle && GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
         {
             tVPU_FRAME vpu_hd;
             int stride_gr;
             context->mVideoMode = true;
+            context->mNV12_VIDEO_VideoMode = true;
 
             ALOGV("video");
 #if GET_VPU_INTO_FROM_HEAD
@@ -3523,7 +3530,7 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
             ALOGW_IF(err, "free(...) failed %d (%s)", err, strerror(-err));
         }
     }
-    if(context->mVideoMode)
+    if(context->mNV12_VIDEO_VideoMode)
     {
         for(i=0;i<MaxVideoBackBuffers;i++)
         {
@@ -5390,6 +5397,7 @@ hwc_device_open(
 
     context->mSkipFlag = 0;
     context->mVideoMode = false;
+    context->mNV12_VIDEO_VideoMode = false;
     context->mIsMediaView = false;
     context->mVideoRotate = false;
 

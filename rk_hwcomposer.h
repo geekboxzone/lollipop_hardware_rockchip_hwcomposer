@@ -397,6 +397,7 @@ typedef struct _hwcContext
 
     /* video flag */
      bool      mVideoMode;
+     bool      mNV12_VIDEO_VideoMode;
      bool      mIsMediaView;
      bool      mVideoRotate;
      int        mtrsformcnt;       
