@@ -976,7 +976,7 @@ int try_wins_dispatch_hor(hwcContext * Context)
     for(i=0;i<pzone_mag->zone_cnt;i++)
     {
         if((pzone_mag->zone_info[i].transform != 0)&&
-            (pzone_mag->zone_info[i].format != HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
+            (pzone_mag->zone_info[i].format != HAL_PIXEL_FORMAT_YCrCb_NV12)
 #if ENABLE_TRANSFORM_BY_RGA
             &&!strstr(Layer->LayerName,"Starting@# ")
 #endif
@@ -1349,7 +1349,7 @@ int try_wins_dispatch_mix (hwcContext * Context,hwc_display_contents_1_t * list)
     for(i=0;i<pzone_mag->zone_cnt;i++)
     {
         if((pzone_mag->zone_info[i].transform != 0)&&
-            (pzone_mag->zone_info[i].format != HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
+            (pzone_mag->zone_info[i].format != HAL_PIXEL_FORMAT_YCrCb_NV12)
 #if ENABLE_TRANSFORM_BY_RGA
             &&!strstr(Layer->LayerName,"Starting@# ")
 #endif
@@ -2248,7 +2248,7 @@ check_layer(
         || handle == NULL
         #if !OPTIMIZATION_FOR_TRANSFORM_UI
         ||((Layer->transform != 0)&&
-          (handle->format != HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
+          (!videomode)
           #if ENABLE_TRANSFORM_BY_RGA
           &&!strstr(Layer->LayerName,"Starting@# ")
           #endif
