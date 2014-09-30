@@ -46,11 +46,13 @@
 #define USE_HWC_FENCE               1
 #define USE_QUEUE_DDRFREQ           1
 #define USE_VIDEO_BACK_BUFFERS      1
+#define USE_SPECIAL_COMPOSER        0
+#define ENABLE_LCDC_IN_NV12_TRANSFORM    1   //1: It will need reserve a phyical memory for transform.
 #define USE_HW_VSYNC                1
 #define WRITE_VPU_FRAME_DATA        0
 #define MOST_WIN_ZONES              4
 #define ENBALE_WIN_ANY_ZONES        0
-#define ENABLE_TRANSFORM_BY_RGA     0
+#define ENABLE_TRANSFORM_BY_RGA     0               //1: It will need reserve a phyical memory for transform.
 #define OPTIMIZATION_FOR_TRANSFORM_UI   1
 
 //Command macro
@@ -245,7 +247,8 @@ typedef struct _hwbkupmanage
 {
     int count;
     buffer_handle_t phd_drt;    
-    int          direct_fd;         
+    int          direct_fd;
+    int          direct_base;
     unsigned int direct_addr;
     void* direct_addr_log;    
     int invalid;
