@@ -59,9 +59,9 @@ static hwcContext * _contextAnchor = NULL;
 static int bootanimFinish = 0;
 #endif
 
-#if  (ENABLE_TRANSFORM_BY_RGA | ENABLE_LCDC_IN_NV12_TRANSFORM | USE_SPECIAL_COMPOSER)
+//#if  (ENABLE_TRANSFORM_BY_RGA | ENABLE_LCDC_IN_NV12_TRANSFORM | USE_SPECIAL_COMPOSER)
 static hwbkupmanage bkupmanage;
-#endif
+//#endif
 
 static PFNEGLRENDERBUFFERMODIFYEDANDROIDPROC _eglRenderBufferModifiedANDROID;
 static mix_info gmixinfo;
@@ -270,13 +270,13 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
         return -1;
     }
 
-#if  (ENABLE_TRANSFORM_BY_RGA | ENABLE_LCDC_IN_NV12_TRANSFORM)
+//#if  (ENABLE_TRANSFORM_BY_RGA | ENABLE_LCDC_IN_NV12_TRANSFORM)
     if(handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12  && specialwin && bkupmanage.direct_base==NULL)
     {
         ALOGE("It hasn't direct_base for dst buffer");
         return -1;
     }
-#endif
+//#endif
 
     if((handle->video_width <= 0 || handle->video_height <= 0 ||
        handle->video_width >= 8192 || handle->video_height >= 4096 )&&!specialwin)
@@ -395,9 +395,9 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
         }
         else
         {
-#if  (ENABLE_TRANSFORM_BY_RGA | ENABLE_LCDC_IN_NV12_TRANSFORM)
+//#if  (ENABLE_TRANSFORM_BY_RGA | ENABLE_LCDC_IN_NV12_TRANSFORM)
             RGA_set_dst_vir_info(&Rga_Request, fd_dst,bkupmanage.direct_base, 0,DstVirW,DstVirH,&clip, Dstfmt, 0);
-#endif
+//#endif
         }
         RGA_set_mmu_info(&Rga_Request, 1, 0, 0, 0, 0, 2);
         Rga_Request.mmu_info.mmu_flag |= (1<<31) | (1<<10);
@@ -538,7 +538,21 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
             LOGV("layer->transform=%d",layer->transform );
             ALOGV("[%d,%d,%d,%d]->[%d,%d,%d,%d]",SrcRect->left,SrcRect->top,SrcRect->right,SrcRect->bottom,DstRect->left,DstRect->top,DstRect->right,DstRect->bottom);
         }
+#else
+
+        if(Context->mGtsStatus)
+        {
+            ALOGV("In gts status,go into lcdc when rotate video");
+            if(layer->transform && SrcHnd->format == HAL_PIXEL_FORMAT_YCrCb_NV12)
+            {
+                trsfrmbyrga = true;
+                LOGV("layer->transform=%d",layer->transform );
+                ALOGV("[%d,%d,%d,%d]->[%d,%d,%d,%d]",SrcRect->left,SrcRect->top,SrcRect->right,SrcRect->bottom,DstRect->left,DstRect->top,DstRect->right,DstRect->bottom);
+            }
+        }
 #endif
+
+
         if(j>=MaxZones)
         {
             ALOGD("Overflow [%d] >max=%d",m+j,MaxZones);
@@ -692,7 +706,13 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
 #if (ENABLE_TRANSFORM_BY_RGA | ENABLE_LCDC_IN_NV12_TRANSFORM)
                 int cache_buffer_fd = bkupmanage.direct_fd;
 #else
-                int cache_buffer_fd = -1;
+                int cache_buffer_fd;
+                if(Context->mGtsStatus)
+                {
+                    cache_buffer_fd = bkupmanage.direct_fd;
+                }
+                else
+                    cache_buffer_fd = -1;
 #endif
     		    hwc_rect_t * psrc_rect = &(Context->zone_manager.zone_info[j].src_rect);            
                 Context->zone_manager.zone_info[j].format = trsfrmbyrga ? SrcHnd->format:Context->video_fmt;//HAL_PIXEL_FORMAT_YCrCb_NV12;
@@ -2225,7 +2245,7 @@ check_layer(
 {
     struct private_handle_t * handle =
         (struct private_handle_t *) Layer->handle;
-  
+
     //(void) Context;
     
     (void) Count;
@@ -2274,12 +2294,15 @@ check_layer(
         #endif
         || skip_count<5
         || (handle->type == 1 && !Context->iommuEn)
+        || (Context->mGtsStatus && !strcmp(Layer->LayerName,"SurfaceView")
+            && (handle && GPU_FORMAT == HAL_PIXEL_FORMAT_RGBA_8888))
         )
     {
         /* We are forbidden to handle this layer. */
-        if(is_out_log())        
-            LOGD("%s(%d):Will not handle layer %s: SKIP_LAYER,Layer->transform=%d,Layer->flags=%d",
-                __FUNCTION__, __LINE__, Layer->LayerName,Layer->transform,Layer->flags);
+        //if(is_out_log())
+            if(handle)
+            LOGD("%s(%d):Will not handle layer %s: SKIP_LAYER,Layer->transform=%d,Layer->flags=%d,format=%x",
+                __FUNCTION__, __LINE__, Layer->LayerName,Layer->transform,Layer->flags,GPU_FORMAT);
         if(handle )     
         {
             LOGV("%s(%d):Will not handle layer %s,handle_type=%d",
@@ -3342,6 +3365,7 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
     int vinfo_cnt = 0;
     int video_cnt = 0;
     bool bIsMediaView=false;
+    char gts_status[PROPERTY_VALUE_MAX];
  
     /* Check layer list. */
     if (list == NULL
@@ -3569,6 +3593,14 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
         ALOGW("more2 video=%d goto GpuComP",video_cnt);
         goto GpuComP;
     }          
+
+    //Get gts staus,save in context->mGtsStatus
+    hwc_get_string_property("sys.cts_gts.status","false",gts_status);
+    if(!strcmp(gts_status,"true"))
+        context->mGtsStatus = true;
+    else
+        context->mGtsStatus = false;
+
     /* Check all layers: tag with different compositionType. */
     context->mtrsformcnt  = 0;    
     for (i = 0; i < (list->numHwLayers - 1); i++)
@@ -3593,11 +3625,16 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
         goto GpuComP;
     }
 
+
+
 #if !ENABLE_LCDC_IN_NV12_TRANSFORM
-    if(context->mVideoMode &&  !context->mNV12_VIDEO_VideoMode && context->mtrsformcnt==1)
+    if(!context->mGtsStatus)
     {
-        ALOGV("Go into GLES,in nv12 transform case");
-        goto GpuComP;
+        if(context->mVideoMode &&  !context->mNV12_VIDEO_VideoMode && context->mtrsformcnt==1)
+        {
+            ALOGV("Go into GLES,in nv12 transform case");
+            goto GpuComP;
+        }
     }
 #endif
     
@@ -5440,7 +5477,7 @@ hwc_device_open(
     context->mNV12_VIDEO_VideoMode = false;
     context->mIsMediaView = false;
     context->mVideoRotate = false;
-
+    context->mGtsStatus   = false;
 
 #if GET_VPU_INTO_FROM_HEAD
     /* initialize params of video source info*/
@@ -5522,10 +5559,10 @@ hwc_device_open(
     if (err == 0) {
         gralloc_open(module_gr, &context->mAllocDev);
 
-#if  (ENABLE_TRANSFORM_BY_RGA | ENABLE_LCDC_IN_NV12_TRANSFORM | USE_SPECIAL_COMPOSER)
+//#if  (ENABLE_TRANSFORM_BY_RGA | ENABLE_LCDC_IN_NV12_TRANSFORM | USE_SPECIAL_COMPOSER)
         memset(&bkupmanage,0,sizeof(hwbkupmanage));
         bkupmanage.dstwinNo = 0xff;
-#endif
+//#endif
 
 #if USE_SPECIAL_COMPOSER
         for(i=0;i<bakupbufsize;i++)
@@ -5548,7 +5585,7 @@ hwc_device_open(
         }
 #endif
 
-#if  (ENABLE_TRANSFORM_BY_RGA | ENABLE_LCDC_IN_NV12_TRANSFORM | USE_SPECIAL_COMPOSER)
+//#if  (ENABLE_TRANSFORM_BY_RGA | ENABLE_LCDC_IN_NV12_TRANSFORM | USE_SPECIAL_COMPOSER)
         err = context->mAllocDev->alloc(context->mAllocDev, context->fbhandle.width, \
                                         context->fbhandle.height, context->fbhandle.format, \
                                         GRALLOC_USAGE_HW_COMPOSER|GRALLOC_USAGE_HW_RENDER, \
@@ -5564,7 +5601,7 @@ hwc_device_open(
             ALOGE("hwc alloc[%d] faild",i);
             goto OnError;
         }
-#endif
+//#endif
     }   
 	else
 	{

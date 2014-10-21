@@ -79,7 +79,7 @@
 #define GPU_FORMAT      handle->format
 #define GPU_DST_FORMAT  DstHandle->format
 
-#define GHWC_VERSION  "2.005"
+#define GHWC_VERSION  "2.005+GTS_V2"
 //HWC version Tag
 //Get commit info:  git log --format="Author: %an%nTime:%cd%nCommit:%h%n%n%s%n%n"
 //Get version: busybox strings /system/lib/hw/hwcomposer.rk30board.so | busybox grep HWC_VERSION
@@ -87,7 +87,7 @@
 #define HWC_VERSION "HWC_VERSION  \
 Author:zxl \
 Previous-Time:Tue Sep 30 17:21:59 2014 +0800 \
-Version:2.005 \
+Version:2.005+GTS_V2 \
 Branch&Previous-Commit:rk/rk32/mid/4.4_r1/develop-5e91b5d."
 
 /* Set it to 1 to enable swap rectangle optimization;
@@ -403,6 +403,7 @@ typedef struct _hwcContext
      bool      mNV12_VIDEO_VideoMode;
      bool      mIsMediaView;
      bool      mVideoRotate;
+     bool      mGtsStatus;
      int        mtrsformcnt;       
 
 #if USE_VIDEO_BACK_BUFFERS
