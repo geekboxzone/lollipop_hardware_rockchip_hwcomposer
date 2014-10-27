@@ -839,7 +839,8 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                         //Context->zone_manager.zone_info[j].format = HAL_PIXEL_FORMAT_RGB_565;                          
                         break;
                     default:
-                        break;
+                        ALOGV("Unsupport transform=0x%x",layer->transform);
+                        return -1;
                 }   
                 ALOGV("layer->transform=%d",layer->transform);
                 if(layer->transform)
