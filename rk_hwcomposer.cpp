@@ -3602,6 +3602,37 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
     else
         context->mGtsStatus = false;
 
+#if  !(ENABLE_TRANSFORM_BY_RGA | ENABLE_LCDC_IN_NV12_TRANSFORM | USE_SPECIAL_COMPOSER)
+    int stride_gr;
+    if(context->mGtsStatus && bkupmanage.direct_fd<=0)
+    {
+        err = context->mAllocDev->alloc(context->mAllocDev, context->fbhandle.width, \
+                                        context->fbhandle.height, context->fbhandle.format, \
+                                        GRALLOC_USAGE_HW_COMPOSER|GRALLOC_USAGE_HW_RENDER, \
+                                        (buffer_handle_t*)(&bkupmanage.phd_drt),&stride_gr);
+        if(!err){
+            struct private_handle_t*phandle_gr = (struct private_handle_t*)bkupmanage.phd_drt;
+            bkupmanage.direct_fd = phandle_gr->share_fd;
+            bkupmanage.direct_base = phandle_gr->base;
+            ALOGD("@hwc alloc drt [%dx%d,f=%d],fd=%d ",phandle_gr->width,phandle_gr->height,phandle_gr->format,phandle_gr->share_fd);                                
+
+        }
+        else {
+            ALOGE("hwc alloc[%d] faild",i);
+            goto  GpuComP;
+        }
+    }
+
+    if(!context->mGtsStatus && bkupmanage.direct_fd>0)
+    {
+        if(bkupmanage.phd_drt)
+        {
+            err = context->mAllocDev->free(context->mAllocDev, bkupmanage.phd_drt);
+            ALOGW_IF(err, "free(...) failed %d (%s)", err, strerror(-err));
+        }
+    }
+#endif
+
     /* Check all layers: tag with different compositionType. */
     context->mtrsformcnt  = 0;    
     for (i = 0; i < (list->numHwLayers - 1); i++)
@@ -5154,13 +5185,16 @@ hwc_device_close(
         }      
     
     }
+#endif
+
+//#if  (ENABLE_TRANSFORM_BY_RGA | ENABLE_LCDC_IN_NV12_TRANSFORM | USE_SPECIAL_COMPOSER)
     if(bkupmanage.phd_drt)
     {
         err = context->mAllocDev->free(context->mAllocDev, bkupmanage.phd_drt);
         ALOGW_IF(err, "free(...) failed %d (%s)", err, strerror(-err));            
-    }      
-    
-#endif
+    }
+//#endif
+
 
     pthread_mutex_destroy(&context->lock);
     free(context);
@@ -5560,10 +5594,9 @@ hwc_device_open(
     if (err == 0) {
         gralloc_open(module_gr, &context->mAllocDev);
 
-//#if  (ENABLE_TRANSFORM_BY_RGA | ENABLE_LCDC_IN_NV12_TRANSFORM | USE_SPECIAL_COMPOSER)
         memset(&bkupmanage,0,sizeof(hwbkupmanage));
         bkupmanage.dstwinNo = 0xff;
-//#endif
+        bkupmanage.direct_fd=0;
 
 #if USE_SPECIAL_COMPOSER
         for(i=0;i<bakupbufsize;i++)
@@ -5586,7 +5619,7 @@ hwc_device_open(
         }
 #endif
 
-//#if  (ENABLE_TRANSFORM_BY_RGA | ENABLE_LCDC_IN_NV12_TRANSFORM | USE_SPECIAL_COMPOSER)
+#if  (ENABLE_TRANSFORM_BY_RGA | ENABLE_LCDC_IN_NV12_TRANSFORM | USE_SPECIAL_COMPOSER)
         err = context->mAllocDev->alloc(context->mAllocDev, context->fbhandle.width, \
                                         context->fbhandle.height, context->fbhandle.format, \
                                         GRALLOC_USAGE_HW_COMPOSER|GRALLOC_USAGE_HW_RENDER, \
@@ -5602,7 +5635,7 @@ hwc_device_open(
             ALOGE("hwc alloc[%d] faild",i);
             goto OnError;
         }
-//#endif
+#endif
     }   
 	else
 	{
