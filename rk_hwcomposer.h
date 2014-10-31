@@ -52,7 +52,7 @@
 #define WRITE_VPU_FRAME_DATA        0
 #define MOST_WIN_ZONES              4
 #define ENBALE_WIN_ANY_ZONES        0
-#define ENABLE_TRANSFORM_BY_RGA     0               //1: It will need reserve a phyical memory for transform.
+#define ENABLE_TRANSFORM_BY_RGA     1               //1: It will need reserve a phyical memory for transform.
 #define OPTIMIZATION_FOR_TRANSFORM_UI   1
 
 //Command macro
