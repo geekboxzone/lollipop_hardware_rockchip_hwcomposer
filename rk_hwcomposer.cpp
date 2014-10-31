@@ -664,15 +664,22 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
             strcpy(Context->zone_manager.zone_info[j].LayerName,layer->LayerName);
             Context->zone_manager.zone_info[j].disp_rect.left = dstRects[0].left;
             Context->zone_manager.zone_info[j].disp_rect.top = dstRects[0].top;
-            Context->zone_manager.zone_info[j].disp_rect.right = dstRects[0].right;
 
             //zxl:Temporary solution to fix blank bar bug when wake up.
             if(!strcmp(layer->LayerName,VIDEO_PLAY_ACTIVITY_LAYER_NAME))
             {
+                Context->zone_manager.zone_info[j].disp_rect.right = SrcHnd->width;
                 Context->zone_manager.zone_info[j].disp_rect.bottom = SrcHnd->height;
+
+                if(Context->zone_manager.zone_info[j].disp_rect.left)
+                    Context->zone_manager.zone_info[j].disp_rect.left=0;
+
+                if(Context->zone_manager.zone_info[j].disp_rect.top)
+                    Context->zone_manager.zone_info[j].disp_rect.top=0;
             }
             else
             {
+                Context->zone_manager.zone_info[j].disp_rect.right = dstRects[0].right;
                 Context->zone_manager.zone_info[j].disp_rect.bottom = dstRects[0].bottom;
             }
 
@@ -878,15 +885,23 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                 - (int) ((DstRect->left   - dstRects[0].left)   * hfactor)),0);
                 Context->zone_manager.zone_info[j].src_rect.top    = hwcMAX ((SrcRect->top \
                 - (int) ((DstRect->top    - dstRects[0].top)    * vfactor)),0);
-                Context->zone_manager.zone_info[j].src_rect.right  = SrcRect->right \
-                - (int) ((DstRect->right  - dstRects[0].right)  * hfactor);
+
                 //zxl:Temporary solution to fix blank bar bug when wake up.
                 if(!strcmp(layer->LayerName,VIDEO_PLAY_ACTIVITY_LAYER_NAME))
                 {
+                    Context->zone_manager.zone_info[j].src_rect.right = SrcHnd->width;
                     Context->zone_manager.zone_info[j].src_rect.bottom = SrcHnd->height;
+
+                    if(Context->zone_manager.zone_info[j].src_rect.left)
+                        Context->zone_manager.zone_info[j].src_rect.left=0;
+
+                    if(Context->zone_manager.zone_info[j].src_rect.top)
+                        Context->zone_manager.zone_info[j].src_rect.top=0;
                 }
                 else
                 {
+                    Context->zone_manager.zone_info[j].src_rect.right  = SrcRect->right \
+                    - (int) ((DstRect->right  - dstRects[0].right)  * hfactor);
                     Context->zone_manager.zone_info[j].src_rect.bottom = SrcRect->bottom \
                     - (int) ((DstRect->bottom - dstRects[0].bottom) * vfactor);
                 }
