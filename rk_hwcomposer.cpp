@@ -5558,8 +5558,8 @@ hwc_device_open(
 #endif
 
 #if  (ENABLE_TRANSFORM_BY_RGA | ENABLE_LCDC_IN_NV12_TRANSFORM | USE_SPECIAL_COMPOSER)
-        err = context->mAllocDev->alloc(context->mAllocDev, context->fbhandle.width*2, \
-                                        context->fbhandle.height, context->fbhandle.format, \
+        err = context->mAllocDev->alloc(context->mAllocDev, 4096, \
+                                        2160, HAL_PIXEL_FORMAT_YCrCb_NV12, \
                                         GRALLOC_USAGE_HW_COMPOSER|GRALLOC_USAGE_HW_RENDER, \
                                         (buffer_handle_t*)(&bkupmanage.phd_drt),&stride_gr);  
         if(!err){
