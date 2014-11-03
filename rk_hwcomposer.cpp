@@ -4706,10 +4706,19 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
             {
                 if(i< (list->numHwLayers -1))
                 {
+                    if(fb_info.win_par[0].data_format == HAL_PIXEL_FORMAT_YCrCb_NV12
+                        &&list->hwLayers[0].transform != 0)  // for video no sync to audio,in hook_dequeueBuffer_DEPRECATED wait fence,so trasnform donot need fence
+                    {
+                        list->hwLayers[i].releaseFenceFd = -1;
+                        close(fb_info.rel_fence_fd[i]);
+                    }
+                    else
+                    {
                     if(mix_flag)  // mix 
                         list->hwLayers[i+1].releaseFenceFd = fb_info.rel_fence_fd[i];
                     else
                         list->hwLayers[i].releaseFenceFd = fb_info.rel_fence_fd[i];
+                    }        
                 }    
                 else
                     close(fb_info.rel_fence_fd[i]);
@@ -5641,8 +5650,8 @@ hwc_device_open(
 #endif
 
 #if  (ENABLE_TRANSFORM_BY_RGA | ENABLE_LCDC_IN_NV12_TRANSFORM | USE_SPECIAL_COMPOSER)
-        err = context->mAllocDev->alloc(context->mAllocDev, context->fbhandle.width, \
-                                        context->fbhandle.height, context->fbhandle.format, \
+        err = context->mAllocDev->alloc(context->mAllocDev, 4096, \
+                                        2160, HAL_PIXEL_FORMAT_YCrCb_NV12, \
                                         GRALLOC_USAGE_HW_COMPOSER|GRALLOC_USAGE_HW_RENDER, \
                                         (buffer_handle_t*)(&bkupmanage.phd_drt),&stride_gr);  
         if(!err){
