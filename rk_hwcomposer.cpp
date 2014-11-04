@@ -2237,7 +2237,7 @@ check_layer(
 {
     struct private_handle_t * handle =
         (struct private_handle_t *) Layer->handle;
-
+    int w=0,h=0;
     //(void) Context;
     
     (void) Count;
@@ -2288,8 +2288,7 @@ check_layer(
         )
     {
         /* We are forbidden to handle this layer. */
-        //if(is_out_log())
-            if(handle)
+        if(is_out_log())
             LOGD("%s(%d):Will not handle layer %s: SKIP_LAYER,Layer->transform=%d,Layer->flags=%d,format=%x",
                 __FUNCTION__, __LINE__, Layer->LayerName,Layer->transform,Layer->flags,GPU_FORMAT);
         if(handle )     
@@ -2302,6 +2301,16 @@ check_layer(
         {
          skip_count++;
         }
+        return HWC_FRAMEBUFFER;
+    }
+
+    // Force 4K transform video go into GPU
+    w =  Layer->sourceCrop.right - Layer->sourceCrop.left;
+    h =  Layer->sourceCrop.bottom - Layer->sourceCrop.top;
+
+    if(Context->mVideoMode && (w>3840 || h>2160) && Layer->transform)
+    {
+        ALOGV("4K video transform=%d,w=%d,h=%d go into GPU",Layer->transform,w,h);
         return HWC_FRAMEBUFFER;
     }
 
@@ -3566,37 +3575,6 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
         context->mGtsStatus = true;
     else
         context->mGtsStatus = false;
-
-#if  0//!(ENABLE_TRANSFORM_BY_RGA | ENABLE_LCDC_IN_NV12_TRANSFORM | USE_SPECIAL_COMPOSER)
-    int stride_gr;
-    if(context->mGtsStatus && bkupmanage.direct_fd<=0)
-    {
-        err = context->mAllocDev->alloc(context->mAllocDev, context->fbhandle.width, \
-                                        context->fbhandle.height, context->fbhandle.format, \
-                                        GRALLOC_USAGE_HW_COMPOSER|GRALLOC_USAGE_HW_RENDER, \
-                                        (buffer_handle_t*)(&bkupmanage.phd_drt),&stride_gr);
-        if(!err){
-            struct private_handle_t*phandle_gr = (struct private_handle_t*)bkupmanage.phd_drt;
-            bkupmanage.direct_fd = phandle_gr->share_fd;
-            bkupmanage.direct_base = phandle_gr->base;
-            ALOGD("@hwc alloc drt [%dx%d,f=%d],fd=%d ",phandle_gr->width,phandle_gr->height,phandle_gr->format,phandle_gr->share_fd);                                
-
-        }
-        else {
-            ALOGE("hwc alloc[%d] faild",i);
-            goto  GpuComP;
-        }
-    }
-
-    if(!context->mGtsStatus && bkupmanage.direct_fd>0)
-    {
-        if(bkupmanage.phd_drt)
-        {
-            err = context->mAllocDev->free(context->mAllocDev, bkupmanage.phd_drt);
-            ALOGW_IF(err, "free(...) failed %d (%s)", err, strerror(-err));
-        }
-    }
-#endif
 
     /* Check all layers: tag with different compositionType. */
     for (i = 0; i < (list->numHwLayers - 1); i++)
