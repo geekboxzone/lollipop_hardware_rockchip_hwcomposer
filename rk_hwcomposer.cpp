@@ -4714,7 +4714,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
                     }
                     else
                     {
-                    if(mix_flag)  // mix 
+                    if(mix_flag == 1)  // mix
                         list->hwLayers[i+1].releaseFenceFd = fb_info.rel_fence_fd[i];
                     else
                         list->hwLayers[i].releaseFenceFd = fb_info.rel_fence_fd[i];
