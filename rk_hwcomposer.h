@@ -47,7 +47,7 @@
 #define USE_QUEUE_DDRFREQ           1
 #define USE_VIDEO_BACK_BUFFERS      1
 #define USE_SPECIAL_COMPOSER        0
-#define ENABLE_LCDC_IN_NV12_TRANSFORM    1   //1: It will need reserve a phyical memory for transform.
+#define ENABLE_LCDC_IN_NV12_TRANSFORM   1   //1: It will need reserve a phyical memory for transform.
 #define USE_HW_VSYNC                1
 #define WRITE_VPU_FRAME_DATA        0
 #define MOST_WIN_ZONES              4
@@ -404,14 +404,13 @@ typedef struct _hwcContext
      bool      mIsMediaView;
      bool      mVideoRotate;
      bool      mGtsStatus;
+     bool      mTrsfrmbyrga;
      int        mtrsformcnt;       
 
-#if USE_VIDEO_BACK_BUFFERS
      /* The index of video buffer will be used */
      int      mCurVideoIndex;
      int      fd_video_bk[MaxVideoBackBuffers];
      buffer_handle_t pbvideo_bk[MaxVideoBackBuffers];
-#endif
 }
 hwcContext;
 #define gcmALIGN(n, align) \
