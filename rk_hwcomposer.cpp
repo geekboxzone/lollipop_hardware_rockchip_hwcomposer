@@ -2237,7 +2237,7 @@ check_layer(
 {
     struct private_handle_t * handle =
         (struct private_handle_t *) Layer->handle;
-    int w=0,h=0;
+
     //(void) Context;
     
     (void) Count;
@@ -2305,14 +2305,17 @@ check_layer(
     }
 
     // Force 4K transform video go into GPU
+#if 0
+    int w=0,h=0;
     w =  Layer->sourceCrop.right - Layer->sourceCrop.left;
     h =  Layer->sourceCrop.bottom - Layer->sourceCrop.top;
 
-    if(Context->mVideoMode && (w>3840 || h>2160) && Layer->transform)
+    if(Context->mVideoMode && (w>=3840 || h>=2160) && Layer->transform)
     {
         ALOGV("4K video transform=%d,w=%d,h=%d go into GPU",Layer->transform,w,h);
         return HWC_FRAMEBUFFER;
     }
+#endif
 
 #if ENABLE_TRANSFORM_BY_RGA
         if(Layer->transform
