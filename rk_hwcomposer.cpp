@@ -1002,7 +1002,7 @@ int try_wins_dispatch_hor(hwcContext * Context)
         if((pzone_mag->zone_info[i].transform != 0)&&
             (pzone_mag->zone_info[i].format != HAL_PIXEL_FORMAT_YCrCb_NV12)
 #if 1
-            && (Context->mtrsformcnt!=1)
+            && (Context->mtrsformcnt!=1 || (Context->mtrsformcnt==1 && pzone_mag->zone_cnt>2))
 #else //ENABLE_TRANSFORM_BY_RGA
             && ((Context->mtrsformcnt!=1)
             || !strstr(pzone_mag->zone_info[i].LayerName,"Starting@# "))
@@ -1378,7 +1378,7 @@ int try_wins_dispatch_mix (hwcContext * Context,hwc_display_contents_1_t * list)
         if((pzone_mag->zone_info[i].transform != 0)&&
             (pzone_mag->zone_info[i].format != HAL_PIXEL_FORMAT_YCrCb_NV12)
 #if 1
-            && (Context->mtrsformcnt!=1)
+            && (Context->mtrsformcnt!=1 || (Context->mtrsformcnt==1 && pzone_mag->zone_cnt>2))
 #else //ENABLE_TRANSFORM_BY_RGA
             && ((Context->mtrsformcnt!=1)
             || !strstr(pzone_mag->zone_info[i].LayerName,"Starting@# "))
