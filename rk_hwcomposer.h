@@ -410,6 +410,7 @@ typedef struct _hwcContext
      /* The index of video buffer will be used */
      int      mCurVideoIndex;
      int      fd_video_bk[MaxVideoBackBuffers];
+     int      base_video_bk[MaxVideoBackBuffers];
      buffer_handle_t pbvideo_bk[MaxVideoBackBuffers];
 }
 hwcContext;

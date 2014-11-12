@@ -255,7 +255,8 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
     int xoffset = 0;
     int yoffset = 0;
     int   rga_fd = _contextAnchor->engine_fd;
-    
+    hwcContext * context = _contextAnchor;
+    int index_v = context->mCurVideoIndex%MaxVideoBackBuffers;
     if (!rga_fd)
     {
        return -1; 
@@ -271,7 +272,7 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
     }
 
 //#if  (ENABLE_TRANSFORM_BY_RGA | ENABLE_LCDC_IN_NV12_TRANSFORM)
-    if(handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12  && specialwin && bkupmanage.direct_base==NULL)
+    if(handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12  && specialwin && context->base_video_bk[index_v]==NULL)
     {
         ALOGE("It hasn't direct_base for dst buffer");
         return -1;
@@ -386,6 +387,11 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
     RGA_set_src_act_info(&Rga_Request,SrcActW,SrcActH, 0,0);
     RGA_set_dst_act_info(&Rga_Request,DstActW,DstActH, xoffset,yoffset);
 
+//debug: clear source data
+#if 0
+    memset((void*)handle->base,0x0,SrcVirW*SrcVirH*3/2);
+#endif
+
     if( handle->type == 1 )
     {
         if( !specialwin)
@@ -395,9 +401,8 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
         }
         else
         {
-//#if  (ENABLE_TRANSFORM_BY_RGA | ENABLE_LCDC_IN_NV12_TRANSFORM)
-            RGA_set_dst_vir_info(&Rga_Request, fd_dst,bkupmanage.direct_base, 0,DstVirW,DstVirH,&clip, Dstfmt, 0);
-//#endif
+            RGA_set_dst_vir_info(&Rga_Request, fd_dst,context->base_video_bk[index_v], 0,DstVirW,DstVirH,&clip, Dstfmt, 0);
+            ALOGV("rga_video_copybit fd_dst=%d,base=%d,index_v=%d",fd_dst,context->base_video_bk[index_v],index_v);
         }
         RGA_set_mmu_info(&Rga_Request, 1, 0, 0, 0, 0, 2);
         Rga_Request.mmu_info.mmu_flag |= (1<<31) | (1<<10);
@@ -514,12 +519,32 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
         hwc_rect_t const * rects = Region->rects;
         hwc_rect_t  rect_merge;
         bool haveStartwin = false;
+        bool trsfrmbyrga = false;
 
         if(strstr(layer->LayerName,"Starting@# "))
         {
             haveStartwin = true;
         }
+#if ENABLE_TRANSFORM_BY_RGA
+        if(layer->transform
+            && SrcHnd->format != HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO
+            &&Context->mtrsformcnt == 1)
+        {
+            trsfrmbyrga = true;
+        }
+#endif
 
+
+#if !ENABLE_LCDC_IN_NV12_TRANSFORM
+        if(Context->mGtsStatus)
+#endif
+        {
+            ALOGV("In gts status,go into lcdc when rotate video");
+            if(layer->transform && SrcHnd->format == HAL_PIXEL_FORMAT_YCrCb_NV12)
+            {
+                trsfrmbyrga = true;
+            }
+        }
 
         if(j>=MaxZones)
         {
@@ -668,7 +693,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
 #if USE_HWC_FENCE
 	        Context->zone_manager.zone_info[j].acq_fence_fd =layer->acquireFenceFd;
 #endif
-            if(SrcHnd->format == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO || (Context->mTrsfrmbyrga))
+            if(SrcHnd->format == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO || (trsfrmbyrga))
             {
                 int w_valid = 0 ,h_valid = 0;
 #if USE_VIDEO_BACK_BUFFERS
@@ -677,7 +702,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
 #else
                 int video_fd;
                 int index_v;
-                if(Context->mTrsfrmbyrga)
+                if(trsfrmbyrga)
                 {
                     index_v = Context->mCurVideoIndex%MaxVideoBackBuffers;
                     video_fd = Context->fd_video_bk[index_v];
@@ -689,7 +714,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
 #endif
 
     		    hwc_rect_t * psrc_rect = &(Context->zone_manager.zone_info[j].src_rect);            
-                Context->zone_manager.zone_info[j].format = Context->mTrsfrmbyrga ? SrcHnd->format:Context->video_fmt;//HAL_PIXEL_FORMAT_YCrCb_NV12;
+                Context->zone_manager.zone_info[j].format = trsfrmbyrga ? SrcHnd->format:Context->video_fmt;//HAL_PIXEL_FORMAT_YCrCb_NV12;
                 ALOGV("HAL_PIXEL_FORMAT_YCrCb_NV12 transform=%d, addr[%x][%dx%d],ori_fd[%d][%dx%d]",
                         layer->transform,SrcHnd->video_addr,SrcHnd->video_width,SrcHnd->video_height,
                         SrcHnd->share_fd,SrcHnd->width,SrcHnd->height);
@@ -714,7 +739,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                         break;
             		 case HWC_TRANSFORM_ROT_270:
 
-                        if(Context->mTrsfrmbyrga)
+                        if(trsfrmbyrga)
                         {
                             psrc_rect->left = SrcRect->top;
                             psrc_rect->top  = SrcHnd->width -  SrcRect->right;//SrcRect->top;
@@ -735,8 +760,8 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                             psrc_rect->bottom = psrc_rect->top
                             + (int) ((dstRects[0].right  - dstRects[0].left) * hfactor);
                         }    
-                        h_valid = Context->mTrsfrmbyrga ? SrcHnd->height : (psrc_rect->bottom - psrc_rect->top);
-                        w_valid = Context->mTrsfrmbyrga ? SrcHnd->width : (psrc_rect->right - psrc_rect->left);
+                        h_valid = trsfrmbyrga ? SrcHnd->height : (psrc_rect->bottom - psrc_rect->top);
+                        w_valid = trsfrmbyrga ? SrcHnd->width : (psrc_rect->right - psrc_rect->left);
                         Context->zone_manager.zone_info[j].layer_fd = video_fd;
                         Context->zone_manager.zone_info[j].width = w_valid;
                         Context->zone_manager.zone_info[j].height = gcmALIGN(h_valid,8);
@@ -747,7 +772,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
 
                     case HWC_TRANSFORM_ROT_90:
                       
-                        if(Context->mTrsfrmbyrga)
+                        if(trsfrmbyrga)
                         {
                             psrc_rect->left = SrcHnd->height - SrcRect->bottom;
                             psrc_rect->top  = SrcRect->left;//SrcRect->top;
@@ -768,8 +793,8 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                             psrc_rect->bottom = psrc_rect->top
                                 + (int) ((dstRects[0].right  - dstRects[0].left) * hfactor);                        
                         }
-                        h_valid = Context->mTrsfrmbyrga ? SrcHnd->height : (psrc_rect->bottom - psrc_rect->top);
-                        w_valid = Context->mTrsfrmbyrga ? SrcHnd->width : (psrc_rect->right - psrc_rect->left);
+                        h_valid = trsfrmbyrga ? SrcHnd->height : (psrc_rect->bottom - psrc_rect->top);
+                        w_valid = trsfrmbyrga ? SrcHnd->width : (psrc_rect->right - psrc_rect->left);
                        
                         Context->zone_manager.zone_info[j].layer_fd = video_fd;
                         Context->zone_manager.zone_info[j].width = w_valid;
@@ -779,7 +804,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                         break;
 
             		case HWC_TRANSFORM_ROT_180:
-                        if(Context->mTrsfrmbyrga)
+                        if(trsfrmbyrga)
                         {
                             psrc_rect->left = SrcHnd->width - SrcRect->right;
                             psrc_rect->top  = SrcHnd->height - SrcRect->bottom;//SrcRect->top;
@@ -802,8 +827,8 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                         }
                        // w_valid = psrc_rect->right - psrc_rect->left;
                        //h_valid = psrc_rect->bottom - psrc_rect->top;
-                        w_valid = Context->mTrsfrmbyrga ? SrcHnd->width : (psrc_rect->right - psrc_rect->left);
-                        h_valid = Context->mTrsfrmbyrga ? SrcHnd->height : (psrc_rect->bottom - psrc_rect->top);
+                        w_valid = trsfrmbyrga ? SrcHnd->width : (psrc_rect->right - psrc_rect->left);
+                        h_valid = trsfrmbyrga ? SrcHnd->height : (psrc_rect->bottom - psrc_rect->top);
                        
                         Context->zone_manager.zone_info[j].layer_fd = video_fd;
                         Context->zone_manager.zone_info[j].width = w_valid;
@@ -821,7 +846,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                 {
                     static int lastfd = -1;
                     bool fd_update = true;
-                    if(Context->mTrsfrmbyrga && lastfd == SrcHnd->share_fd)
+                    if(trsfrmbyrga && lastfd == SrcHnd->share_fd)
                     {
                         fd_update = false; 
                     }
@@ -853,13 +878,13 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                                 Context->zone_manager.zone_info[j].layer_fd);
                         rga_video_copybit(SrcHnd,layer->transform,w_valid,h_valid, \ 
                             Context->zone_manager.zone_info[j].layer_fd,\
-                            Context->mTrsfrmbyrga ? hwChangeRgaFormat(SrcHnd->format) : RK_FORMAT_YCbCr_420_SP,Context->mTrsfrmbyrga);
+                            trsfrmbyrga ? hwChangeRgaFormat(SrcHnd->format) : RK_FORMAT_YCbCr_420_SP,trsfrmbyrga);
                         lastfd = SrcHnd->share_fd;      
                     }    
 #if USE_VIDEO_BACK_BUFFERS
                     Context->mCurVideoIndex++;  //update video buffer index
 #else
-                    if(Context->mTrsfrmbyrga)
+                    if(trsfrmbyrga)
                         Context->mCurVideoIndex++;  //update video buffer index
 #endif
                 }
@@ -2267,8 +2292,6 @@ check_layer(
     else
         Context->mVideoRotate=false;
 
-    Context->mTrsfrmbyrga = false;
-
     if ((Layer->flags & HWC_SKIP_LAYER)
        // ||(hfactor != 1.0f)  // because rga scale down too slowly,so return to opengl  ,huangds modify
        // ||(vfactor != 1.0f)  // because rga scale down too slowly,so return to opengl ,huangds modify
@@ -2323,7 +2346,7 @@ check_layer(
             &&Context->mtrsformcnt == 1)
         {
             Context->mTrsfrmbyrga = true;
-            ALOGV("layer->transform=%d",Layer->transform);
+            ALOGV("zxl:layer->transform=%d",Layer->transform);
         }
 #endif
 
@@ -2336,7 +2359,7 @@ check_layer(
             if(Layer->transform && handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12)
             {
                 Context->mTrsfrmbyrga = true;
-                LOGV("layer->transform=%d",Layer->transform );
+                LOGV("zxl:layer->transform=%d",Layer->transform );
             }
         }
     
@@ -3579,6 +3602,7 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
     else
         context->mGtsStatus = false;
 
+    context->mTrsfrmbyrga = false;
     /* Check all layers: tag with different compositionType. */
     for (i = 0; i < (list->numHwLayers - 1); i++)
     {
@@ -3607,7 +3631,7 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
 #if !ENABLE_LCDC_IN_NV12_TRANSFORM
     if(!context->mGtsStatus)
     {
-        if(context->mVideoMode &&  !context->mNV12_VIDEO_VideoMode && context->mtrsformcnt==1)
+        if(context->mVideoMode &&  !context->mNV12_VIDEO_VideoMode && context->mtrsformcnt>0)
         {
             ALOGV("Go into GLES,in nv12 transform case");
             goto GpuComP;
@@ -3619,8 +3643,20 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
     {
         struct private_handle_t * handle = (struct private_handle_t *) list->hwLayers[i].handle;
         int stride_gr;
+        int video_w=0,video_h=0;
 
-        if(handle && GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
+        if(GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
+        {
+            video_w = handle->video_width;
+            video_h = handle->video_height;
+        }
+        else if(GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12)
+        {
+            video_w = handle->width;
+            video_h = handle->height;
+        }
+
+        if(handle && (GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO || GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12))
         {
             //alloc video gralloc buffer in video mode
             if(context->fd_video_bk[0] == -1 && (
@@ -3628,18 +3664,21 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
             context->mNV12_VIDEO_VideoMode ||
 #endif
             context->mTrsfrmbyrga
+          //  context->mVideoMode
             ))
             {
+                ALOGV("context->mNV12_VIDEO_VideoMode=%d,context->mTrsfrmbyrga=%d,w=%d,h=%d",context->mNV12_VIDEO_VideoMode,context->mTrsfrmbyrga,video_w,video_h);
                 for(j=0;j<MaxVideoBackBuffers;j++)
                 {
-                    err = context->mAllocDev->alloc(context->mAllocDev, handle->video_width, \
-                                                    handle->video_height,HAL_PIXEL_FORMAT_YCrCb_NV12, \
+                    err = context->mAllocDev->alloc(context->mAllocDev, 4096, \
+                                                    2304,HAL_PIXEL_FORMAT_YCrCb_NV12, \
                                                     GRALLOC_USAGE_HW_COMPOSER|GRALLOC_USAGE_HW_RENDER|GRALLOC_USAGE_HW_VIDEO_ENCODER, \
                                                     (buffer_handle_t*)(&(context->pbvideo_bk[j])),&stride_gr);
                     if(!err){
                         struct private_handle_t*phandle_gr = (struct private_handle_t*)context->pbvideo_bk[j];
                         context->fd_video_bk[j] = phandle_gr->share_fd;
-                        ALOGD("video alloc fd [%dx%d,f=%d],fd=%d ",phandle_gr->width,phandle_gr->height,phandle_gr->format,phandle_gr->share_fd);                                
+                        context->base_video_bk[j]= phandle_gr->base;
+                        ALOGV("video alloc fd [%dx%d,f=%d],fd=%d ",phandle_gr->width,phandle_gr->height,phandle_gr->format,phandle_gr->share_fd);                                
 
                     }
                     else {
@@ -3654,7 +3693,7 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
 
     // free video gralloc buffer in ui mode
     if(context->fd_video_bk[0] > 0 &&
-        ((
+        (/*!context->mVideoMode*/(
 #if USE_VIDEO_BACK_BUFFERS
         !context->mNV12_VIDEO_VideoMode && 
 #endif
@@ -3665,9 +3704,11 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
         {
             if(context->pbvideo_bk[i] > 0)
                 err = context->mAllocDev->free(context->mAllocDev, context->pbvideo_bk[i]);
+            ALOGV("free video fd=%d,base=%p",context->fd_video_bk[i], context->base_video_bk[i]);
             if(!err)
             {
                 context->fd_video_bk[i] = -1;
+                context->base_video_bk[i] = NULL;
                 context->pbvideo_bk[i] = NULL;
             }
             ALOGW_IF(err, "free(...) failed %d (%s)", err, strerror(-err));
@@ -4311,7 +4352,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
         hwc_rect_t * pdisp_rect = &(pzone_mag->zone_info[i].disp_rect);            
         int area_no = 0;
         int win_id = 0;
-        ALOGV("Zone[%d]->layer[%d],dispatched=%d,"
+        ALOGV("hwc_set_lcdc Zone[%d]->layer[%d],dispatched=%d,"
         "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
         "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],"
         "layer_fd[%d],addr=%x,acq_fence_fd=%d"
@@ -5531,6 +5572,7 @@ hwc_device_open(
     for(i=0;i<MaxVideoBackBuffers;i++)
     {
         context->fd_video_bk[i] = -1;
+        context->base_video_bk[i] = NULL;
         context->pbvideo_bk[i] = NULL;
     }
     context->mCurVideoIndex= 0;
