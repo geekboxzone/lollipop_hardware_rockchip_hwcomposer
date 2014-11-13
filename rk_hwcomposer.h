@@ -86,8 +86,8 @@
 //HWC_VERSION Author:zxl Time:Tue Aug 12 17:27:36 2014 +0800 Version:1.17 Branch&Previous-Commit:rk/rk312x/mid/4.4_r1/develop-9533348.
 #define HWC_VERSION "HWC_VERSION  \
 Author:zxl \
-Previous-Time:Tue Nov 4 16:06:26 2014 +0800 \
-Version:2.007 \
+Previous-Time:Wed Nov 5 11:19:45 2014 +0800 \
+Version:2.008 \
 Branch&Previous-Commit:rk/rk32/mid/4.4_r1/develop-4975183."
 
 /* Set it to 1 to enable swap rectangle optimization;

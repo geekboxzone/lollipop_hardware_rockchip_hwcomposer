@@ -390,7 +390,7 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
     {
         if( !specialwin)
         {
-            RGA_set_dst_vir_info(&Rga_Request, fd_dst,handle->base, 0,DstVirW,DstVirH,&clip, Dstfmt, 0);    
+            RGA_set_dst_vir_info(&Rga_Request, fd_dst,(unsigned int)(handle->base), 0,DstVirW,DstVirH,&clip, Dstfmt, 0);    
             ALOGW("Debugmem mmu_en fd=%d in vmalloc ,base=%p,[%dX%d],fmt=%d,src_addr=%x", fd_dst,handle->base,DstVirW,DstVirH,handle->video_addr);
         }
         else
