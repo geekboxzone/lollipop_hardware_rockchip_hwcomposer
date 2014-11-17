@@ -846,7 +846,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                 {
                     static int lastfd = -1;
                     bool fd_update = true;
-                    if(trsfrmbyrga && lastfd == SrcHnd->share_fd)
+                    if(trsfrmbyrga && lastfd == SrcHnd->share_fd && SrcHnd->format != HAL_PIXEL_FORMAT_YCrCb_NV12)
                     {
                         fd_update = false; 
                     }
@@ -879,16 +879,16 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                         rga_video_copybit(SrcHnd,layer->transform,w_valid,h_valid, \ 
                             Context->zone_manager.zone_info[j].layer_fd,\
                             trsfrmbyrga ? hwChangeRgaFormat(SrcHnd->format) : RK_FORMAT_YCbCr_420_SP,trsfrmbyrga);
-                        lastfd = SrcHnd->share_fd;      
-                    }    
+                        lastfd = SrcHnd->share_fd;
 #if USE_VIDEO_BACK_BUFFERS
                     Context->mCurVideoIndex++;  //update video buffer index
 #else
                     if(trsfrmbyrga)
                         Context->mCurVideoIndex++;  //update video buffer index
 #endif
-                }
+                    }
 
+                }
     			psrc_rect->left = psrc_rect->left - psrc_rect->left%2;
     			psrc_rect->top = psrc_rect->top - psrc_rect->top%2;
     			psrc_rect->right = psrc_rect->right - psrc_rect->right%2;
