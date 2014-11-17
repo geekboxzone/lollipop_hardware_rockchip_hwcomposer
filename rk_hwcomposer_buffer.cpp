@@ -22,7 +22,7 @@
 #include <linux/fb.h>
 #include <linux/fs.h>
 #include <sys/ioctl.h>
-#include <linux/android_pmem.h>
+//#include <linux/android_pmem.h>
 #include <ui/PixelFormat.h>
 #include <fcntl.h>
 
