@@ -3677,7 +3677,7 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
                     if(!err){
                         struct private_handle_t*phandle_gr = (struct private_handle_t*)context->pbvideo_bk[j];
                         context->fd_video_bk[j] = phandle_gr->share_fd;
-                        context->base_video_bk[j]= phandle_gr->base;
+                        context->base_video_bk[j]= (int)phandle_gr->base;
                         ALOGV("video alloc fd [%dx%d,f=%d],fd=%d ",phandle_gr->width,phandle_gr->height,phandle_gr->format,phandle_gr->share_fd);                                
 
                     }
