@@ -610,7 +610,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
         rect_merge.bottom = bottom_max;
 
         //zxl:If in video mode,then use all area.
-        if(SrcHnd->format == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
+        if(SrcHnd->format == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO || SrcHnd->format == HAL_PIXEL_FORMAT_YCrCb_NV12)
         {
             dstRects[0].left   = DstRect->left;
             dstRects[0].top    = DstRect->top;
@@ -925,7 +925,16 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                 Context->zone_manager.zone_info[j].width = SrcHnd->width;
                 Context->zone_manager.zone_info[j].height = SrcHnd->height;
                 Context->zone_manager.zone_info[j].stride = SrcHnd->stride;
-                Context->zone_manager.zone_info[j].layer_fd = SrcHnd->share_fd;                
+                Context->zone_manager.zone_info[j].layer_fd = SrcHnd->share_fd;
+
+                //odd number will lead to lcdc composer fail with error display.
+                if(SrcHnd->format == HAL_PIXEL_FORMAT_YCrCb_NV12)
+                {
+                    Context->zone_manager.zone_info[j].src_rect.left = Context->zone_manager.zone_info[j].src_rect.left - Context->zone_manager.zone_info[j].src_rect.left%2;
+                    Context->zone_manager.zone_info[j].src_rect.top = Context->zone_manager.zone_info[j].src_rect.top - Context->zone_manager.zone_info[j].src_rect.top%2;
+                    Context->zone_manager.zone_info[j].src_rect.right = Context->zone_manager.zone_info[j].src_rect.right - Context->zone_manager.zone_info[j].src_rect.right%2;
+                    Context->zone_manager.zone_info[j].src_rect.bottom = Context->zone_manager.zone_info[j].src_rect.bottom - Context->zone_manager.zone_info[j].src_rect.bottom%2;                
+                }
             }    
             srcw = Context->zone_manager.zone_info[j].src_rect.right - \
                         Context->zone_manager.zone_info[j].src_rect.left;
@@ -3445,6 +3454,7 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
         }
     }
     context->mVideoMode=false;
+    context->mVideoRotate=false;
     context->mNV12_VIDEO_VideoMode=false;
     context->mIsMediaView=false;
     context->mtrsformcnt  = 0;
@@ -5266,6 +5276,20 @@ hwc_device_close(
     }
 //#endif
 
+
+    // free video gralloc buffer
+    for(i=0;i<MaxVideoBackBuffers;i++)
+    {
+        if(context->pbvideo_bk[i] > 0)
+            err = context->mAllocDev->free(context->mAllocDev, context->pbvideo_bk[i]);
+        if(!err)
+        {
+            context->fd_video_bk[i] = -1;
+            context->base_video_bk[i] = NULL;
+            context->pbvideo_bk[i] = NULL;
+        }
+        ALOGW_IF(err, "free(...) failed %d (%s)", err, strerror(-err));
+    }
 
     pthread_mutex_destroy(&context->lock);
     free(context);
