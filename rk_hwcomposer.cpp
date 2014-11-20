@@ -525,6 +525,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
         {
             haveStartwin = true;
         }
+
 #if ENABLE_TRANSFORM_BY_RGA
         if(layer->transform
             && SrcHnd->format != HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO
@@ -2271,11 +2272,24 @@ check_layer(
 {
     struct private_handle_t * handle =
         (struct private_handle_t *) Layer->handle;
-
     //(void) Context;
     
     (void) Count;
     (void) Index;
+
+#if OPTIMIZATION_FOR_DIMLAYER
+    if(!strcmp(Layer->LayerName,"DimLayer"))
+    {
+        Layer->handle=(struct private_handle_t *) Context->mDimHandle;
+        handle = (struct private_handle_t *) Layer->handle;
+        Layer->sourceCrop.left = Layer->displayFrame.left;
+        Layer->sourceCrop.top = Layer->displayFrame.top;
+        Layer->sourceCrop.right = Layer->displayFrame.right;
+        Layer->sourceCrop.bottom = Layer->displayFrame.bottom;
+
+        Layer->flags &= ~HWC_SKIP_LAYER;
+    }
+#endif
     
 #if 0    
     float hfactor = 1;
@@ -2304,7 +2318,7 @@ check_layer(
     if ((Layer->flags & HWC_SKIP_LAYER)
        // ||(hfactor != 1.0f)  // because rga scale down too slowly,so return to opengl  ,huangds modify
        // ||(vfactor != 1.0f)  // because rga scale down too slowly,so return to opengl ,huangds modify
-        || handle == NULL
+        || (handle == NULL)
         #if !OPTIMIZATION_FOR_TRANSFORM_UI
         ||((Layer->transform != 0)&&
           (!videomode)
@@ -2323,6 +2337,7 @@ check_layer(
         if(is_out_log())
             LOGD("%s(%d):Will not handle layer %s: SKIP_LAYER,Layer->transform=%d,Layer->flags=%d,format=%x",
                 __FUNCTION__, __LINE__, Layer->LayerName,Layer->transform,Layer->flags,GPU_FORMAT);
+
         if(handle )     
         {
             LOGV("%s(%d):Will not handle layer %s,handle_type=%d",
@@ -2375,8 +2390,17 @@ check_layer(
     do
     {
         RgaSURF_FORMAT format = RK_FORMAT_UNKNOWN;
+
+#if 0
         /* Check for dim layer. */
-       
+        if ((Layer->blending & 0xFFFF) == HWC_BLENDING_DIM )
+        {
+            Layer->compositionType = HWC_DIM;
+            Layer->flags           = 0;
+            ALOGV("DIM Layer");
+            break;
+        }
+#endif
 
             /* TODO: I BELIEVE YOU CAN HANDLE SUCH LAYER!. */
 
@@ -5262,7 +5286,7 @@ hwc_device_close(
         if(bkupmanage.bkupinfo[i].phd_bk)
         {
             err = context->mAllocDev->free(context->mAllocDev, bkupmanage.bkupinfo[i].phd_bk);
-            ALOGW_IF(err, "free(...) failed %d (%s)", err, strerror(-err));            
+            ALOGW_IF(err, "free bkupmanage.bkupinfo[%d].phd_bk (...) failed %d (%s)",i, err, strerror(-err));
         }      
     
     }
@@ -5272,7 +5296,7 @@ hwc_device_close(
     if(bkupmanage.phd_drt)
     {
         err = context->mAllocDev->free(context->mAllocDev, bkupmanage.phd_drt);
-        ALOGW_IF(err, "free(...) failed %d (%s)", err, strerror(-err));            
+        ALOGW_IF(err, "free bkupmanage.phd_drt (...) failed %d (%s)", err, strerror(-err));
     }
 //#endif
 
@@ -5288,8 +5312,16 @@ hwc_device_close(
             context->base_video_bk[i] = NULL;
             context->pbvideo_bk[i] = NULL;
         }
-        ALOGW_IF(err, "free(...) failed %d (%s)", err, strerror(-err));
+        ALOGW_IF(err, "free pbvideo_bk (...) failed %d (%s)", err, strerror(-err));
     }
+
+#if OPTIMIZATION_FOR_DIMLAYER
+    if(context->mDimHandle)
+    {
+        err = context->mAllocDev->free(context->mAllocDev, context->mDimHandle);
+        ALOGW_IF(err, "free mDimHandle (...) failed %d (%s)", err, strerror(-err));
+    }
+#endif
 
     pthread_mutex_destroy(&context->lock);
     free(context);
@@ -5719,6 +5751,26 @@ hwc_device_open(
 	{
 	    ALOGE(" GRALLOC_HARDWARE_MODULE_ID failed");
 	}
+
+#if OPTIMIZATION_FOR_DIMLAYER
+    err = context->mAllocDev->alloc(context->mAllocDev, context->fbhandle.width, \
+                                    context->fbhandle.height,HAL_PIXEL_FORMAT_RGB_565, \
+                                    GRALLOC_USAGE_HW_COMPOSER|GRALLOC_USAGE_HW_RENDER, \
+                                    (buffer_handle_t*)(&(context->mDimHandle)),&stride_gr);
+    if(!err){
+        struct private_handle_t*phandle_gr = (struct private_handle_t*)context->mDimHandle;
+        context->mDimFd = phandle_gr->share_fd;
+        context->mDimBase = (int)phandle_gr->base;
+        ALOGD("Dim buffer alloc fd [%dx%d,f=%d],fd=%d ",context->fbhandle.width,context->fbhandle.height,HAL_PIXEL_FORMAT_RGB_565,phandle_gr->share_fd);                                
+
+    }
+    else{
+            ALOGE("Dim buffer alloc faild");
+            goto OnError;
+    }
+
+    memset((void*)context->mDimBase,0x0,context->fbhandle.width*context->fbhandle.height*2);
+#endif
 
     /* Increment reference count. */
     context->reference++;

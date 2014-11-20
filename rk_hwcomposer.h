@@ -54,6 +54,7 @@
 #define ENBALE_WIN_ANY_ZONES        0
 #define ENABLE_TRANSFORM_BY_RGA     1               //1: It will need reserve a phyical memory for transform.
 #define OPTIMIZATION_FOR_TRANSFORM_UI   1
+#define OPTIMIZATION_FOR_DIMLAYER       1           //1: optimise for dim layer
 
 //Command macro
 #define FB1_IOCTL_SET_YUV_ADDR	    0x5002
@@ -412,6 +413,12 @@ typedef struct _hwcContext
      int      fd_video_bk[MaxVideoBackBuffers];
      int      base_video_bk[MaxVideoBackBuffers];
      buffer_handle_t pbvideo_bk[MaxVideoBackBuffers];
+
+#if OPTIMIZATION_FOR_DIMLAYER
+     int      mDimFd;
+     int      mDimBase;
+     buffer_handle_t      mDimHandle;
+#endif
 }
 hwcContext;
 #define gcmALIGN(n, align) \
