@@ -476,21 +476,28 @@ int is_zone_combine(ZoneInfo * zf,ZoneInfo * zf2)
     if(zf->format != zf2->format)
     {
         ALOGV("line=%d",__LINE__);
+        ALOGV("format:%x=>%x",zf->format,zf2->format);
         return 0;
     }    
     if(zf->zone_alpha!= zf2->zone_alpha)
     {
         ALOGV("line=%d",__LINE__);
+        ALOGV("zone_alpha:%x=>%x",zf->zone_alpha,zf2->zone_alpha);
+
         return 0;
     }    
     if(zf->is_stretch || zf2->is_stretch )    
     {
-        ALOGV("line=%d",__LINE__);    
+        ALOGV("line=%d",__LINE__);
+        ALOGV("is_stretch:%x=>%x",zf->is_stretch,zf2->is_stretch);
+
         return 0;
     }    
     if(is_x_intersect(&(zf->disp_rect),&(zf2->disp_rect)))  
     {
         ALOGV("line=%d",__LINE__);
+        ALOGV("is_x_intersect rec(%d,%d,%d,%d)=rec2(%d,%d,%d,%d)",zf->disp_rect.left,zf->disp_rect.top,zf->disp_rect.right,\
+        zf->disp_rect.bottom,zf2->disp_rect.left,zf2->disp_rect.top,zf2->disp_rect.right,zf2->disp_rect.bottom);
         return 0;
     }    
     else
@@ -1113,7 +1120,7 @@ int try_wins_dispatch_hor(hwcContext * Context)
     if(sort >4)  // lcdc dont support 5 wins
     {
         if(is_out_log())
-            ALOGD("lcdc dont support 5 wins");
+            ALOGD("try_wins_dispatch_hor lcdc dont support 5 wins sort=%d",sort);
         return -1;
     }    
 
@@ -1436,9 +1443,12 @@ int try_wins_dispatch_mix (hwcContext * Context,hwc_display_contents_1_t * list)
                     ALOGD("Donot support video ");
                 return -1;
             }    
-            if(gmixinfo.gpu_draw_fd[pzone_mag->zone_info[i].layer_index] != pzone_mag->zone_info[i].layer_fd
+            if((strcmp(layer->LayerName,"com.android.launcher3/com.android.launcher3.Launcher")&&(gmixinfo.gpu_draw_fd[pzone_mag->zone_info[i].layer_index] != pzone_mag->zone_info[i].layer_fd))
                 || gmixinfo.alpha[pzone_mag->zone_info[i].layer_index] != pzone_mag->zone_info[i].zone_alpha)
             {
+            ALOGV("bk fd=%d,cur fd=%d;bk alpha=%x,cur alpha=%x,i=%d,layer_index=%d",gmixinfo.gpu_draw_fd[pzone_mag->zone_info[i].layer_index], \
+            pzone_mag->zone_info[i].layer_fd,gmixinfo.alpha[pzone_mag->zone_info[i].layer_index],\
+            pzone_mag->zone_info[i].zone_alpha, i,pzone_mag->zone_info[i].layer_index);
                 gpu_draw = 1;
                 layer->compositionType = HWC_FRAMEBUFFER;
                 gmixinfo.gpu_draw_fd[pzone_mag->zone_info[i].layer_index] = pzone_mag->zone_info[i].layer_fd;  
@@ -1447,7 +1457,8 @@ int try_wins_dispatch_mix (hwcContext * Context,hwc_display_contents_1_t * list)
             else
             {
                 layer->compositionType = HWC_NODRAW;
-            }    
+            }
+
             if(gpu_draw && pzone_mag->zone_info[i].layer_index == 1)
             {
                 layer = &list->hwLayers[0];
@@ -1537,7 +1548,7 @@ int try_wins_dispatch_mix (hwcContext * Context,hwc_display_contents_1_t * list)
     if(sort >3)  // lcdc dont support 5 wins
     {
         if(is_out_log())
-        ALOGD("lcdc dont support 5 wins");
+        ALOGD("lcdc dont support 5 wins sort=%d",sort);
         return -1;
     }    
     for(i=0;i<pzone_mag->zone_cnt;i++)
@@ -1746,7 +1757,7 @@ int try_wins_dispatch_mix (hwcContext * Context,hwc_display_contents_1_t * list)
 #endif   
     if((large_cnt + bw) >= 5)    
     {       
-        if(is_out_log())    
+        if(is_out_log())
             ALOGD("lagre win > 2,and Scale-down 1.5 multiple,lcdc no support");
         return -1;
     }
@@ -3760,7 +3771,7 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
         {
             if(context->fd_video_bk[i] < 0 )
             {
-                ALOGW("@video fd[%d]=%d",i,context->fd_video_bk[i]);
+                ALOGV("@video fd[%d]=%d",i,context->fd_video_bk[i]);
                 goto GpuComP;
             }
         }
