@@ -1443,7 +1443,7 @@ int try_wins_dispatch_mix (hwcContext * Context,hwc_display_contents_1_t * list)
                     ALOGD("Donot support video ");
                 return -1;
             }    
-            if((strcmp(layer->LayerName,"com.android.launcher3/com.android.launcher3.Launcher")&&(gmixinfo.gpu_draw_fd[pzone_mag->zone_info[i].layer_index] != pzone_mag->zone_info[i].layer_fd))
+            if(((!Context->bHasDimLayer)&&(gmixinfo.gpu_draw_fd[pzone_mag->zone_info[i].layer_index] != pzone_mag->zone_info[i].layer_fd))
                 || gmixinfo.alpha[pzone_mag->zone_info[i].layer_index] != pzone_mag->zone_info[i].zone_alpha)
             {
             ALOGV("bk fd=%d,cur fd=%d;bk alpha=%x,cur alpha=%x,i=%d,layer_index=%d",gmixinfo.gpu_draw_fd[pzone_mag->zone_info[i].layer_index], \
@@ -2299,6 +2299,8 @@ check_layer(
         Layer->sourceCrop.bottom = Layer->displayFrame.bottom;
 
         Layer->flags &= ~HWC_SKIP_LAYER;
+
+        Context->bHasDimLayer = true;
     }
 #endif
     
@@ -3492,6 +3494,7 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
     context->mVideoRotate=false;
     context->mNV12_VIDEO_VideoMode=false;
     context->mIsMediaView=false;
+    context->bHasDimLayer = false;
     context->mtrsformcnt  = 0;
     for (i = 0; i < (list->numHwLayers - 1); i++)
     {
@@ -5651,6 +5654,7 @@ hwc_device_open(
     context->mVideoRotate = false;
     context->mGtsStatus   = false;
     context->mTrsfrmbyrga = false;
+    context->bHasDimLayer = false;
 
 #if GET_VPU_INTO_FROM_HEAD
     /* initialize params of video source info*/

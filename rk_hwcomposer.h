@@ -415,6 +415,7 @@ typedef struct _hwcContext
      buffer_handle_t pbvideo_bk[MaxVideoBackBuffers];
 
 #if OPTIMIZATION_FOR_DIMLAYER
+     bool     bHasDimLayer;
      int      mDimFd;
      int      mDimBase;
      buffer_handle_t      mDimHandle;
