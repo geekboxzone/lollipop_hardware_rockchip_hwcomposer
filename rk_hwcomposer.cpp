@@ -681,7 +681,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
             Context->zone_manager.zone_info[j].disp_rect.top = dstRects[0].top;
 
             //zxl:Temporary solution to fix blank bar bug when wake up.
-            if(!strcmp(layer->LayerName,VIDEO_PLAY_ACTIVITY_LAYER_NAME))
+            if(i==1 && !strcmp(layer->LayerName,VIDEO_PLAY_ACTIVITY_LAYER_NAME))
             {
                 Context->zone_manager.zone_info[j].disp_rect.right = SrcHnd->width;
                 Context->zone_manager.zone_info[j].disp_rect.bottom = SrcHnd->height;
@@ -911,7 +911,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                 - (int) ((DstRect->top    - dstRects[0].top)    * vfactor)),0);
 
                 //zxl:Temporary solution to fix blank bar bug when wake up.
-                if(!strcmp(layer->LayerName,VIDEO_PLAY_ACTIVITY_LAYER_NAME))
+                if(i==1 && !strcmp(layer->LayerName,VIDEO_PLAY_ACTIVITY_LAYER_NAME))
                 {
                     Context->zone_manager.zone_info[j].src_rect.right = SrcHnd->width;
                     Context->zone_manager.zone_info[j].src_rect.bottom = SrcHnd->height;
