@@ -652,7 +652,8 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
             if((dstRects[m].right - dstRects[m].left) < 16
                 || (dstRects[m].bottom - dstRects[m].top) < 16)
             {
-            	ALOGD("lcdc dont support too small area cnt =%d,name=%s",Region->numRects,layer->LayerName);
+            	ALOGD("lcdc dont support too small area cnt =%d,name=%s,zone[%d,%d,%d,%d]",
+            	        Region->numRects,layer->LayerName,dstRects[m].left,dstRects[m].top,dstRects[m].right,dstRects[m].bottom);
                 return -1;
             }
             LOGV("%s(%d): Region rect[%d]:  [%d,%d,%d,%d]",
@@ -1446,9 +1447,9 @@ int try_wins_dispatch_mix (hwcContext * Context,hwc_display_contents_1_t * list)
             if(((!Context->bHasDimLayer)&&(gmixinfo.gpu_draw_fd[pzone_mag->zone_info[i].layer_index] != pzone_mag->zone_info[i].layer_fd))
                 || gmixinfo.alpha[pzone_mag->zone_info[i].layer_index] != pzone_mag->zone_info[i].zone_alpha)
             {
-            ALOGV("bk fd=%d,cur fd=%d;bk alpha=%x,cur alpha=%x,i=%d,layer_index=%d",gmixinfo.gpu_draw_fd[pzone_mag->zone_info[i].layer_index], \
-            pzone_mag->zone_info[i].layer_fd,gmixinfo.alpha[pzone_mag->zone_info[i].layer_index],\
-            pzone_mag->zone_info[i].zone_alpha, i,pzone_mag->zone_info[i].layer_index);
+            	ALOGV("bk fd=%d,cur fd=%d;bk alpha=%x,cur alpha=%x,i=%d,layer_index=%d",gmixinfo.gpu_draw_fd[pzone_mag->zone_info[i].layer_index], \
+            	pzone_mag->zone_info[i].layer_fd,gmixinfo.alpha[pzone_mag->zone_info[i].layer_index],\
+            	pzone_mag->zone_info[i].zone_alpha, i,pzone_mag->zone_info[i].layer_index);
                 gpu_draw = 1;
                 layer->compositionType = HWC_FRAMEBUFFER;
                 gmixinfo.gpu_draw_fd[pzone_mag->zone_info[i].layer_index] = pzone_mag->zone_info[i].layer_fd;  
@@ -2347,15 +2348,15 @@ check_layer(
         )
     {
         /* We are forbidden to handle this layer. */
-        if(is_out_log())
-            LOGD("%s(%d):Will not handle layer %s: SKIP_LAYER,Layer->transform=%d,Layer->flags=%d,format=%x",
-                __FUNCTION__, __LINE__, Layer->LayerName,Layer->transform,Layer->flags,GPU_FORMAT);
-
-        if(handle )     
+        if(is_out_log() )
         {
-            LOGV("%s(%d):Will not handle layer %s,handle_type=%d",
-                __FUNCTION__, __LINE__, Layer->LayerName,handle->type);
-        }
+            LOGD("%s(%d):Will not handle layer %s: SKIP_LAYER,Layer->transform=%d,Layer->flags=%d",
+                __FUNCTION__, __LINE__, Layer->LayerName,Layer->transform,Layer->flags);
+            if(handle)   
+            {
+                LOGD("Will not handle format=%x,handle_type=%d",GPU_FORMAT,handle->type);  
+            }    
+        }        
         Layer->compositionType = HWC_FRAMEBUFFER;
         if (skip_count<5)
         {
