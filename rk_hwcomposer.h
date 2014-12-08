@@ -80,16 +80,16 @@
 #define GPU_FORMAT      handle->format
 #define GPU_DST_FORMAT  DstHandle->format
 
-#define GHWC_VERSION  "2.011"
+#define GHWC_VERSION  "2.012"
 //HWC version Tag
 //Get commit info:  git log --format="Author: %an%nTime:%cd%nCommit:%h%n%n%s%n%n"
 //Get version: busybox strings /system/lib/hw/hwcomposer.rk30board.so | busybox grep HWC_VERSION
 //HWC_VERSION Author:zxl Time:Tue Aug 12 17:27:36 2014 +0800 Version:1.17 Branch&Previous-Commit:rk/rk312x/mid/4.4_r1/develop-9533348.
 #define HWC_VERSION "HWC_VERSION  \
 Author:zxl \
-Previous-Time:Thu Nov 20 14:53:57 2014 +0800 \
-Version:2.011 \
-Branch&Previous-Commit:rk/rk32/mid/4.4_r1/develop-b434333."
+Previous-Time:Fri Dec 5 14:24:14 2014 +0800 \
+Version:2.012 \
+Branch&Previous-Commit:rk/rk32/mid/4.4_r1/develop-43a81d9."
 
 /* Set it to 1 to enable swap rectangle optimization;
  * Set it to 0 to disable. */

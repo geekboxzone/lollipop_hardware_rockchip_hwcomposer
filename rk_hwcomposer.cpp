@@ -2728,7 +2728,7 @@ static int  sort_area_by_ypos(int win_id,struct rk_fb_win_cfg_data* p_fb_info)
 		    for(j=0;j<3;j++)
 		    {
 		        bSwitch=false;
-                for(k=RK_WIN_MAX_REGION-1;k>j;k--)
+                for(k=RK_WIN_MAX_AREA-1;k>j;k--)
                 {
                     if((p_fb_info->win_par[i].area_par[k].ion_fd || p_fb_info->win_par[i].area_par[k].phy_addr)  &&
                         (p_fb_info->win_par[i].area_par[k-1].ion_fd || p_fb_info->win_par[i].area_par[k-1].phy_addr) )
@@ -2946,7 +2946,7 @@ hwc_buff_recover(
         {
             LOGE("%s(%d):RGA_FLUSH Failed!", __FUNCTION__, __LINE__);
         }        
-        fb_info.win_par[0].data_format = bkupmanage.bkupinfo[0].format;
+        fb_info.win_par[0].area_par[0].data_format = bkupmanage.bkupinfo[0].format;
         fb_info.win_par[0].win_id = 0;
         fb_info.win_par[0].z_order = 0;
         fb_info.win_par[0].area_par[0].ion_fd = bkupmanage.direct_fd;
@@ -4082,7 +4082,7 @@ static int hwc_primary_Post( hwcContext * context,hwc_display_contents_1_t* list
         #else
 
         unsigned int offset = handle->offset;        
-        fb_info.win_par[0].data_format = context->fbhandle.format;
+        fb_info.win_par[0].area_par[0].data_format = context->fbhandle.format;
         fb_info.win_par[0].win_id = 0;
         fb_info.win_par[0].z_order = 0;
         fb_info.win_par[0].area_par[0].ion_fd = handle->share_fd;
@@ -4145,7 +4145,7 @@ static int hwc_primary_Post( hwcContext * context,hwc_display_contents_1_t* list
                         fb_info.win_par[i].area_par[j].ysize,
                         fb_info.win_par[i].area_par[j].xvir,
                         fb_info.win_par[i].area_par[j].yvir,
-                        fb_info.win_par[i].data_format,
+                        fb_info.win_par[i].area_par[j].data_format,
                         fb_info.win_par[i].area_par[j].ion_fd,
                         fb_info.win_par[i].area_par[j].phy_addr);
             }
@@ -4503,17 +4503,17 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
         {
             if(pzone_mag->zone_info[i].format ==  HAL_PIXEL_FORMAT_RGBA_8888) //
             {
-                fb_info.win_par[win_no-1].data_format = HAL_PIXEL_FORMAT_RGBX_8888;
+                fb_info.win_par[win_no-1].area_par[area_no].data_format = HAL_PIXEL_FORMAT_RGBX_8888;
             }
             else
             {
-                fb_info.win_par[win_no-1].data_format =  pzone_mag->zone_info[i].format;
+                fb_info.win_par[win_no-1].area_par[area_no].data_format =  pzone_mag->zone_info[i].format;
             }
                 
         }
         else
         {
-            fb_info.win_par[win_no-1].data_format =  pzone_mag->zone_info[i].format;
+            fb_info.win_par[win_no-1].area_par[area_no].data_format =  pzone_mag->zone_info[i].format;
         }    
         fb_info.win_par[win_no-1].win_id = win_id;
         fb_info.win_par[win_no-1].alpha_mode = AB_SRC_OVER;
@@ -4568,7 +4568,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
 
     #if 1 // detect UI invalid ,so close win1 ,reduce  bandwidth.
     if(
-        fb_info.win_par[0].data_format == HAL_PIXEL_FORMAT_YCrCb_NV12
+        fb_info.win_par[0].area_par[0].data_format == HAL_PIXEL_FORMAT_YCrCb_NV12
         && list->numHwLayers == 3)  // @ video & 2 layers
     {
         bool IsDiff = true;
@@ -4645,7 +4645,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
                         fb_info.win_par[i].area_par[j].ysize,
                         fb_info.win_par[i].area_par[j].xvir,
                         fb_info.win_par[i].area_par[j].yvir,
-                        fb_info.win_par[i].data_format,
+                        fb_info.win_par[i].area_par[j].data_format,
                         fb_info.win_par[i].area_par[j].acq_fence_fd,
                         fb_info.win_par[i].area_par[j].ion_fd,
                         fb_info.win_par[i].area_par[j].phy_addr);
@@ -4694,7 +4694,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
 
         ALOGV("mix_flag=%d,win_no =%d,z_order = %d",mix_flag,win_no,z_order);
         unsigned int offset = handle->offset;
-        fb_info.win_par[win_no-1].data_format = format;
+        fb_info.win_par[win_no-1].area_par[0].data_format = format;
         fb_info.win_par[win_no-1].win_id = 3;
         fb_info.win_par[win_no-1].z_order = z_order-1;
         fb_info.win_par[win_no-1].area_par[0].ion_fd = handle->share_fd;
@@ -4740,7 +4740,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
                         fb_info.win_par[i].area_par[j].ysize,
                         fb_info.win_par[i].area_par[j].xvir,
                         fb_info.win_par[i].area_par[j].yvir,
-                        fb_info.win_par[i].data_format,
+                        fb_info.win_par[i].area_par[j].data_format,
                         fb_info.win_par[i].area_par[j].ion_fd,
                         fb_info.win_par[i].area_par[j].phy_addr);
             }
@@ -4767,7 +4767,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
                         fb_info.win_par[i].area_par[j].ysize,
                         fb_info.win_par[i].area_par[j].xvir,
                         fb_info.win_par[i].area_par[j].yvir,
-                        fb_info.win_par[i].data_format,
+                        fb_info.win_par[i].area_par[j].data_format,
                         fb_info.win_par[i].area_par[j].ion_fd,
                         fb_info.win_par[i].area_par[j].phy_addr);
             }
@@ -4796,7 +4796,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
             {
                 if(i< (list->numHwLayers -1))
                 {
-                    if(fb_info.win_par[0].data_format == HAL_PIXEL_FORMAT_YCrCb_NV12
+                    if(fb_info.win_par[0].area_par[0].data_format == HAL_PIXEL_FORMAT_YCrCb_NV12
                         &&list->hwLayers[0].transform != 0)  // for video no sync to audio,in hook_dequeueBuffer_DEPRECATED wait fence,so trasnform donot need fence
                     {
                         list->hwLayers[i].releaseFenceFd = -1;
