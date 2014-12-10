@@ -30,8 +30,8 @@
 #include <linux/fb.h>
 #include <hardware/gralloc.h>
 #include "../libgralloc_ump/gralloc_priv.h"
-#include "../libon2/vpu_global.h"
-#include "../libon2/vpu_mem.h"
+#include "../librkvpu/vpu_global.h"
+#include "../librkvpu/vpu_mem.h"
 
 //Control macro
 #define hwcDEBUG                    0
