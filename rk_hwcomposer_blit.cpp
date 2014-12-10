@@ -20,7 +20,7 @@
 #include "rk_hwcomposer.h"
 
 #include <fcntl.h>
-#include "../libgralloc_ump/gralloc_priv.h"
+#include "../libgralloc/gralloc_priv.h"
 #include <ui/PixelFormat.h>
 
 //#include "struct.h"

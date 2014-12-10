@@ -18,7 +18,7 @@
 #ifdef TARGET_BOARD_PLATFORM_RK30XXB
 #include  <hardware/hal_public.h>
 #else
-#include "../libgralloc_ump/gralloc_priv.h"
+#include "../libgralloc/gralloc_priv.h"
 #endif
 
 #ifdef TARGET_BOARD_PLATFORM_RK30XXB

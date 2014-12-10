@@ -18,7 +18,7 @@
 
 
 #include "rk_hwcomposer.h"
-#include "../libgralloc_ump/gralloc_priv.h"
+#include "../libgralloc/gralloc_priv.h"
 #include <linux/fb.h>
 #include <linux/fs.h>
 #include <sys/ioctl.h>

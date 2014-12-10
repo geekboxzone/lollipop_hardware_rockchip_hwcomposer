@@ -29,7 +29,7 @@
 #include <cutils/properties.h>
 #include <fcntl.h>
 #include <sync/sync.h>
-#include "../libgralloc_ump/gralloc_priv.h"
+#include "../libgralloc/gralloc_priv.h"
 #include <time.h>
 #include <poll.h>
 #include "rk_hwcomposer_hdmi.h"

@@ -41,7 +41,7 @@ LOCAL_C_INCLUDES := \
 	$(AQROOT)/sdk/inc \
 	$(AQROOT)/hal/inc
 
-LOCAL_C_INCLUDES += hardware/rockchip/libgralloc_ump/ump/include
+LOCAL_C_INCLUDES += hardware/rockchip/libgralloc/ump/include
 LOCAL_LDFLAGS := \
 	-Wl,-z,defs \
 	-Wl,--version-script=$(LOCAL_PATH)/hwcomposer.map
