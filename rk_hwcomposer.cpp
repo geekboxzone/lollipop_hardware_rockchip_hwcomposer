@@ -40,7 +40,7 @@
 #include <hardware/rk_fh.h>
 #include <linux/ion.h>
 #include <ion/ion.h>
-#include <ion/rockchip_ion.h>
+#include <linux/rockchip_ion.h>
 
 #define MAX_DO_SPECIAL_COUNT        8
 #define RK_FBIOSET_ROTATE            0x5003 

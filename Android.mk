@@ -42,6 +42,11 @@ LOCAL_C_INCLUDES := \
 	$(AQROOT)/hal/inc
 
 LOCAL_C_INCLUDES += hardware/rockchip/libgralloc/ump/include
+
+LOCAL_C_INCLUDES += \
+	system/core/libion/include \
+	system/core/libion/kernel-headers
+
 LOCAL_LDFLAGS := \
 	-Wl,-z,defs \
 	-Wl,--version-script=$(LOCAL_PATH)/hwcomposer.map
