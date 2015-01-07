@@ -51,6 +51,19 @@
 #define VIDEO_PLAY_ACTIVITY_LAYER_NAME "android.rk.RockVideoPlayer/android.rk.RockVideoPlayer.VideoP"
 #define RK_QUEDDR_FREQ              0x8000 
 
+/*wzq:
+	#android 4.4 and kernel has different define for HAL_PIXEL_FORMAT_YCrCb_NV12
+	[android:]
+		1.for android 4.4 in the system/core/include/system/graphics.h:HAL_PIXEL_FORMAT_YCrCb_NV12 is 0x20
+		2.but for androidL in the system/core/include/system/graphics.h:HAL_PIXEL_FORMAT_YCrCb_NV12 is 0x15
+  	[kenel:]
+  		1.kernel in the kernel/include/linux/rk_fb.h HAL_PIXEL_FORMAT_YCrCb_NV12 is 0x20 always
+
+  	due to android 4.4 and androidL has the some path for kernel,so change the format define coordinate kenel a-
+  	nd android system
+*/
+#define HAL_PIXEL_FORMAT_YCrCb_NV12_OLD  0x20 
+
 //#define ENABLE_HDMI_APP_LANDSCAP_TO_PORTRAIT
 static int SkipFrameCount = 0;
 
@@ -69,6 +82,20 @@ static mix_info gmixinfo;
 int gwin_tab[MaxZones] = {win0,win1,win2_0,win2_1,win2_2,win2_3,win3_0,win3_1,win3_2,win3_3};
 #undef LOGV
 #define LOGV(...)
+
+int hwChangeFormatandroidL(IN int fmt)
+{
+	switch (fmt) {
+		case HAL_PIXEL_FORMAT_YCrCb_NV12:	/* YUV420---uvuvuv */
+			return 0x20;                   /*android4.4 HAL_PIXEL_FORMAT_YCrCb_NV12 is 0x20*/    
+			
+		case HAL_PIXEL_FORMAT_YCrCb_NV12_10:	/* yuv444 */
+			return 0x22;				        /*android4.4 HAL_PIXEL_FORMAT_YCrCb_NV12_10 is 0x20*/
+
+		default:
+			return fmt;
+		}
+}
 
 static int
 hwc_blank(
@@ -4505,15 +4532,15 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
             {
                 fb_info.win_par[win_no-1].area_par[area_no].data_format = HAL_PIXEL_FORMAT_RGBX_8888;
             }
-            else
+			else
             {
-                fb_info.win_par[win_no-1].area_par[area_no].data_format =  pzone_mag->zone_info[i].format;
+                fb_info.win_par[win_no-1].area_par[area_no].data_format =  hwChangeFormatandroidL(pzone_mag->zone_info[i].format);
             }
                 
         }
         else
         {
-            fb_info.win_par[win_no-1].area_par[area_no].data_format =  pzone_mag->zone_info[i].format;
+            fb_info.win_par[win_no-1].area_par[area_no].data_format =  hwChangeFormatandroidL(pzone_mag->zone_info[i].format);
         }    
         fb_info.win_par[win_no-1].win_id = win_id;
         fb_info.win_par[win_no-1].alpha_mode = AB_SRC_OVER;
@@ -4568,7 +4595,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
 
     #if 1 // detect UI invalid ,so close win1 ,reduce  bandwidth.
     if(
-        fb_info.win_par[0].area_par[0].data_format == HAL_PIXEL_FORMAT_YCrCb_NV12
+        fb_info.win_par[0].area_par[0].data_format == HAL_PIXEL_FORMAT_YCrCb_NV12_OLD
         && list->numHwLayers == 3)  // @ video & 2 layers
     {
         bool IsDiff = true;
@@ -4796,7 +4823,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
             {
                 if(i< (list->numHwLayers -1))
                 {
-                    if(fb_info.win_par[0].area_par[0].data_format == HAL_PIXEL_FORMAT_YCrCb_NV12
+                    if(fb_info.win_par[0].area_par[0].data_format == HAL_PIXEL_FORMAT_YCrCb_NV12_OLD 
                         &&list->hwLayers[0].transform != 0)  // for video no sync to audio,in hook_dequeueBuffer_DEPRECATED wait fence,so trasnform donot need fence
                     {
                         list->hwLayers[i].releaseFenceFd = -1;
