@@ -18,44 +18,69 @@
 //0,1,2
  void rk_check_hdmi_uevents(const char *buf)
 {
+	//ALOGD("line %d,buf[%s]",__LINE__,buf);
     if ( !strcmp(buf, "change@/devices/virtual/switch/hdmi"))
+	{
+		int fd = open("/sys/devices/virtual/switch/hdmi/state", O_RDONLY);
+		if (fd > 0)
+			{
+			char statebuf[100];
+			memset(statebuf, 0, sizeof(statebuf));
+			int err = read(fd, statebuf, sizeof(statebuf));
+			if (err < 0)
+			{
+			    ALOGE("error reading vsync timestamp: %s", strerror(errno));
+			    return;
+			}
+			close(fd);
+			g_hdmi_mode = atoi(statebuf);
+			/* if (g_hdmi_mode==0)
+			{
+				property_set("sys.hdmi.mode", "0");
+			}
+			else
+			{
+				property_set("sys.hdmi.mode", "1");
+			}*/
+			handle_hdmi_event(g_hdmi_mode,1);
+			ALOGD("HDMI unevent happened!g_hdmi_mode=%d,LINE=%d",g_hdmi_mode,__LINE__);
+			}  
+		else
+		{
+			ALOGD("err=%s",strerror(errno));
+		}
+	}
+    else if( strstr(buf, "change@/devices/virtual/display/HDMI") != NULL )
     {
-         int fd = open("/sys/devices/virtual/switch/hdmi/state", O_RDONLY);
-
-	  if (fd > 0)
-	  {
-		 char statebuf[100];
-		 memset(statebuf, 0, sizeof(statebuf));
-		 int err = read(fd, statebuf, sizeof(statebuf));
-
-		if (err < 0)
-		 {
-		        ALOGE("error reading vsync timestamp: %s", strerror(errno));
-		        return;
-		 }
-		close(fd);
-		g_hdmi_mode = atoi(statebuf);
-       /* if (g_hdmi_mode==0)
+		int fd = open("/sys/devices/virtual/switch/hdmi/state", O_RDONLY);
+		if (fd > 0)
+		{
+			char statebuf[100];
+			memset(statebuf, 0, sizeof(statebuf));
+			int err = read(fd, statebuf, sizeof(statebuf));
+			if (err < 0)
+			{
+			    ALOGE("error reading vsync timestamp: %s", strerror(errno));
+			    return;
+			}
+			close(fd);
+			g_hdmi_mode = atoi(statebuf);
+			if(g_hdmi_mode == 1)
+			{
+				handle_hdmi_event(1,3);
+				ALOGD("HDMI unevent happened!g_hdmi_mode=%d,LINE=%d",g_hdmi_mode,__LINE__);
+			}
+		}  
+        else
         {
-		    property_set("sys.hdmi.mode", "0");
+            ALOGD("err=%s",strerror(errno));
         }
-	    else
-	    {
-		    property_set("sys.hdmi.mode", "1");
-		}*/
-
-	   }  
-	   else
-	   {
-           ALOGD("err=%s",strerror(errno));
-	   }
-
     }
 }
 
  void rk_handle_uevents(const char *buff)
 {
-   // uint64_t timestamp = 0;
+	// uint64_t timestamp = 0;
     rk_check_hdmi_uevents(buff);
 }
 
