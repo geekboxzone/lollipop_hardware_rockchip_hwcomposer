@@ -88,6 +88,8 @@ static mix_info gmixinfo1;
 int flag_blank = 0;
 int flag_external = 0;
 int flag_hwcup_external = 0;
+int last_rel_fence[RK_MAX_BUF_NUM];
+int last_ret_fence;
 
 int gwin_tab[MaxZones] = {win0,win1,win2_0,win2_1,win2_2,win2_3,win3_0,win3_1,win3_2,win3_3};
 #undef LOGV
@@ -6683,12 +6685,13 @@ static int hwc_external_Post( hwcContext * context,hwc_display_contents_1_t* lis
         for(int k=0;k<RK_MAX_BUF_NUM;k++)
         {
             if(fb_info.rel_fence_fd[k]!= -1)
-               // close(fb_info.rel_fence_fd[k]);
+            {   // close(fb_info.rel_fence_fd[k]);
                fbLayer->releaseFenceFd = fb_info.rel_fence_fd[k];
-
+			}
+			last_rel_fence[k] = fb_info.rel_fence_fd[k] ;
         }
 
-        list->retireFenceFd = fb_info.ret_fence_fd;
+        last_ret_fence = list->retireFenceFd = fb_info.ret_fence_fd;
 
 #endif
 
@@ -8068,6 +8071,7 @@ static int hwc_set_lcdc_external(hwcContext * context, hwc_display_contents_1_t 
                     {
                         list->hwLayers[i].releaseFenceFd = -1;
                         close(fb_info.rel_fence_fd[i]);
+						fb_info.rel_fence_fd[i] = -1;
                     }
                     else
                     {
@@ -8078,10 +8082,14 @@ static int hwc_set_lcdc_external(hwcContext * context, hwc_display_contents_1_t 
                     }        
                 }    
                 else
+				{
                     close(fb_info.rel_fence_fd[i]);
-             }
+            		fb_info.rel_fence_fd[i] = -1;
+				} 
+			}
+			last_rel_fence[i] = fb_info.rel_fence_fd[i];
     	}
-        list->retireFenceFd = fb_info.ret_fence_fd;
+        last_ret_fence = list->retireFenceFd = fb_info.ret_fence_fd;
 #else
 
     	for(i=0;i<RK_MAX_BUF_NUM;i++)
@@ -8577,6 +8585,19 @@ void handle_hdmi_event(int hdmi_mode ,int flag )
 						if((((tend.tv_sec - tstart.tv_sec)*1000000)+(tend.tv_usec - tstart.tv_usec)) % 2000  == 0 )
 						{
 							ALOGW("Try to remove external screen spent time = %ld us",(((tend.tv_sec - tstart.tv_sec)*1000000)+(tend.tv_usec - tstart.tv_usec)));
+						}
+						for(int i=0;i<RK_MAX_BUF_NUM ;i++)
+						{
+							if(last_rel_fence[i] != -1)
+							{
+								close(last_rel_fence[i]);
+								last_rel_fence[i] = -1;
+							}	
+						}
+						if(last_ret_fence != -1)
+						{
+							close(last_ret_fence);
+							last_ret_fence = -1;
 						}
 						if((((tend.tv_sec - tstart.tv_sec)*1000000)+(tend.tv_usec - tstart.tv_usec)) > 100000 && _contextAnchor->fb_blanked == 0)
 						{
