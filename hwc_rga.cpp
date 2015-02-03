@@ -405,7 +405,7 @@ int set_rga_cfg(hwc_cfg_t  *cfg)
   //src cfg
   if (cfg->rga_fbAddr==0)
   {
-	   g_rga_cfg.rga_cfg.src.yrgb_addr = (unsigned int )(SRC_HANDLE_BASE);
+	   g_rga_cfg.rga_cfg.src.yrgb_addr = (unsigned long )(SRC_HANDLE_BASE);
   }
   else
   {
@@ -423,7 +423,7 @@ int set_rga_cfg(hwc_cfg_t  *cfg)
   //dst cfg
   //memset((void*)cfg->dst_handle->base,0,cfg->dst_handle->width*cfg->dst_handle->height*4);
 
-  g_rga_cfg.rga_cfg.dst.yrgb_addr = (unsigned int)(DST_HANDLE_BASE);
+  g_rga_cfg.rga_cfg.dst.yrgb_addr = (unsigned long)(DST_HANDLE_BASE);
 
   g_rga_cfg.rga_cfg.dst.vir_w = WIDTH(cfg->dst_rect);
   g_rga_cfg.rga_cfg.dst.vir_h = HEIGHT(cfg->dst_rect);

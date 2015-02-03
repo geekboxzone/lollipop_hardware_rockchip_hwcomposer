@@ -29,7 +29,6 @@
 #include <cutils/properties.h>
 #include <fcntl.h>
 #include <sync/sync.h>
-#include "../libgralloc/gralloc_priv.h"
 #include <time.h>
 #include <poll.h>
 #include "rk_hwcomposer_hdmi.h"
@@ -161,7 +160,10 @@ int hwChangeFormatandroidL(IN int fmt)
 			
 		case HAL_PIXEL_FORMAT_YCrCb_NV12_10:	/* yuv444 */
 			return 0x22;				        /*android4.4 HAL_PIXEL_FORMAT_YCrCb_NV12_10 is 0x20*/
-
+#ifdef GPU_G6110
+		case HAL_PIXEL_FORMAT_BGRX_8888:
+		    return HAL_PIXEL_FORMAT_BGRA_8888;
+#endif
 		default:
 			return fmt;
 	}
@@ -229,7 +231,7 @@ static int hwc_get_string_property(const char* pcProperty,const char* default_va
 static int LayerZoneCheck( hwc_layer_1_t * Layer , int disp)
 {
 	hwcContext * context = NULL;
-#ifdef HWC_EXTERNAL
+#if HWC_EXTERNAL
 	switch (disp){
 		case HWC_DISPLAY_PRIMARY: 
 			context = _contextAnchor;
@@ -274,7 +276,7 @@ void hwc_sync(hwc_display_contents_1_t  *list)
 		if (list->hwLayers[i].acquireFenceFd>0)
 		{
 			sync_wait(list->hwLayers[i].acquireFenceFd,500);  // add 40ms timeout
-			ALOGV("fenceFd=%d,name=%s",list->hwLayers[i].acquireFenceFd,list->hwLayers[i].LayerName);
+			ALOGV("acquireFenceFd=%d,name=%s",list->hwLayers[i].acquireFenceFd,list->hwLayers[i].LayerName);
 		}
 
 	}
@@ -348,7 +350,7 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
     }
 
 //#if  (ENABLE_TRANSFORM_BY_RGA | ENABLE_LCDC_IN_NV12_TRANSFORM)
-    if(handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12  && specialwin && context->base_video_bk[index_v]==NULL)
+    if(handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12  && specialwin && context->base_video_bk[index_v]==0)
     {
         ALOGE("It hasn't direct_base for dst buffer");
         return -1;
@@ -472,8 +474,12 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
     {
         if( !specialwin)
         {
-            RGA_set_dst_vir_info(&Rga_Request, fd_dst,(unsigned int)(handle->base), 0,DstVirW,DstVirH,&clip, Dstfmt, 0);    
-            ALOGW("Debugmem mmu_en fd=%d in vmalloc ,base=%p,[%dX%d],fmt=%d,src_addr=%x", fd_dst,handle->base,DstVirW,DstVirH,handle->video_addr);
+#if defined(__arm64__) || defined(__aarch64__)
+            RGA_set_dst_vir_info(&Rga_Request, fd_dst,(unsigned long)(GPU_BASE), 0,DstVirW,DstVirH,&clip, Dstfmt, 0);
+#else
+            RGA_set_dst_vir_info(&Rga_Request, fd_dst,(unsigned int)(GPU_BASE), 0,DstVirW,DstVirH,&clip, Dstfmt, 0);
+#endif
+            ALOGW("Debugmem mmu_en fd=%d in vmalloc ,base=%p,[%dX%d],fmt=%d,src_addr=%x", fd_dst,GPU_BASE,DstVirW,DstVirH,handle->video_addr);
         }
         else
         {
@@ -511,7 +517,7 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
         pfile = fopen(layername,"wb");
         if(pfile)
         {
-            fwrite((const void *)handle->base,(size_t)(3 * handle->stride*handle->height /2),1,pfile);
+            fwrite((const void *)(GPU_BASE),(size_t)(3 * handle->stride*handle->height /2),1,pfile);
             fclose(pfile);
         }
     }
@@ -653,10 +659,10 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
         } 
         ALOGV("name=%s,hfactor =%f,vfactor =%f",layer->LayerName,hfactor,vfactor );
         is_stretch = (hfactor != 1.0) || (vfactor != 1.0);
-        int left_min ; 
-        int top_min ;
-        int right_max ;
-        int bottom_max ;
+        int left_min=0 ;
+        int top_min=0;
+        int right_max=0;
+        int bottom_max=0;
         int isLarge = 0;
         int srcw,srch;    
         if(rects)
@@ -666,7 +672,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
              right_max  = rects[0].right;
              bottom_max = rects[0].bottom;
         }
-        for (int r = 0; r < (unsigned int) Region->numRects ; r++)
+        for (int r = 0; r < (int) Region->numRects ; r++)
         {
             int r_left;
             int r_top;
@@ -950,8 +956,8 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                             Context->zone_manager.zone_info[j].acq_fence_fd,
                             Context->zone_manager.zone_info[j].LayerName,
                             Context->zone_manager.zone_info[j].layer_fd);
-                    rga_video_copybit(SrcHnd,layer->transform,w_valid,h_valid, \ 
-                        Context->zone_manager.zone_info[j].layer_fd,\
+                    rga_video_copybit(SrcHnd,layer->transform,w_valid,h_valid, \
+                                        Context->zone_manager.zone_info[j].layer_fd,\
                         trsfrmbyrga ? hwChangeRgaFormat(SrcHnd->format) : RK_FORMAT_YCbCr_420_SP,trsfrmbyrga);
                     lastfd = SrcHnd->share_fd;
 #if USE_VIDEO_BACK_BUFFERS
@@ -1010,9 +1016,9 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
             }
         }    
         srcw = Context->zone_manager.zone_info[j].src_rect.right - \
-                    Context->zone_manager.zone_info[j].src_rect.left;
-        srch = Context->zone_manager.zone_info[j].src_rect.bottom -  \           
-                    Context->zone_manager.zone_info[j].src_rect.top;  
+                Context->zone_manager.zone_info[j].src_rect.left;
+        srch = Context->zone_manager.zone_info[j].src_rect.bottom -  \
+                Context->zone_manager.zone_info[j].src_rect.top;
         int bpp = android::bytesPerPixel(Context->zone_manager.zone_info[j].format);
         if(Context->zone_manager.zone_info[j].format == HAL_PIXEL_FORMAT_YCrCb_NV12
             || haveStartwin)
@@ -1144,10 +1150,10 @@ int collect_all_zones_external( hwcContext * Context,hwc_display_contents_1_t * 
         } 
         ALOGV("name=%s,hfactor =%f,vfactor =%f",layer->LayerName,hfactor,vfactor );
         is_stretch = (hfactor != 1.0) || (vfactor != 1.0);
-        int left_min ; 
-        int top_min ;
-        int right_max ;
-        int bottom_max ;
+        int left_min = 0 ;
+        int top_min = 0;
+        int right_max = 0;
+        int bottom_max = 0;
         int isLarge = 0;
         int srcw,srch;    
         if(rects)
@@ -1157,7 +1163,7 @@ int collect_all_zones_external( hwcContext * Context,hwc_display_contents_1_t * 
              right_max  = rects[0].right;
              bottom_max = rects[0].bottom;
         }
-        for (int r = 0; r < (unsigned int) Region->numRects ; r++)
+        for (int r = 0; r < (int) Region->numRects ; r++)
         {
             int r_left;
             int r_top;
@@ -1427,7 +1433,7 @@ int collect_all_zones_external( hwcContext * Context,hwc_display_contents_1_t * 
                             Context->zone_manager.zone_info[j].acq_fence_fd,
                             Context->zone_manager.zone_info[j].LayerName,
                             Context->zone_manager.zone_info[j].layer_fd);
-                    rga_video_copybit(SrcHnd,layer->transform,w_valid,h_valid, \ 
+                    rga_video_copybit(SrcHnd,layer->transform,w_valid,h_valid, \
                         Context->zone_manager.zone_info[j].layer_fd,\
                         trsfrmbyrga ? hwChangeRgaFormat(SrcHnd->format) : RK_FORMAT_YCbCr_420_SP,trsfrmbyrga);
                     lastfd = SrcHnd->share_fd;
@@ -1473,9 +1479,9 @@ int collect_all_zones_external( hwcContext * Context,hwc_display_contents_1_t * 
             }
         }    
             srcw = Context->zone_manager.zone_info[j].src_rect.right - \
-                        Context->zone_manager.zone_info[j].src_rect.left;
-            srch = Context->zone_manager.zone_info[j].src_rect.bottom -  \           
-                        Context->zone_manager.zone_info[j].src_rect.top;  
+                    Context->zone_manager.zone_info[j].src_rect.left;
+            srch = Context->zone_manager.zone_info[j].src_rect.bottom -  \
+                    Context->zone_manager.zone_info[j].src_rect.top;
         int bpp = android::bytesPerPixel(Context->zone_manager.zone_info[j].format);
         if(Context->zone_manager.zone_info[j].format == HAL_PIXEL_FORMAT_YCrCb_NV12
             || haveStartwin)
@@ -3922,8 +3928,8 @@ int try_wins_dispatch_ver(hwcContext * Context)
                 {
                     bool isLandScape = ( (0==pzone_mag->zone_info[i].realtransform) \
                                 || (HWC_TRANSFORM_ROT_180==pzone_mag->zone_info[i].realtransform) );
-                    bool isSmallRect = (isLandScape && (pzone_mag->zone_info[i].height< Context->fbhandle.height/4))  \
-                                ||(!isLandScape && (pzone_mag->zone_info[i].width < Context->fbhandle.width/4)) ;
+                    bool isSmallRect = (isLandScape && (pzone_mag->zone_info[i].height< (unsigned int)Context->fbhandle.height/4))  \
+                                ||(!isLandScape && (pzone_mag->zone_info[i].width < (unsigned int)Context->fbhandle.width/4)) ;
                     if(isSmallRect)
                         pzone_mag->zone_info[i].dispatched  = win_ext;
                     else
@@ -4032,8 +4038,8 @@ int try_wins_dispatch_ver_external(hwcContext * Context)
                 {
                     bool isLandScape = ( (0==pzone_mag->zone_info[i].realtransform) \
                                 || (HWC_TRANSFORM_ROT_180==pzone_mag->zone_info[i].realtransform) );
-                    bool isSmallRect = (isLandScape && (pzone_mag->zone_info[i].height< Context->fbhandle.height/4))  \
-                                ||(!isLandScape && (pzone_mag->zone_info[i].width < Context->fbhandle.width/4)) ;
+                    bool isSmallRect = (isLandScape && (pzone_mag->zone_info[i].height< (unsigned int)Context->fbhandle.height/4))  \
+                                ||(!isLandScape && (pzone_mag->zone_info[i].width < (unsigned int)Context->fbhandle.width/4)) ;
                     if(isSmallRect)
                         pzone_mag->zone_info[i].dispatched  = win_ext;
                     else
@@ -4073,8 +4079,8 @@ check_layer(
 #if OPTIMIZATION_FOR_DIMLAYER
     if(!strcmp(Layer->LayerName,"DimLayer"))
     {
-        Layer->handle=(struct private_handle_t *) Context->mDimHandle;
-        handle = (struct private_handle_t *) Layer->handle;
+        Layer->handle= Context->mDimHandle;
+        handle = (struct private_handle_t*) Layer->handle;
         Layer->sourceCrop.left = Layer->displayFrame.left;
         Layer->sourceCrop.top = Layer->displayFrame.top;
         Layer->sourceCrop.right = Layer->displayFrame.right;
@@ -4199,15 +4205,16 @@ check_layer(
         Layer->compositionType = HWC_FRAMEBUFFER;
 
         /* Get format. */
-        if( hwcGetFormat(handle, &format) != hwcSTATUS_OK
-            || (LayerZoneCheck(Layer,HWC_DISPLAY_PRIMARY) != 0))
+		//zxl: remove hwcGetFormat,or it will let fbdc format return gpu.
+        if( /* hwcGetFormat(handle, &format) != hwcSTATUS_OK
+            ||*/ (LayerZoneCheck(Layer,HWC_DISPLAY_PRIMARY) != 0))
         {
              return HWC_FRAMEBUFFER;
         }
 
         LOGV("name[%d]=%s,cnt=%d,vodemod=%d",Index,Layer->LayerName,Count ,videomode);
         if(1 
-#ifndef HWC_EXTERNAL
+#if !HWC_EXTERNAL
 			&& ((getHdmiMode()==0) || (Count <= 2 && videomode))
 #endif			
 		)  // layer <=3,do special processing
@@ -4250,7 +4257,7 @@ check_layer_external(
 #if OPTIMIZATION_FOR_DIMLAYER
     if(!strcmp(Layer->LayerName,"DimLayer"))
     {
-        Layer->handle=(struct private_handle_t *) Context->mDimHandle;
+        Layer->handle= Context->mDimHandle;
         handle = (struct private_handle_t *) Layer->handle;
         Layer->sourceCrop.left = Layer->displayFrame.left;
         Layer->sourceCrop.top = Layer->displayFrame.top;
@@ -4382,8 +4389,9 @@ check_layer_external(
         Layer->compositionType = HWC_FRAMEBUFFER;
 
         /* Get format. */
-        if( hwcGetFormat(handle, &format) != hwcSTATUS_OK
-            || (LayerZoneCheck(Layer,HWC_DISPLAY_EXTERNAL) != 0))
+		//zxl: remove hwcGetFormat,or it will let fbdc format return gpu.
+        if( /* hwcGetFormat(handle, &format) != hwcSTATUS_OK
+            ||*/(LayerZoneCheck(Layer,HWC_DISPLAY_EXTERNAL) != 0))
         {
 			LOGGPUCOP("Back to gpu compositon line[%d],fun[%s]",__LINE__,__FUNCTION__);
 			return HWC_FRAMEBUFFER;
@@ -4391,7 +4399,7 @@ check_layer_external(
 
         LOGV("name[%d]=%s,cnt=%d,vodemod=%d",Index,Layer->LayerName,Count ,videomode);
 		if(1 
-#ifndef HWC_EXTERNAL
+#if !HWC_EXTERNAL
 			&& ((getHdmiMode()==0) || (Count <= 2 && videomode))
 #endif			
 		)  // layer <=3,do special processing
@@ -4519,7 +4527,7 @@ _DumpSurface(
                 pfile = fopen(layername,"wb");
                 if(pfile)
                 {
-                    fwrite((const void *)handle_pre->base,(size_t)(SrcStride * handle_pre->stride*handle_pre->height),1,pfile);
+                    fwrite((const void *)(GPU_BASE),(size_t)(SrcStride * handle_pre->stride*handle_pre->height),1,pfile);
                     fclose(pfile);
                     LOGI(" dump surface layername %s,w:%d,h:%d,formatsize :%d",layername,handle_pre->width,handle_pre->height,SrcStride);
                 }
@@ -4572,7 +4580,7 @@ hwcDumpArea(
                 }
             }
 
-            if (area->owners < (1U << i))
+            if (area->owners < (1 << i))
             {
                 break;
             }
@@ -4591,7 +4599,7 @@ static int CompareLines(int *da,int w)
     {
         for(j= 0;j<w;j++)  
         {
-            if(*da != 0xff000000 && *da != 0x0)
+            if((unsigned int)*da != 0xff000000 && (unsigned int)*da != 0x0)
             {
                 return 1;
             }            
@@ -4609,7 +4617,7 @@ static int CompareVers(int *da,int w,int h)
         data = da + i;
         for(j= 0;j<h;j++)  
         {
-            if(*data != 0xff000000 && *data != 0x0 )
+            if((unsigned int)*data != 0xff000000 && (unsigned int)*data != 0x0 )
             {
                 return 1;
             }    
@@ -4663,18 +4671,19 @@ static int DetectValidData(int *data,int w,int h)
 }
 
 /**
- * @brief Sort by ypos (positive-order)
+ * @brief Sort by pos (positive-order)
  *
+ * @param pos           0:ypos  1:xpos
  * @param win_id 		Win index
  * @param p_fb_info 	Win config data
  * @return 				Errno no
  */
 
-static int  sort_area_by_ypos(int win_id,struct rk_fb_win_cfg_data* p_fb_info)
+static int  sort_area_by_pos(int pos,int win_id,struct rk_fb_win_cfg_data* p_fb_info)
 {
     int i,j,k;
     bool bSwitch;
-	if((win_id !=2 && win_id !=3) || p_fb_info==NULL)
+	if((win_id !=2 && win_id !=3) || p_fb_info==NULL || (pos != 0 && pos != 1))
 	{
 		ALOGW("%s(%d):invalid param",__FUNCTION__,__LINE__);
 		return -1;
@@ -4693,7 +4702,8 @@ static int  sort_area_by_ypos(int win_id,struct rk_fb_win_cfg_data* p_fb_info)
                     if((p_fb_info->win_par[i].area_par[k].ion_fd || p_fb_info->win_par[i].area_par[k].phy_addr)  &&
                         (p_fb_info->win_par[i].area_par[k-1].ion_fd || p_fb_info->win_par[i].area_par[k-1].phy_addr) )
                         {
-                            if(p_fb_info->win_par[i].area_par[k].ypos < p_fb_info->win_par[i].area_par[k-1].ypos )
+                            if(((pos == 0) && (p_fb_info->win_par[i].area_par[k].ypos < p_fb_info->win_par[i].area_par[k-1].ypos)) ||
+                                ((pos == 1) && (p_fb_info->win_par[i].area_par[k].xpos < p_fb_info->win_par[i].area_par[k-1].xpos)) )
                             {
                                 //switch
                                 memcpy(&tmp_fb_area,&(p_fb_info->win_par[i].area_par[k-1]),sizeof(struct rk_fb_area_par));
@@ -5397,7 +5407,7 @@ int hwc_prepare_virtual(hwc_composer_device_1_t * dev, hwc_display_contents_1_t 
 
 static int hwc_prepare_external(hwc_composer_device_1 *dev,
                                hwc_display_contents_1_t *list) {
-#ifdef HWC_EXTERNAL
+#if HWC_EXTERNAL
 	size_t i;
     size_t j;
     
@@ -5501,9 +5511,13 @@ static int hwc_prepare_external(hwc_composer_device_1 *dev,
 #endif
             {
 #if GET_VPU_INTO_FROM_HEAD
-                memcpy(&vpu_hd,(void*)handle->base,sizeof(tVPU_FRAME));
+                memcpy(&vpu_hd,(void*)(GPU_BASE),sizeof(tVPU_FRAME));
 #else
-                memcpy(&vpu_hd,(void*)handle->base+2*handle->stride*handle->height,sizeof(tVPU_FRAME));
+#if defined(__arm64__) || defined(__aarch64__)
+                memcpy(&vpu_hd,(long*)(GPU_BASE)+2*handle->stride*handle->height,sizeof(tVPU_FRAME));
+#else
+                memcpy(&vpu_hd,(int*)(GPU_BASE)+2*handle->stride*handle->height,sizeof(tVPU_FRAME));
+#endif
 #endif
                 //if find invalid params,then increase iVideoSources and try again.
                 if(vpu_hd.FrameWidth>8192 || vpu_hd.FrameWidth <=0 || \
@@ -5568,9 +5582,9 @@ static int hwc_prepare_external(hwc_composer_device_1 *dev,
             //save handle into video_info which doesn't match before.
             if(!context->video_info[m].bMatch)
             {
-                ALOGV("save handle=%p,base=%p,w=%d,h=%d",handle,handle->base,handle->video_width,handle->video_height);
+                ALOGV("save handle=%p,base=%p,w=%d,h=%d",handle,GPU_BASE,handle->video_width,handle->video_height);
                 context->video_info[m].video_hd = handle ;
-                context->video_info[m].video_base = (void*)handle->base;
+                context->video_info[m].video_base = (void*)(GPU_BASE);
                 context->video_info[m].bMatch=true;
                 vinfo_cnt++;
                 break;
@@ -5681,10 +5695,14 @@ static int hwc_prepare_external(hwc_composer_device_1 *dev,
                                                     GRALLOC_USAGE_HW_COMPOSER|GRALLOC_USAGE_HW_RENDER|GRALLOC_USAGE_HW_VIDEO_ENCODER, \
                                                     (buffer_handle_t*)(&(context->pbvideo_bk[j])),&stride_gr);
                     if(!err){
-                        struct private_handle_t*phandle_gr = (struct private_handle_t*)context->pbvideo_bk[j];
-                        context->fd_video_bk[j] = phandle_gr->share_fd;
-                        context->base_video_bk[j]= (int)phandle_gr->base;
-                        ALOGV("video alloc fd [%dx%d,f=%d],fd=%d ",phandle_gr->width,phandle_gr->height,phandle_gr->format,phandle_gr->share_fd);                                
+                        struct private_handle_t*handle = (struct private_handle_t*)context->pbvideo_bk[j];
+                        context->fd_video_bk[j] = handle->share_fd;
+#if defined(__arm64__) || defined(__aarch64__)
+                        context->base_video_bk[j]= (long)(GPU_BASE);
+#else
+                        context->base_video_bk[j]= (int)(GPU_BASE);
+#endif
+                        ALOGV("video alloc fd [%dx%d,f=%d],fd=%d ",handle->width,handle->height,handle->format,handle->share_fd);
 
                     }
                     else {
@@ -5709,13 +5727,13 @@ static int hwc_prepare_external(hwc_composer_device_1 *dev,
         err = 0;
         for(i=0;i<MaxVideoBackBuffers;i++)
         {
-            if(context->pbvideo_bk[i] > 0)
+            if(context->pbvideo_bk[i] != NULL)
                 err = context->mAllocDev->free(context->mAllocDev, context->pbvideo_bk[i]);
             ALOGV("free video fd=%d,base=%p",context->fd_video_bk[i], context->base_video_bk[i]);
             if(!err)
             {
                 context->fd_video_bk[i] = -1;
-                context->base_video_bk[i] = NULL;
+                context->base_video_bk[i] = 0;
                 context->pbvideo_bk[i] = NULL;
             }
             ALOGW_IF(err, "free(...) failed %d (%s)", err, strerror(-err));
@@ -5951,9 +5969,13 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
 #endif
             {
 #if GET_VPU_INTO_FROM_HEAD
-                memcpy(&vpu_hd,(void*)handle->base,sizeof(tVPU_FRAME));
+                memcpy(&vpu_hd,(void*)(GPU_BASE),sizeof(tVPU_FRAME));
 #else
-                memcpy(&vpu_hd,(void*)handle->base+2*handle->stride*handle->height,sizeof(tVPU_FRAME));
+#if defined(__arm64__) || defined(__aarch64__)
+                memcpy(&vpu_hd,(long*)(GPU_BASE)+2*handle->stride*handle->height,sizeof(tVPU_FRAME));
+#else
+                memcpy(&vpu_hd,(int*)(GPU_BASE)+2*handle->stride*handle->height,sizeof(tVPU_FRAME));
+#endif
 #endif
                 //if find invalid params,then increase iVideoSources and try again.
                 if(vpu_hd.FrameWidth>8192 || vpu_hd.FrameWidth <=0 || \
@@ -6020,9 +6042,9 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
             //save handle into video_info which doesn't match before.
             if(!context->video_info[m].bMatch)
             {
-                ALOGV("save handle=%p,base=%p,w=%d,h=%d",handle,handle->base,handle->video_width,handle->video_height);
+                ALOGV("save handle=%p,base=%p,w=%d,h=%d",handle,GPU_BASE,handle->video_width,handle->video_height);
                 context->video_info[m].video_hd = handle ;
-                context->video_info[m].video_base = (void*)handle->base;
+                context->video_info[m].video_base = (void*)GPU_BASE;
                 context->video_info[m].bMatch=true;
                 vinfo_cnt++;
                 break;
@@ -6134,10 +6156,14 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
                                                     GRALLOC_USAGE_HW_COMPOSER|GRALLOC_USAGE_HW_RENDER|GRALLOC_USAGE_HW_VIDEO_ENCODER, \
                                                     (buffer_handle_t*)(&(context->pbvideo_bk[j])),&stride_gr);
                     if(!err){
-                        struct private_handle_t*phandle_gr = (struct private_handle_t*)context->pbvideo_bk[j];
-                        context->fd_video_bk[j] = phandle_gr->share_fd;
-                        context->base_video_bk[j]= (int)phandle_gr->base;
-                        ALOGV("video alloc fd [%dx%d,f=%d],fd=%d ",phandle_gr->width,phandle_gr->height,phandle_gr->format,phandle_gr->share_fd);                                
+                        struct private_handle_t* handle = (struct private_handle_t*)context->pbvideo_bk[j];
+                        context->fd_video_bk[j] = handle->share_fd;
+#if defined(__arm64__) || defined(__aarch64__)
+                        context->base_video_bk[j]= (long)(GPU_BASE);
+#else
+                        context->base_video_bk[j]= (int)(GPU_BASE);
+#endif
+                        ALOGV("video alloc fd [%dx%d,f=%d],fd=%d ",handle->width,handle->height,handle->format,handle->share_fd);
 
                     }
                     else {
@@ -6162,13 +6188,13 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
         err = 0;
         for(i=0;i<MaxVideoBackBuffers;i++)
         {
-            if(context->pbvideo_bk[i] > 0)
+            if(context->pbvideo_bk[i] != NULL)
                 err = context->mAllocDev->free(context->mAllocDev, context->pbvideo_bk[i]);
             ALOGV("free video fd=%d,base=%p",context->fd_video_bk[i], context->base_video_bk[i]);
             if(!err)
             {
                 context->fd_video_bk[i] = -1;
-                context->base_video_bk[i] = NULL;
+                context->base_video_bk[i] = 0;
                 context->pbvideo_bk[i] = NULL;
             }
             ALOGW_IF(err, "free(...) failed %d (%s)", err, strerror(-err));
@@ -6325,7 +6351,7 @@ hwc_prepare(
 #if hwcDumpSurface
     _DumpSurface(list);
 #endif
-#ifdef HWC_EXTERNAL
+#if HWC_EXTERNAL
 	if(flag_hwcup_external < 5 && getHdmiMode() == 1 && flag_external == 0 && flag_blank == 0  )
 	{
 		flag_hwcup_external ++;
@@ -6399,7 +6425,7 @@ int hwc_blank(struct hwc_composer_device_1 *dev, int dpy, int blank)
     }
 
     case HWC_DISPLAY_EXTERNAL:{
-#ifdef HWC_EXTERNAL
+#if HWC_EXTERNAL
 		flag_blank = 1;
 		_contextAnchor1->fb_blanked = blank;
         int fb_blank = blank ? FB_BLANK_POWERDOWN : FB_BLANK_UNBLANK;
@@ -6460,6 +6486,49 @@ static int hwc_fbPost(hwc_composer_device_1_t * dev, size_t numDisplays, hwc_dis
 {
     return 0;
 }
+
+#if G6110_SUPPORT_FBDC
+int HALPixelFormatGetCompression(int iFormat)
+{
+	/* Extension format. Return only the compression bits. */
+	if (iFormat >= 0x100 && iFormat <= 0x1FF)
+		return (iFormat & 0x70) >> 4;
+
+	/* Upstream formats are not compressible unless they are redefined as
+	 * extension formats (e.g. RGB_565, BGRA_8888).
+	 */
+	return HAL_FB_COMPRESSION_NONE;
+}
+
+int HALPixelFormatGetRawFormat(int iFormat)
+{
+	/* If the format is within the "vendor format" range, just mask out the
+	 * compression bits.
+	 */
+	if (iFormat >= 0x100 && iFormat <= 0x1FF)
+	{
+		switch (iFormat & 0xF)
+		{
+			/* These formats will be *rendered* by the GPU and we want to
+			 * support compression, but they are "upstream" formats too, so
+			 * remap them.
+			 */
+			case HAL_PIXEL_FORMAT_RGB_565:
+				return HAL_PIXEL_FORMAT_RGB_565;
+			case HAL_PIXEL_FORMAT_BGRA_8888:
+				return HAL_PIXEL_FORMAT_BGRA_8888;
+			/* Vendor format */
+			default:
+				return iFormat & ~0xF0;
+		}
+	}
+
+	/* Upstream format */
+	return iFormat;
+}
+
+#endif
+
 static int hwc_primary_Post( hwcContext * context,hwc_display_contents_1_t* list)
 {
 
@@ -6546,6 +6615,30 @@ static int hwc_primary_Post( hwcContext * context,hwc_display_contents_1_t* list
 	    fb_info.wait_fs=0;
 #endif
 
+#if G6110_SUPPORT_FBDC
+    if(HALPixelFormatGetCompression(context->fbhandle.format) != HAL_FB_COMPRESSION_NONE)
+    {
+        switch(HALPixelFormatGetRawFormat(context->fbhandle.format))
+        {
+            case HAL_PIXEL_FORMAT_RGB_565:
+                fb_info.win_par[0].area_par[0].data_format = FBDC_RGB_565;
+                fb_info.win_par[0].area_par[0].fbdc_data_format = FBDC_RGB_565;
+                fb_info.win_par[0].area_par[0].fbdc_en= 1;
+                fb_info.win_par[0].area_par[0].fbdc_cor_en = 0;
+                break;
+            case HAL_PIXEL_FORMAT_BGRA_8888:
+                fb_info.win_par[0].area_par[0].data_format = FBDC_ARGB_888;
+                fb_info.win_par[0].area_par[0].fbdc_data_format = FBDC_ARGB_888;
+                fb_info.win_par[0].area_par[0].fbdc_en= 1;
+                fb_info.win_par[0].area_par[0].fbdc_cor_en = 0;
+                break;
+            default:
+                ALOGE("Unsupport format 0x%x",HALPixelFormatGetRawFormat(context->fbhandle.format));
+                break;
+        }
+    }
+#endif
+
         ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info);
 
 #if USE_HWC_FENCE
@@ -6553,13 +6646,24 @@ static int hwc_primary_Post( hwcContext * context,hwc_display_contents_1_t* list
         for(int k=0;k<RK_MAX_BUF_NUM;k++)
         {
             if(fb_info.rel_fence_fd[k]!= -1)
-               // close(fb_info.rel_fence_fd[k]);
                fbLayer->releaseFenceFd = fb_info.rel_fence_fd[k];
 
         }
 
         list->retireFenceFd = fb_info.ret_fence_fd;
+#else
+        for(int k=0;k<RK_MAX_BUF_NUM;k++)
+        {
+            if(fb_info.rel_fence_fd[k]!= -1)
+                close(fb_info.rel_fence_fd[k]);
+        }
+        fbLayer->releaseFenceFd=-1;
 
+        if(fb_info.ret_fence_fd!= -1)
+        {
+            close(fb_info.ret_fence_fd);
+        }
+        list->retireFenceFd=-1;
 #endif
 
         for(int i = 0;i<4;i++)
@@ -6678,6 +6782,30 @@ static int hwc_external_Post( hwcContext * context,hwc_display_contents_1_t* lis
 	    fb_info.wait_fs=0;
 #endif
 
+#if G6110_SUPPORT_FBDC
+    if(HALPixelFormatGetCompression(context->fbhandle.format) != HAL_FB_COMPRESSION_NONE)
+    {
+        switch(HALPixelFormatGetRawFormat(context->fbhandle.format))
+        {
+            case HAL_PIXEL_FORMAT_RGB_565:
+                fb_info.win_par[0].area_par[0].data_format = FBDC_RGB_565;
+                fb_info.win_par[0].area_par[0].fbdc_data_format = FBDC_RGB_565;
+                fb_info.win_par[0].area_par[0].fbdc_en= 1;
+                fb_info.win_par[0].area_par[0].fbdc_cor_en = 0;
+                break;
+            case HAL_PIXEL_FORMAT_BGRA_8888:
+                fb_info.win_par[0].area_par[0].data_format = FBDC_ARGB_888;
+                fb_info.win_par[0].area_par[0].fbdc_data_format = FBDC_ARGB_888;
+                fb_info.win_par[0].area_par[0].fbdc_en= 1;
+                fb_info.win_par[0].area_par[0].fbdc_cor_en = 0;
+                break;
+            default:
+                ALOGE("Unsupport format 0x%x",HALPixelFormatGetRawFormat(context->fbhandle.format));
+                break;
+        }
+    }
+#endif
+
         ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info);
 
 #if USE_HWC_FENCE
@@ -6692,7 +6820,19 @@ static int hwc_external_Post( hwcContext * context,hwc_display_contents_1_t* lis
         }
 
         last_ret_fence = list->retireFenceFd = fb_info.ret_fence_fd;
+#else
+        for(int k=0;k<RK_MAX_BUF_NUM;k++)
+        {
+            if(fb_info.rel_fence_fd[k]!= -1)
+                close(fb_info.rel_fence_fd[k]);
+        }
+        fbLayer->releaseFenceFd=-1;
 
+        if(fb_info.ret_fence_fd!= -1)
+        {
+            close(fb_info.ret_fence_fd);
+        }
+        list->retireFenceFd=-1;
 #endif
 
         for(int i = 0;i<4;i++)
@@ -7197,6 +7337,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
         hwc_rect_t * pdisp_rect = &(pzone_mag->zone_info[i].disp_rect);            
         int area_no = 0;
         int win_id = 0;
+        int raw_format=hwChangeFormatandroidL(pzone_mag->zone_info[i].format);
         ALOGV("hwc_set_lcdc Zone[%d]->layer[%d],dispatched=%d,"
         "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
         "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],"
@@ -7295,24 +7436,49 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
                 ALOGE("hwc_set_lcdc  err!");
                 return -1;
          }    
+
+#if 0 //G6110_SUPPORT_FBDC
+    if(HALPixelFormatGetCompression(pzone_mag->zone_info[i].format) != HAL_FB_COMPRESSION_NONE)
+    {
+        raw_format = HALPixelFormatGetRawFormat(pzone_mag->zone_info[i].format);
+        switch(raw_format)
+        {
+            case HAL_PIXEL_FORMAT_RGB_565:
+                raw_format = FBDC_RGB_565;
+                fb_info.win_par[win_no-1].area_par[area_no].fbdc_data_format = FBDC_RGB_565;
+                fb_info.win_par[win_no-1].area_par[area_no].fbdc_en= 1;
+                fb_info.win_par[win_no-1].area_par[area_no].fbdc_cor_en = 0;
+                break;
+            case HAL_PIXEL_FORMAT_BGRA_8888:
+                raw_format = FBDC_ARGB_888;
+                fb_info.win_par[win_no-1].area_par[area_no].fbdc_data_format = FBDC_ARGB_888;
+                fb_info.win_par[win_no-1].area_par[area_no].fbdc_en= 1;
+                fb_info.win_par[win_no-1].area_par[area_no].fbdc_cor_en = 0;
+                break;
+            default:
+                ALOGE("Unsupport format 0x%x",raw_format);
+                break;
+        }
+    }
+#endif
+
         if(win_no ==1 && !mix_flag)         
         {
-            if(pzone_mag->zone_info[i].format ==  HAL_PIXEL_FORMAT_RGBA_8888) //
+            if(raw_format ==  HAL_PIXEL_FORMAT_RGBA_8888)
             {
                 fb_info.win_par[win_no-1].area_par[area_no].data_format = HAL_PIXEL_FORMAT_RGBX_8888;
             }
             else
             {
-                //fb_info.win_par[win_no-1].area_par[area_no].data_format =  pzone_mag->zone_info[i].format;
-                fb_info.win_par[win_no-1].area_par[area_no].data_format =  hwChangeFormatandroidL(pzone_mag->zone_info[i].format);
+                fb_info.win_par[win_no-1].area_par[area_no].data_format =  raw_format;
             }
                 
         }
         else
         {
-            //fb_info.win_par[win_no-1].area_par[area_no].data_format =  pzone_mag->zone_info[i].format;
-			fb_info.win_par[win_no-1].area_par[area_no].data_format =  hwChangeFormatandroidL(pzone_mag->zone_info[i].format);
-        }    
+            fb_info.win_par[win_no-1].area_par[area_no].data_format =  raw_format;
+        }
+
         fb_info.win_par[win_no-1].win_id = win_id;
         fb_info.win_par[win_no-1].alpha_mode = AB_SRC_OVER;
         fb_info.win_par[win_no-1].g_alpha_val =  pzone_mag->zone_info[i].zone_alpha;
@@ -7360,9 +7526,15 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
         }    
     }    
 
+#ifndef GPU_G6110
     //win2 & win3 need sort by ypos (positive-order)
-    sort_area_by_ypos(2,&fb_info);
-    sort_area_by_ypos(3,&fb_info);
+    sort_area_by_pos(0,2,&fb_info);
+    sort_area_by_pos(0,3,&fb_info);
+#else
+    //win2 & win3 need sort by xpos (positive-order)
+    sort_area_by_pos(1,2,&fb_info);
+    sort_area_by_pos(1,3,&fb_info);
+#endif
 
 #if 1 // detect UI invalid ,so close win1 ,reduce  bandwidth.
     if(
@@ -7372,16 +7544,15 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
         bool IsDiff = true;
         int ret;
         hwc_layer_1_t * layer = &list->hwLayers[1];
-        struct private_handle_t* uiHnd = (struct private_handle_t *) layer->handle;
-        IsDiff = uiHnd->share_fd != context->vui_fd;
+        struct private_handle_t* handle = (struct private_handle_t *) layer->handle;
+        IsDiff = handle->share_fd != context->vui_fd;
         if(IsDiff)
         {
             context->vui_hide = 0;  
         }
         else if(!context->vui_hide)
         {
-            ret = DetectValidData((int *)uiHnd->base,uiHnd->width,uiHnd->height);
-			ALOGD("uiHnd->width=%d,uiHnd->height=%d",uiHnd->width,uiHnd->height);
+            ret = DetectValidData((int *)(GPU_BASE),handle->width,handle->height);
             if(!ret)
             {                               
                 context->vui_hide = 1;
@@ -7400,7 +7571,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
                 }
             }    
         }    
-        context->vui_fd = uiHnd->share_fd;
+        context->vui_fd = handle->share_fd;
     }
 #endif
 
@@ -7574,12 +7745,15 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
     }
     if(!context->fb_blanked)
     {
+#ifndef GPU_G6110
         hwc_display_t dpy = NULL;
         hwc_surface_t surf = NULL;
         dpy = eglGetCurrentDisplay();
         surf = eglGetCurrentSurface(EGL_DRAW);
         _eglRenderBufferModifiedANDROID((EGLDisplay) dpy, (EGLSurface) surf);
-        eglSwapBuffers((EGLDisplay) dpy, (EGLSurface) surf); 
+        eglSwapBuffers((EGLDisplay) dpy, (EGLSurface) surf);
+#endif
+
         ALOGV("lcdc config done");
         if(ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info) == -1)
         {
@@ -7587,7 +7761,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
         }           
 
 #if USE_HWC_FENCE
-    	for(i=0;i<RK_MAX_BUF_NUM;i++)
+        for(unsigned int i=0;i<RK_MAX_BUF_NUM;i++)
     	{
             //ALOGD("rel_fence_fd[%d] = %d", i, fb_info.rel_fence_fd[i]);
             if(fb_info.rel_fence_fd[i] != -1)
@@ -7602,16 +7776,32 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
                     }
                     else
                     {
-                    if(mix_flag == 1)  // mix
-                        list->hwLayers[i+1].releaseFenceFd = fb_info.rel_fence_fd[i];
-                    else
-                        list->hwLayers[i].releaseFenceFd = fb_info.rel_fence_fd[i];
+                        if(mix_flag == 1)  // mix
+                        {
+                            if(list->hwLayers[i+1].releaseFenceFd > 0)
+                                close(list->hwLayers[i+1].releaseFenceFd);
+                            list->hwLayers[i+1].releaseFenceFd = fb_info.rel_fence_fd[i];
+                        }
+                        else
+                        {
+                            if(list->hwLayers[i].releaseFenceFd>0)
+                            {
+                                close(list->hwLayers[i+1].releaseFenceFd);
+                            }
+                            list->hwLayers[i].releaseFenceFd = fb_info.rel_fence_fd[i];
+                        }
                     }        
                 }    
                 else
                     close(fb_info.rel_fence_fd[i]);
              }
     	}
+
+        if(list->retireFenceFd > 0)
+        {
+            close(list->retireFenceFd);
+        }
+
         list->retireFenceFd = fb_info.ret_fence_fd;
 #else
 
@@ -7639,7 +7829,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
     }
     else
     {
-        for(i=0;i< (list->numHwLayers -1);i++)
+        for(unsigned int i=0;i< (list->numHwLayers -1);i++)
     	{
             list->hwLayers[i].releaseFenceFd = -1;    	   
     	}
@@ -7666,6 +7856,7 @@ static int hwc_set_lcdc_external(hwcContext * context, hwc_display_contents_1_t 
         hwc_rect_t * pdisp_rect = &(pzone_mag->zone_info[i].disp_rect);            
         int area_no = 0;
         int win_id = 0;
+		int raw_format=hwChangeFormatandroidL(pzone_mag->zone_info[i].format);
         ALOGV("hwc_set_lcdc Zone[%d]->layer[%d],dispatched=%d,"
         "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
         "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],"
@@ -7766,21 +7957,19 @@ static int hwc_set_lcdc_external(hwcContext * context, hwc_display_contents_1_t 
          }    
         if(win_no ==1 && !mix_flag)         
         {
-            if(pzone_mag->zone_info[i].format ==  HAL_PIXEL_FORMAT_RGBA_8888) //
+            if(raw_format ==  HAL_PIXEL_FORMAT_RGBA_8888) //
             {
                 fb_info.win_par[win_no-1].area_par[area_no].data_format = HAL_PIXEL_FORMAT_RGBX_8888;
             }
             else
             {
-                //fb_info.win_par[win_no-1].area_par[area_no].data_format =  pzone_mag->zone_info[i].format;
-                fb_info.win_par[win_no-1].area_par[area_no].data_format =  hwChangeFormatandroidL(pzone_mag->zone_info[i].format);
+                fb_info.win_par[win_no-1].area_par[area_no].data_format =  raw_format;
             }
                 
         }
         else
         {
-            //fb_info.win_par[win_no-1].area_par[area_no].data_format =  pzone_mag->zone_info[i].format;
-			fb_info.win_par[win_no-1].area_par[area_no].data_format =  hwChangeFormatandroidL(pzone_mag->zone_info[i].format);
+			fb_info.win_par[win_no-1].area_par[area_no].data_format =  raw_format;
         }    
         fb_info.win_par[win_no-1].win_id = win_id;
         fb_info.win_par[win_no-1].alpha_mode = AB_SRC_OVER;
@@ -7829,9 +8018,15 @@ static int hwc_set_lcdc_external(hwcContext * context, hwc_display_contents_1_t 
         }    
     }    
 
+#ifndef GPU_G6110
     //win2 & win3 need sort by ypos (positive-order)
-    sort_area_by_ypos(2,&fb_info);
-    sort_area_by_ypos(3,&fb_info);
+    sort_area_by_pos(0,2,&fb_info);
+    sort_area_by_pos(0,3,&fb_info);
+#else
+    //win2 & win3 need sort by xpos (positive-order)
+    sort_area_by_pos(1,2,&fb_info);
+    sort_area_by_pos(1,3,&fb_info);
+#endif
 
     #if 1 // detect UI invalid ,so close win1 ,reduce  bandwidth.
     if(
@@ -7841,17 +8036,17 @@ static int hwc_set_lcdc_external(hwcContext * context, hwc_display_contents_1_t 
         bool IsDiff = true;
         int ret;
         hwc_layer_1_t * layer = &list->hwLayers[1];
-        struct private_handle_t* uiHnd = (struct private_handle_t *) layer->handle;
-#ifndef HWC_EXTERNAL
-        IsDiff = uiHnd->share_fd != context->vui_fd;
+        struct private_handle_t* handle = (struct private_handle_t *) layer->handle;
+#if !HWC_EXTERNAL
+        IsDiff = handle->share_fd != context->vui_fd;
         if(IsDiff)
         {
             context->vui_hide = 0;  
         }
         else if(!context->vui_hide)
         {
-            ret = DetectValidData((int *)uiHnd->base,uiHnd->width,uiHnd->height);
-			ALOGD("uiHnd->width=%d,uiHnd->height=%d",uiHnd->width,uiHnd->height);
+            ret = DetectValidData((int *)(GPU_BASE),handle->width,handle->height);
+			ALOGD("handle->width=%d,handle->height=%d",handle->width,handle->height);
             if(!ret)
             {                               
                 context->vui_hide = 1;
@@ -7871,8 +8066,7 @@ static int hwc_set_lcdc_external(hwcContext * context, hwc_display_contents_1_t 
                 }
             }    
         }    
-        context->vui_fd = uiHnd->share_fd;
-       
+        context->vui_fd = handle->share_fd;
     }
     #endif
 
@@ -8046,12 +8240,14 @@ static int hwc_set_lcdc_external(hwcContext * context, hwc_display_contents_1_t 
     }
     if(!context->fb_blanked)
     {
+#ifndef GPU_G6110
         hwc_display_t dpy = NULL;
         hwc_surface_t surf = NULL;
         dpy = eglGetCurrentDisplay();
         surf = eglGetCurrentSurface(EGL_DRAW);
         _eglRenderBufferModifiedANDROID((EGLDisplay) dpy, (EGLSurface) surf);
         eglSwapBuffers((EGLDisplay) dpy, (EGLSurface) surf); 
+#endif
         ALOGV("lcdc config done");
         if(ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info) == -1)
         {
@@ -8059,7 +8255,7 @@ static int hwc_set_lcdc_external(hwcContext * context, hwc_display_contents_1_t 
         }           
 
 #if USE_HWC_FENCE
-    	for(i=0;i<RK_MAX_BUF_NUM;i++)
+        for(unsigned int i=0;i<RK_MAX_BUF_NUM;i++)
     	{
             //ALOGD("rel_fence_fd[%d] = %d", i, fb_info.rel_fence_fd[i]);
             if(fb_info.rel_fence_fd[i] != -1)
@@ -8075,20 +8271,34 @@ static int hwc_set_lcdc_external(hwcContext * context, hwc_display_contents_1_t 
                     }
                     else
                     {
-                    if(mix_flag == 1)  // mix
-                        list->hwLayers[i+1].releaseFenceFd = fb_info.rel_fence_fd[i];
-                    else
-                        list->hwLayers[i].releaseFenceFd = fb_info.rel_fence_fd[i];
-                    }        
-                }    
+                        if(mix_flag == 1)  // mix
+                        {
+                            if(list->hwLayers[i+1].releaseFenceFd > 0)
+                                close(list->hwLayers[i+1].releaseFenceFd);
+                            list->hwLayers[i+1].releaseFenceFd = fb_info.rel_fence_fd[i];
+                        }
+                        else
+                        {
+                            if(list->hwLayers[i].releaseFenceFd>0)
+                                close(list->hwLayers[i+1].releaseFenceFd);
+                            list->hwLayers[i].releaseFenceFd = fb_info.rel_fence_fd[i];
+                        }
+                    }
+                }
                 else
 				{
                     close(fb_info.rel_fence_fd[i]);
             		fb_info.rel_fence_fd[i] = -1;
-				} 
+				}
 			}
 			last_rel_fence[i] = fb_info.rel_fence_fd[i];
     	}
+
+        if(list->retireFenceFd > 0)
+        {
+            close(list->retireFenceFd);
+        }
+
         last_ret_fence = list->retireFenceFd = fb_info.ret_fence_fd;
 #else
 
@@ -8116,7 +8326,7 @@ static int hwc_set_lcdc_external(hwcContext * context, hwc_display_contents_1_t 
     }
     else
     {
-        for(i=0;i< (list->numHwLayers -1);i++)
+        for(unsigned int i=0;i< (list->numHwLayers -1);i++)
     	{
             list->hwLayers[i].releaseFenceFd = -1;    	   
     	}
@@ -8316,6 +8526,7 @@ int hwc_set_virtual(hwc_composer_device_1_t * dev, hwc_display_contents_1_t  **c
 }
 static int hwc_set_external(hwc_composer_device_1_t *dev, hwc_display_contents_1_t* list, int dpy)
 {
+#if HWC_EXTERNAL
 
     hwcContext * context = _contextAnchor1;
 #if hwcUseTime
@@ -8413,6 +8624,9 @@ static int hwc_set_external(hwc_composer_device_1_t *dev, hwc_display_contents_1
 #endif
 
     hwc_sync_release(list);
+#else
+    //do nothing
+#endif
     //ALOGD("set end");
     return 0; //? 0 : HWC_EGL_ERROR;
 }
@@ -8539,7 +8753,7 @@ static void handle_vsync_event(hwcContext * context )
 
 void handle_hdmi_event(int hdmi_mode ,int flag )
 {
-#ifdef HWC_EXTERNAL
+#if HWC_EXTERNAL
     if (!_contextAnchor->procs){
         return;
     }
@@ -8742,7 +8956,7 @@ hwc_device_close(
     )
 {
     int i;
-    int err;
+    int err=0;
     hwcContext * context = _contextAnchor;
 
     LOGD("%s(%d):Close hwc device in thread=%d",
@@ -8803,12 +9017,12 @@ hwc_device_close(
     // free video gralloc buffer
     for(i=0;i<MaxVideoBackBuffers;i++)
     {
-        if(context->pbvideo_bk[i] > 0)
+        if(context->pbvideo_bk[i] != NULL)
             err = context->mAllocDev->free(context->mAllocDev, context->pbvideo_bk[i]);
         if(!err)
         {
             context->fd_video_bk[i] = -1;
-            context->base_video_bk[i] = NULL;
+            context->base_video_bk[i] = 0;
             context->pbvideo_bk[i] = NULL;
         }
         ALOGW_IF(err, "free pbvideo_bk (...) failed %d (%s)", err, strerror(-err));
@@ -8901,6 +9115,8 @@ static int hwc_getDisplayAttributes(struct hwc_composer_device_1* dev, int disp,
             break;
         case HWC_DISPLAY_DPI_Y:
             values[i] = (int32_t) (pdev->dpyAttr[disp].ydpi*1000.0);
+            break;
+        case HWC_DISPLAY_NO_ATTRIBUTE:
             break;
         default:
             ALOGE("Unknown display attribute %d",
@@ -9127,7 +9343,7 @@ hwc_device_open(
     for(i=0;i<MaxVideoBackBuffers;i++)
     {
         context->fd_video_bk[i] = -1;
-        context->base_video_bk[i] = NULL;
+        context->base_video_bk[i] = 0;
         context->pbvideo_bk[i] = NULL;
     }
     context->mCurVideoIndex= 0;
@@ -9151,6 +9367,8 @@ hwc_device_open(
     }
 #endif
 
+//zxl: tmp
+#ifndef G6110_RM_RGA
     /* Get gco2D object pointer. */
     
     context->engine_fd = open("/dev/rga",O_RDWR,0);
@@ -9160,7 +9378,7 @@ hwc_device_open(
         ALOGE("rga open err!");
 
     }
-    
+#endif
 
 #if ENABLE_WFD_OPTIMIZE
 	 property_set("sys.enable.wfd.optimize","1");
@@ -9168,7 +9386,9 @@ hwc_device_open(
     {
         int type = hwc_get_int_property("sys.enable.wfd.optimize","0");
         context->wfdOptimize = type;
+#ifndef G6110_RM_RGA
         init_rga_cfg(context->engine_fd);
+#endif
         if (type>0 && !is_surport_wfd_optimize())
         {
            property_set("sys.enable.wfd.optimize","0");
@@ -9207,7 +9427,11 @@ hwc_device_open(
     context->fbStride   = fixInfo.line_length;
 	context->fbhandle.width = info.xres;
 	context->fbhandle.height = info.yres;
+#ifdef GPU_G6110
+    context->fbhandle.format = HAL_PIXEL_FORMAT_BGRA_8888;
+#else
     context->fbhandle.format = info.nonstd & 0xff;
+#endif
     context->fbhandle.stride = (info.xres+ 31) & (~31);
     context->pmemPhysical = ~0U;
     context->pmemLength   = 0;
@@ -9258,11 +9482,14 @@ hwc_device_open(
                                     GRALLOC_USAGE_HW_COMPOSER|GRALLOC_USAGE_HW_RENDER, \
                                     (buffer_handle_t*)(&(context->mDimHandle)),&stride_gr);
     if(!err){
-        struct private_handle_t*phandle_gr = (struct private_handle_t*)context->mDimHandle;
-        context->mDimFd = phandle_gr->share_fd;
-        context->mDimBase = (int)phandle_gr->base;
-        ALOGD("Dim buffer alloc fd [%dx%d,f=%d],fd=%d ",context->fbhandle.width,context->fbhandle.height,HAL_PIXEL_FORMAT_RGB_565,phandle_gr->share_fd);                                
-
+        struct private_handle_t* handle = (struct private_handle_t*)context->mDimHandle;
+        context->mDimFd = handle->share_fd;
+#if defined(__arm64__) || defined(__aarch64__)
+        context->mDimBase = (long)(GPU_BASE);
+#else
+        context->mDimBase = (int)(GPU_BASE);
+#endif
+        ALOGD("Dim buffer alloc fd [%dx%d,f=%d],fd=%d ",context->fbhandle.width,context->fbhandle.height,HAL_PIXEL_FORMAT_RGB_565,handle->share_fd);
     }
     else{
             ALOGE("Dim buffer alloc faild");
@@ -9353,7 +9580,7 @@ hwc_device_open(
     {
         LOGD("Create readHdmiMode thread error .");
     }
-#ifdef HWC_EXTERNAL
+#if HWC_EXTERNAL
 	pthread_t t0;
 	if (pthread_create(&t0, NULL, try_hotplug_external, NULL))
     {
@@ -9574,7 +9801,7 @@ int get_hdmi_config(){
     for(int i=0;i<MaxVideoBackBuffers;i++)
     {
         context->fd_video_bk[i] = -1;
-        context->base_video_bk[i] = NULL;
+        context->base_video_bk[i] = 0;
         context->pbvideo_bk[i] = NULL;
     }
     context->mCurVideoIndex= 0;
@@ -9593,7 +9820,11 @@ int get_hdmi_config(){
     context->fbStride   = finfo.line_length;
 	context->fbhandle.width = info.xres;
 	context->fbhandle.height = info.yres;
+#ifdef GPU_G6110
+    context->fbhandle.format = HAL_PIXEL_FORMAT_BGRA_8888;
+#else
     context->fbhandle.format = info.nonstd & 0xff;
+#endif
     context->fbhandle.stride = (info.xres+ 31) & (~31);
     context->pmemPhysical = ~0U;
     context->pmemLength   = 0;
@@ -9607,10 +9838,14 @@ int get_hdmi_config(){
                                     GRALLOC_USAGE_HW_COMPOSER|GRALLOC_USAGE_HW_RENDER, \
                                     (buffer_handle_t*)(&(context->mDimHandle)),&stride_gr);
     if(!err){
-        struct private_handle_t*phandle_gr = (struct private_handle_t*)context->mDimHandle;
-        context->mDimFd = phandle_gr->share_fd;
-        context->mDimBase = (int)phandle_gr->base;
-        ALOGD("Dim buffer alloc fd [%dx%d,f=%d],fd=%d ",context->fbhandle.width,context->fbhandle.height,HAL_PIXEL_FORMAT_RGB_565,phandle_gr->share_fd);                                
+        struct private_handle_t*handle = (struct private_handle_t*)context->mDimHandle;
+        context->mDimFd = handle->share_fd;
+#if defined(__arm64__) || defined(__aarch64__)
+        context->mDimBase = (long)(GPU_BASE);
+#else
+        context->mDimBase = (int)(GPU_BASE);
+#endif
+        ALOGD("Dim buffer alloc fd [%dx%d,f=%d],fd=%d ",context->fbhandle.width,context->fbhandle.height,HAL_PIXEL_FORMAT_RGB_565,handle->share_fd);                                
 
     }
     else{
@@ -9748,7 +9983,7 @@ void get_external_full_screen_size(int* w,int* h)
 int close_hdmi()
 {
     int i;
-    int err;
+    int err=0;
     hwcContext * context = _contextAnchor1;
 
     if(context->engine_fd)
@@ -9768,12 +10003,12 @@ int close_hdmi()
     // free video gralloc buffer
     for(i=0;i<MaxVideoBackBuffers;i++)
     {
-        if(context->pbvideo_bk[i] > 0)
+        if(context->pbvideo_bk[i] != NULL)
             err = context->mAllocDev->free(context->mAllocDev, context->pbvideo_bk[i]);
         if(!err)
         {
             context->fd_video_bk[i] = -1;
-            context->base_video_bk[i] = NULL;
+            context->base_video_bk[i] = 0;
             context->pbvideo_bk[i] = NULL;
         }
         ALOGW_IF(err, "free pbvideo_bk (...) failed %d (%s)", err, strerror(-err));

@@ -29,7 +29,11 @@
 #include <utils/Thread.h>
 #include <linux/fb.h>
 #include <hardware/gralloc.h>
+#ifdef GPU_G6110
+#include  <hardware/img_gralloc_public.h>
+#else
 #include "../libgralloc/gralloc_priv.h"
+#endif
 #include "../librkvpu/vpu_global.h"
 #include "../librkvpu/vpu_mem.h"
 
@@ -44,7 +48,7 @@
 #define DUMP_SPLIT_AREA             0
 #define SYNC_IN_VIDEO               0
 #define USE_HWC_FENCE               1
-#define USE_QUEUE_DDRFREQ           0
+//#define USE_QUEUE_DDRFREQ           0
 #define USE_VIDEO_BACK_BUFFERS      1
 #define USE_SPECIAL_COMPOSER        0
 #define ENABLE_LCDC_IN_NV12_TRANSFORM   1   //1: It will need reserve a phyical memory for transform.
@@ -55,7 +59,16 @@
 #define ENABLE_TRANSFORM_BY_RGA     1               //1: It will need reserve a phyical memory for transform.
 #define OPTIMIZATION_FOR_TRANSFORM_UI   1
 #define OPTIMIZATION_FOR_DIMLAYER       1           //1: optimise for dim layer
+
+#ifdef GPU_G6110
+#define G6110_SUPPORT_FBDC              1
+#define G6110_RM_RGA                    1
+#define USE_QUEUE_DDRFREQ               0
+#define HWC_EXTERNAL                    0           //1:hwc control two lcdc for display
+#else
 #define HWC_EXTERNAL                    1           //1:hwc control two lcdc for display
+#define USE_QUEUE_DDRFREQ               0
+#endif
 
 //Command macro
 #define FB1_IOCTL_SET_YUV_ADDR	    0x5002
@@ -75,7 +88,6 @@
 #define GPUDRAWCNT                  (10)
 
 //Other macro
-#define GPU_BASE        handle->base
 #define GPU_WIDTH       handle->width
 #define GPU_HEIGHT      handle->height
 #define GPU_FORMAT      handle->format
@@ -91,7 +103,56 @@
 Author:wzq \
 Version:2.014 \
 "
+#if G6110_SUPPORT_FBDC
 
+//lcdc support fbdc format
+enum data_format {
+FBDC_RGB_565 = 0x26,
+FBDC_ARGB_888,
+FBDC_RGBX_888,
+};
+
+//G6110 support fbdc compression methods
+#define HAL_FB_COMPRESSION_NONE                0
+#define HAL_FB_COMPRESSION_DIRECT_8x8          1
+#define HAL_FB_COMPRESSION_DIRECT_16x4         2
+#define HAL_FB_COMPRESSION_DIRECT_32x2         3
+#define HAL_FB_COMPRESSION_INDIRECT_8x8        4
+#define HAL_FB_COMPRESSION_INDIRECT_16x4       5
+#define HAL_FB_COMPRESSION_INDIRECT_4TILE_8x8  6
+#define HAL_FB_COMPRESSION_INDIRECT_4TILE_16x4 7
+
+
+#define HAL_PIXEL_FORMAT_BAD		 0xff
+
+/* Use bits [0-3] of "vendor format" bits as real format. Customers should
+ * use *only* the unassigned bits below for custom pixel formats, YUV or RGB.
+ *
+ * If there are no bits set in this part of the field, or other bits are set
+ * in the format outside of the "vendor format" mask, the non-extension format
+ * is used instead. Reserve 0 for this purpose.
+ */
+
+#define HAL_PIXEL_FORMAT_VENDOR_EXT(fmt) (0x100 | (fmt & 0xF))
+
+/*      Reserved ** DO NOT USE **    HAL_PIXEL_FORMAT_VENDOR_EXT(0) */
+#define HAL_PIXEL_FORMAT_BGRX_8888   HAL_PIXEL_FORMAT_VENDOR_EXT(1)
+#define HAL_PIXEL_FORMAT_sBGR_A_8888 HAL_PIXEL_FORMAT_VENDOR_EXT(2)
+#define HAL_PIXEL_FORMAT_sBGR_X_8888 HAL_PIXEL_FORMAT_VENDOR_EXT(3)
+/*      HAL_PIXEL_FORMAT_RGB_565     HAL_PIXEL_FORMAT_VENDOR_EXT(4) */
+/*      HAL_PIXEL_FORMAT_BGRA_8888   HAL_PIXEL_FORMAT_VENDOR_EXT(5) */
+#define HAL_PIXEL_FORMAT_NV12        HAL_PIXEL_FORMAT_VENDOR_EXT(6)
+/*      Free for customer use        HAL_PIXEL_FORMAT_VENDOR_EXT(7) */
+/*      Free for customer use        HAL_PIXEL_FORMAT_VENDOR_EXT(8) */
+/*      Free for customer use        HAL_PIXEL_FORMAT_VENDOR_EXT(9) */
+/*      Free for customer use        HAL_PIXEL_FORMAT_VENDOR_EXT(10) */
+/*      Free for customer use        HAL_PIXEL_FORMAT_VENDOR_EXT(11) */
+/*      Free for customer use        HAL_PIXEL_FORMAT_VENDOR_EXT(12) */
+/*      Free for customer use        HAL_PIXEL_FORMAT_VENDOR_EXT(13) */
+/*      Free for customer use        HAL_PIXEL_FORMAT_VENDOR_EXT(14) */
+/*      Free for customer use        HAL_PIXEL_FORMAT_VENDOR_EXT(15) */
+
+#endif
 /* Set it to 1 to enable swap rectangle optimization;
  * Set it to 0 to disable. */
 /* Set it to 1 to enable pmem cache flush.
@@ -104,6 +165,12 @@ Version:2.014 \
 extern "C" {
 #endif
 
+#ifdef GPU_G6110
+#define private_handle_t    tagIMG_native_handle_t
+#define GPU_BASE            handle->pvBase
+#else
+#define GPU_BASE            handle->base
+#endif
 
 #if PLATFORM_SDK_VERSION >= 17
 
@@ -412,13 +479,21 @@ typedef struct _hwcContext
      /* The index of video buffer will be used */
      int      mCurVideoIndex;
      int      fd_video_bk[MaxVideoBackBuffers];
+#if defined(__arm64__) || defined(__aarch64__)
+     long     base_video_bk[MaxVideoBackBuffers];
+#else
      int      base_video_bk[MaxVideoBackBuffers];
+#endif
      buffer_handle_t pbvideo_bk[MaxVideoBackBuffers];
 
 #if OPTIMIZATION_FOR_DIMLAYER
      bool     bHasDimLayer;
      int      mDimFd;
-     int      mDimBase;
+#if defined(__arm64__) || defined(__aarch64__)
+     long      mDimBase;
+#else
+     int       mDimBase;
+#endif
      buffer_handle_t      mDimHandle;
 #endif
 }
@@ -511,6 +586,32 @@ hwcGetFormat(
     );
 
 int hwChangeRgaFormat(IN int fmt );
+
+#if defined(__arm64__) || defined(__aarch64__)
+hwcSTATUS
+hwcLockBuffer(
+    IN  hwcContext *  Context,
+    IN  struct private_handle_t * Handle,
+    OUT void * *  Logical,
+    OUT unsigned long* Physical,
+    OUT unsigned int* Width,
+    OUT unsigned int* Height,
+    OUT unsigned int* Stride,
+    OUT void * *  Info
+    );
+
+
+hwcSTATUS
+hwcUnlockBuffer(
+    IN hwcContext * Context,
+    IN struct private_handle_t * Handle,
+    IN void * Logical,
+    IN void * Info,
+    IN unsigned long  Physical
+    );
+
+#else
+
 hwcSTATUS
 hwcLockBuffer(
     IN  hwcContext *  Context,
@@ -532,6 +633,8 @@ hwcUnlockBuffer(
     IN void * Info,
     IN unsigned int  Physical
     );
+
+#endif
 
 int
 _HasAlpha(RgaSURF_FORMAT Format);

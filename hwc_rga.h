@@ -15,11 +15,7 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <cutils/log.h>
-#ifdef TARGET_BOARD_PLATFORM_RK30XXB
-#include  <hardware/hal_public.h>
-#else
-#include "../libgralloc/gralloc_priv.h"
-#endif
+#include "rk_hwcomposer.h"
 
 #ifdef TARGET_BOARD_PLATFORM_RK30XXB
 #define SRC_HANDLE_BASE    src_handle->iBase
@@ -33,12 +29,19 @@
 #define DST_HANDLE_FORMAT  dst_handle->iFormat
 #define private_handle_t IMG_native_handle_t
 #else
+#ifdef GPU_G6110
+#define SRC_HANDLE_BASE    src_handle->pvBase
+#else
 #define SRC_HANDLE_BASE    src_handle->base
+#endif
 #define SRC_HANDLE_WIDTH   src_handle->width
 #define SRC_HANDLE_HEIGHT  src_handle->height
 #define SRC_HANDLE_FORMAT  src_handle->format
-
+#ifdef GPU_G6110
+#define DST_HANDLE_BASE    dst_handle->pvBase
+#else
 #define DST_HANDLE_BASE    dst_handle->base
+#endif
 #define DST_HANDLE_WIDTH   dst_handle->width
 #define DST_HANDLE_HEIGHT  dst_handle->height
 #define DST_HANDLE_FORMAT  dst_handle->format

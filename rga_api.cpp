@@ -19,6 +19,19 @@ RGA_set_src_act_info(
     return 1;
 }
 
+#if defined(__arm64__) || defined(__aarch64__)
+int
+RGA_set_src_vir_info(
+		struct rga_req *req,
+		unsigned long   yrgb_addr,       /* yrgb_addr  */
+		unsigned long   uv_addr,         /* uv_addr    */
+		unsigned long   v_addr,          /* v_addr     */
+		unsigned int   vir_w,           /* vir width  */
+		unsigned int   vir_h,           /* vir height */
+		unsigned long  format,          /* format     */
+		unsigned char  a_swap_en        /* only for 32bit RGB888 format */
+		)
+#else
 int
 RGA_set_src_vir_info(
 		struct rga_req *req,
@@ -30,6 +43,7 @@ RGA_set_src_vir_info(
 		unsigned char  format,          /* format     */
 		unsigned char  a_swap_en        /* only for 32bit RGB888 format */
 		)
+#endif
 {
     req->src.yrgb_addr = yrgb_addr;
     req->src.uv_addr  = uv_addr;
@@ -41,7 +55,6 @@ RGA_set_src_vir_info(
 
     return 1;
 }
-
 
 int
 RGA_set_dst_act_info(
@@ -60,6 +73,20 @@ RGA_set_dst_act_info(
     return 1;
 }
 
+#if defined(__arm64__) || defined(__aarch64__)
+int
+RGA_set_dst_vir_info(
+		struct rga_req *msg,
+		unsigned long   yrgb_addr,   /* yrgb_addr   */
+		unsigned long   uv_addr,     /* uv_addr     */
+		unsigned long   v_addr,      /* v_addr      */
+		unsigned int   vir_w,       /* vir width   */
+		unsigned int   vir_h,       /* vir height  */
+		RECT           *clip,        /* clip window */
+		unsigned long  format,      /* format      */
+		unsigned char  a_swap_en
+		)
+#else
 int
 RGA_set_dst_vir_info(
 		struct rga_req *msg,
@@ -72,6 +99,7 @@ RGA_set_dst_vir_info(
 		unsigned char  format,      /* format      */
 		unsigned char  a_swap_en
 		)
+#endif
 {
     msg->dst.yrgb_addr = yrgb_addr;
     msg->dst.uv_addr  = uv_addr;
@@ -111,13 +139,21 @@ RGA_set_pat_info(
 }
 
 
-
+#if defined(__arm64__) || defined(__aarch64__)
+int
+RGA_set_rop_mask_info(
+		struct rga_req *msg,
+		unsigned long rop_mask_addr,
+		unsigned int rop_mask_endian_mode
+		)
+#else
 int
 RGA_set_rop_mask_info(
 		struct rga_req *msg,
 		unsigned int rop_mask_addr,
 		unsigned int rop_mask_endian_mode
 		)
+#endif
 {
     msg->rop_mask_addr = rop_mask_addr;
     msg->endian_mode = rop_mask_endian_mode;
@@ -395,13 +431,21 @@ RGA_set_pre_scaling_mode(
     return 1;
 }
 
-
+#if defined(__arm64__) || defined(__aarch64__)
+int
+RGA_update_palette_table_mode(
+		struct rga_req *msg,
+		unsigned long LUT_addr,      /* LUT table addr      */
+		unsigned int palette_mode   /* 1bpp/2bpp/4bpp/8bpp */
+		)
+#else
 int
 RGA_update_palette_table_mode(
 		struct rga_req *msg,
 		unsigned int LUT_addr,      /* LUT table addr      */
 		unsigned int palette_mode   /* 1bpp/2bpp/4bpp/8bpp */
 		)
+#endif
 {
     msg->render_mode = update_palette_table_mode;
     
@@ -429,7 +473,18 @@ RGA_set_update_patten_buff_mode(
     return 1;
 }
 
-
+#if defined(__arm64__) || defined(__aarch64__)
+int
+RGA_set_mmu_info(
+		struct rga_req *msg,
+		unsigned char  mmu_en,
+		unsigned char  src_flush,
+		unsigned char  dst_flush,
+		unsigned char  cmd_flush,
+		unsigned long base_addr,
+		unsigned char  page_size
+		)
+#else
 int
 RGA_set_mmu_info(
 		struct rga_req *msg,
@@ -440,6 +495,7 @@ RGA_set_mmu_info(
 		unsigned int base_addr,
 		unsigned char  page_size
 		)
+#endif
 {
     msg->mmu_info.mmu_en    = mmu_en;
     msg->mmu_info.base_addr = base_addr;
@@ -483,10 +539,18 @@ void rga_test_0()
     clip.ymax = 479;
     
     RGA_set_src_act_info(&req, 320, 240, 0, 0);
+#if defined(__arm64__) || defined(__aarch64__)
+    RGA_set_src_vir_info(&req, (unsigned long)src_addr, 0, 0, 320, 240, RK_FORMAT_RGBA_8888, 0);
+#else
     RGA_set_src_vir_info(&req, (unsigned int)src_addr, 0, 0, 320, 240, RK_FORMAT_RGBA_8888, 0);
+#endif
     
     RGA_set_dst_act_info(&req, 320, 240, 200, 100);
+#if defined(__arm64__) || defined(__aarch64__)
+    RGA_set_dst_vir_info(&req, (unsigned long)dst_addr, 0, 0, 800, 480, &clip, RK_FORMAT_RGBA_8888, 0);
+#else
     RGA_set_dst_vir_info(&req, (unsigned int)dst_addr, 0, 0, 800, 480, &clip, RK_FORMAT_RGBA_8888, 0);
+#endif
 
     RGA_set_bitblt_mode(&req, 0, 0, 0, 0, 0, 0);
 
@@ -538,11 +602,18 @@ void rga_test_rotate()
     clip.ymax = 479;
     
     RGA_set_src_act_info(&req, 320, 240, 0, 0);
+#if defined(__arm64__) || defined(__aarch64__)
+    RGA_set_src_vir_info(&req, (unsigned long)src_addr, 0, 0, 320, 240, RK_FORMAT_RGBA_8888, 0);
+#else
     RGA_set_src_vir_info(&req, (unsigned int)src_addr, 0, 0, 320, 240, RK_FORMAT_RGBA_8888, 0);
-    
-    RGA_set_dst_act_info(&req, 320, 240, 200, 100);
-    RGA_set_dst_vir_info(&req, (unsigned int)dst_addr, 0, 0, 800, 480, &clip, RK_FORMAT_RGBA_8888, 0);
+#endif
 
+    RGA_set_dst_act_info(&req, 320, 240, 200, 100);
+#if defined(__arm64__) || defined(__aarch64__)
+    RGA_set_dst_vir_info(&req, (unsigned long)dst_addr, 0, 0, 800, 480, &clip, RK_FORMAT_RGBA_8888, 0);
+#else
+    RGA_set_dst_vir_info(&req, (unsigned int)dst_addr, 0, 0, 800, 480, &clip, RK_FORMAT_RGBA_8888, 0);
+#endif
     RGA_set_bitblt_mode(&req, bilinear, BB_ROTATE, 30, 0, ENABLE, 0);
 
     RGA_set_mmu_info(&req, 1, 0, 0, 0, 0, 2);

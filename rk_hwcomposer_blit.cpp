@@ -20,7 +20,6 @@
 #include "rk_hwcomposer.h"
 
 #include <fcntl.h>
-#include "../libgralloc/gralloc_priv.h"
 #include <ui/PixelFormat.h>
 
 //#include "struct.h"
@@ -111,7 +110,13 @@ hwcBlit(
     hwcRECT             dstRect;
 
     void *              srcLogical  = NULL;
+#if defined(__arm64__) || defined(__aarch64__)
+    unsigned long        srcPhysical = ~0;
+    unsigned long        dstPhysical = ~0;
+#else
     unsigned int        srcPhysical = ~0;
+    unsigned int        dstPhysical = ~0;
+#endif
     void *              srcInfo     = NULL;
     unsigned int        srcStride;
     unsigned int        srcWidth;
@@ -119,7 +124,6 @@ hwcBlit(
     RgaSURF_FORMAT      srcFormat;
 
     void *              dstLogical  = NULL;
-    unsigned int        dstPhysical = ~0;
     void *              dstInfo     = NULL;
     unsigned int        dstStride;
     unsigned int        dstWidth;
@@ -220,8 +224,11 @@ hwcBlit(
 	//dstPhysical = (unsigned int)(Context->hwc_ion.pion->phys+Context->hwc_ion.offset);
     //RGA_set_bitblt_mode(&Rga_Request,RotateMode,1,Rotation,1,0,0);
     LOGI("RGA src_vir_w = %d, src_vir_h = %d,srcLogical=%x,srcFormat=%d", srcStride, srcHeight,srcLogical,srcFormat);
+#if defined(__arm64__) || defined(__aarch64__)
+    RGA_set_src_vir_info(&Rga_Request, (long)srcLogical, 0, 0, srcStride, srcHeight, srcFormat, 0);
+#else
     RGA_set_src_vir_info(&Rga_Request, (int)srcLogical, 0, 0, srcStride, srcHeight, srcFormat, 0);
-
+#endif
     LOGI("RGA dst_vir_w = %d, dst_vir_h = %d,dstLogical=%x,dstPhysical=%x,dstFormat=%d", dstWidth, dstHeight,dstLogical,dstPhysical,dstFormat);
     RGA_set_dst_vir_info(&Rga_Request, (dstPhysical + 0x60000000), 0, 0, dstWidth, dstHeight, &clip, dstFormat, 0);
     //RGA_set_dst_vir_info(&Rga_Request, (int)dstLogical, 0, 0, dstWidth, dstHeight, &clip, dstFormat, 0);
@@ -438,6 +445,17 @@ hwcBlit(
                 unsigned int uStride;
                 unsigned int vStride;
 
+#if defined(__arm64__) || defined(__aarch64__)
+                hwcONERROR(
+                    _ComputeUVOffset(srcFormat,
+                                     (unsigned long)srcLogical,
+                                     srcHeight,
+                                     srcStride,
+                                     &uLogical,
+                                     &uStride,
+                                     &vLogical,
+                                     &vStride));
+#else
                 hwcONERROR(
                     _ComputeUVOffset(srcFormat,
                                      (unsigned int)srcLogical,
@@ -447,7 +465,7 @@ hwcBlit(
                                      &uStride,
                                      &vLogical,
                                      &vStride));
-
+#endif
                 Rga_Request.src.uv_addr  = uLogical;
                 Rga_Request.src.v_addr   = vLogical;
                 //scale_mode = 2;
@@ -683,7 +701,11 @@ hwcDim(
 
 #if 1
     void *     dstLogical;
-    unsigned int      dstPhysical = ~0;
+#if defined(__arm64__) || defined(__aarch64__)
+    unsigned long      dstPhysical = ~0;
+#else
+    unsigned int       dstPhysical = ~0;
+#endif
     void *     dstInfo;
     unsigned int      dstStride;
     unsigned int      dstWidth;
@@ -854,7 +876,11 @@ hwcClear(
     hwcSTATUS status = hwcSTATUS_OK;
 
     void *     dstLogical;
+#if defined(__arm64__) || defined(__aarch64__)
+    unsigned long      dstPhysical = ~0;
+#else
     unsigned int      dstPhysical = ~0;
+#endif
     void *     dstInfo;
     unsigned int      dstStride;
     unsigned int      dstWidth;

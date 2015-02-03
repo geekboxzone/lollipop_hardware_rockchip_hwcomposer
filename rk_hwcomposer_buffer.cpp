@@ -18,7 +18,6 @@
 
 
 #include "rk_hwcomposer.h"
-#include "../libgralloc/gralloc_priv.h"
 #include <linux/fb.h>
 #include <linux/fs.h>
 #include <sys/ioctl.h>
@@ -34,7 +33,19 @@
 
 
 
-
+#if defined(__arm64__) || defined(__aarch64__)
+hwcSTATUS
+hwcLockBuffer(
+    IN  hwcContext  * Context,
+    IN  struct private_handle_t * Handle,
+    OUT void * * Logical,
+    OUT unsigned long  * Physical,
+    OUT unsigned int  * Width,
+    OUT unsigned int  * Height,
+    OUT unsigned int  * Stride,
+    OUT void * * Info
+    )
+#else
 hwcSTATUS
 hwcLockBuffer(
     IN  hwcContext  * Context,
@@ -46,6 +57,7 @@ hwcLockBuffer(
     OUT unsigned int  * Stride,
     OUT void * * Info
     )
+#endif
 {
     hwcSTATUS status = hwcSTATUS_OK;
     unsigned int width;
@@ -61,14 +73,29 @@ hwcLockBuffer(
 
 	//LOGD("hwcLockBuffer width=%d,Handle->format=%x,bytesPerPixel=%d,stride=%d",width,Handle->format,android::bytesPerPixel(Handle->format),stride);
     {
+#ifndef GPU_G6110
 		if (Handle->flags & private_handle_t::PRIV_FLAGS_FRAMEBUFFER)
+#else
+        if (Handle->usage & GRALLOC_USAGE_HW_FB)
+#endif
         {
             /* Framebuffer. */
             if (Context->fbFd == 0)
             {
                 struct fb_fix_screeninfo fixInfo;
-                int rel = ioctl(Handle->fd, FBIOGET_FSCREENINFO, &fixInfo);			            
+#ifndef GPU_G6110
+                int rel = ioctl(Handle->fd, FBIOGET_FSCREENINFO, &fixInfo);
+#else
+                int iFbFd;
+                iFbFd = open("/dev/graphics/fb0", O_RDWR, 0);
 
+				if (!iFbFd)
+				{
+					LOGE("open(dev/graphics/fb0) failed in %s", __func__);
+					return hwcSTATUS_IO_ERR;
+				}
+				int rel = ioctl(iFbFd, FBIOGET_FSCREENINFO, &fixInfo);
+#endif
                 if (rel != 0)
                 {
                     LOGE("ioctl(fd, FBIOGET_FSCREENINFO) failed"
@@ -76,8 +103,11 @@ hwcLockBuffer(
 
                     return hwcSTATUS_IO_ERR;
                 }
-				Context->fbFd       = Handle->fd;			
-             
+#ifndef GPU_G6110
+				Context->fbFd       = Handle->fd;
+#else
+				Context->fbFd       = iFbFd;
+#endif
                 Context->fbPhysical = fixInfo.smem_start;
                 Context->fbStride   = fixInfo.line_length;
             }
