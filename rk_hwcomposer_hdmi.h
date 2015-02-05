@@ -1,3 +1,13 @@
+/*
+
+* rockchip hwcomposer( 2D graphic acceleration unit) .
+
+*
+
+* Copyright (C) 2015 Rockchip Electronics Co., Ltd.
+
+*/
+
 #define MODE_CHANGE_HDMI 1
 #define MODE_ADD_HDMI 2
 #define MODE_REMOVE_HDMI 3

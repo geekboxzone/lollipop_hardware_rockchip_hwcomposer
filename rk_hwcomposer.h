@@ -1,24 +1,17 @@
-/****************************************************************************
+/*
+
+* rockchip hwcomposer( 2D graphic acceleration unit) .
+
 *
-*    Copyright (c) 2005 - 2011 by Vivante Corp.  All rights reserved.
-*
-*    The material in this file is confidential and contains trade secrets
-*    of Vivante Corporation. This is proprietary information owned by
-*    Vivante Corporation. No part of this work may be disclosed,
-*    reproduced, copied, transmitted, or used in any way for any purpose,
-*    without the express written permission of Vivante Corporation.
-*
-*****************************************************************************
-*
-*    Auto-generated file on 12/13/2011. Do not edit!!!
-*
-*****************************************************************************/
+
+* Copyright (C) 2015 Rockchip Electronics Co., Ltd.
+
+*/
 
 
 
-
-#ifndef __gc_hwcomposer_h_
-#define __gc_hwcomposer_h_
+#ifndef __rk_hwcomposer_h_
+#define __rk_hwcomposer_h_
 
 /* Set 0 to enable LOGV message. See cutils/log.h */
 #include <cutils/log.h>
@@ -44,7 +37,6 @@
 #define hwcDumpSurface              0
 #define DUMP_AFTER_RGA_COPY_IN_GPU_CASE 0
 #define DEBUG_CHECK_WIN_CFG_DATA    0     //check rk_fb_win_cfg_data for lcdc
-#define ENABLE_HWC_WORMHOLE         1
 #define DUMP_SPLIT_AREA             0
 #define SYNC_IN_VIDEO               0
 #define USE_HWC_FENCE               1
@@ -413,7 +405,6 @@ typedef struct _hwcContext
     /* Reference count. Normally: 1. */
     unsigned int reference;
 
-    /* GC state goes below here */
 
     /* Raster engine */
     int   engine_fd;
@@ -455,13 +446,6 @@ typedef struct _hwcContext
     alloc_device_t  *mAllocDev;	
 	ZoneManager  zone_manager;;
 
-#if ENABLE_HWC_WORMHOLE
-    /* Splited composition area queue. */
-    hwcArea *                        compositionArea;
-
-    /* Pre-allocated area pool. */
-    hwcAreaPool                      areaPool;
-#endif
     /* skip flag */
      int      mSkipFlag;
      int      flag;
@@ -498,7 +482,7 @@ typedef struct _hwcContext
 #endif
 }
 hwcContext;
-#define gcmALIGN(n, align) \
+#define rkmALIGN(n, align) \
 ( \
     ((n) + ((align) - 1)) & ~((align) - 1) \
 )
@@ -533,26 +517,9 @@ hwcContext;
  ********************************* Blitters ***********************************
 \******************************************************************************/
 
-/* 2D blit. */
-hwcSTATUS
-hwcBlit(
-    IN hwcContext * Context,
-    IN hwc_layer_1_t * Src,
-    IN struct private_handle_t * DstHandle,
-    IN hwc_rect_t * SrcRect,
-    IN hwc_rect_t * DstRect,
-    IN hwc_region_t * Region
-    );
 
 
-hwcSTATUS
-hwcDim(
-    IN hwcContext * Context,
-    IN hwc_layer_1_t * Src,
-    IN struct private_handle_t * DstHandle,
-    IN hwc_rect_t * DstRect,
-    IN hwc_region_t * Region
-    );
+
 
 hwcSTATUS
 hwcLayerToWin(
@@ -564,14 +531,6 @@ hwcLayerToWin(
     IN hwc_region_t * Region,
     IN int Index,
     IN int Win
-    );
-hwcSTATUS
-hwcClear(
-    IN hwcContext * Context,
-    IN unsigned int Color,
-    IN struct private_handle_t * DstHandle,
-    IN hwc_rect_t * DstRect,
-    IN hwc_region_t * Region
     );
 
 
@@ -588,17 +547,6 @@ hwcGetFormat(
 int hwChangeRgaFormat(IN int fmt );
 
 #if defined(__arm64__) || defined(__aarch64__)
-hwcSTATUS
-hwcLockBuffer(
-    IN  hwcContext *  Context,
-    IN  struct private_handle_t * Handle,
-    OUT void * *  Logical,
-    OUT unsigned long* Physical,
-    OUT unsigned int* Width,
-    OUT unsigned int* Height,
-    OUT unsigned int* Stride,
-    OUT void * *  Info
-    );
 
 
 hwcSTATUS
@@ -612,17 +560,6 @@ hwcUnlockBuffer(
 
 #else
 
-hwcSTATUS
-hwcLockBuffer(
-    IN  hwcContext *  Context,
-    IN  struct private_handle_t * Handle,
-    OUT void * *  Logical,
-    OUT unsigned int* Physical,
-    OUT unsigned int* Width,
-    OUT unsigned int* Height,
-    OUT unsigned int* Stride,
-    OUT void * *  Info
-    );
 
 
 hwcSTATUS
@@ -642,46 +579,10 @@ _HasAlpha(RgaSURF_FORMAT Format);
 int closeFb(int fd);
 int  getHdmiMode();
 void init_hdmi_mode();
-/******************************************************************************\
- ****************************** Rectangle split *******************************
-\******************************************************************************/
-/* Split rectangles. */
-bool
-hwcSplit(
-    IN  hwcRECT * Source,
-    IN  hwcRECT * Dest,
-    OUT hwcRECT * Intersection,
-    OUT hwcRECT * Rects,
-    OUT int  * Count
-    );
 
-hwcSTATUS
-WormHole(
-    IN hwcContext * Context,
-    IN hwcRECT * Rect
-    );
 
-void
-_FreeArea(
-    IN hwcContext * Context,
-    IN hwcArea* Head
-    );
 
-void
-_SplitArea(
-    IN hwcContext * Context,
-    IN hwcArea * Area,
-    IN hwcRECT * Rect,
-    IN int Owner
-    );
 
-hwcArea *
-_AllocateArea(
-    IN hwcContext * Context,
-    IN hwcArea * Slibing,
-    IN hwcRECT * Rect,
-    IN int Owner
-    );
 
 
 
@@ -693,5 +594,5 @@ extern "C" int clock_nanosleep(clockid_t clock_id, int flags,
 }
 #endif
 
-#endif /* __gc_hwcomposer_h_ */
+#endif 
 

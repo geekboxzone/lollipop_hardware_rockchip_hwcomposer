@@ -1,3 +1,12 @@
+/*
+
+* rockchip hwcomposer( 2D graphic acceleration unit) .
+
+*
+
+* Copyright (C) 2015 Rockchip Electronics Co., Ltd.
+
+*/
 #include "rk_hwcomposer_hdmi.h"
 #include <errno.h>
 #include <malloc.h>
