@@ -4948,7 +4948,6 @@ static int hwc_external_Post( hwcContext * context,hwc_display_contents_1_t* lis
         }
     }
 #endif
-
         ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info);
 
 #if USE_HWC_FENCE
@@ -6911,6 +6910,10 @@ hwc_device_open(
         LOGD(" rga version =%s",Version);
 
     }
+#ifdef TARGET_BOARD_PLATFORM_RK3368
+    if(0 == hwc_get_int_property("ro.rk.soc", "0"))
+        property_set("sys.rk.soc","rk3368");
+#endif
     /*
 	 context->ippDev = new ipp_device_t();
 	 rel = ipp_open(context->ippDev);
