@@ -6178,29 +6178,28 @@ void handle_hdmi_event(int hdmi_mode ,int flag )
 						}
 #endif
             	}
-
             }
-        }
-        
-    }
-    //if(last_fenceFd_flag == 1)
-    {
-        for(unsigned int i = 0; i < RK_MAX_BUF_NUM; i++)
-        {
-            if(last_rel_fenceFd[i] >= 0)
+            //if(last_fenceFd_flag == 1)
             {
-                ALOGD("last_rel_fenceFd[%d]=%d",i,last_rel_fenceFd[i]);
-                close(last_rel_fenceFd[i]);
-                last_rel_fenceFd[i] = -1;
-            }
-        }
-        if(last_ret_fenceFd >= 0)
-        {
-            ALOGD("last_ret_fenceFd=%d",last_ret_fenceFd);
-            close(last_ret_fenceFd); 
-            last_ret_fenceFd = -1;
-        }
+                for(unsigned int i = 0; i < RK_MAX_BUF_NUM; i++)
+                {
+                    if(last_rel_fenceFd[i] >= 0)
+                    {
+                        ALOGD("last_rel_fenceFd[%d]=%d",i,last_rel_fenceFd[i]);
+                        close(last_rel_fenceFd[i]);
+                        last_rel_fenceFd[i] = -1;
+                    }
+                }
+                if(last_ret_fenceFd >= 0)
+                {
+                    ALOGD("last_ret_fenceFd=%d",last_ret_fenceFd);
+                    close(last_ret_fenceFd); 
+                    last_ret_fenceFd = -1;
+                }
+            }       
+        }    
     }
+
 #endif    
 }
 
