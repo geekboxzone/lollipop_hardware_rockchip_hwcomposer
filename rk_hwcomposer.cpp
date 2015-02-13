@@ -5534,7 +5534,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
                             {
                                 if(list->hwLayers[i].releaseFenceFd>0)
                                 {
-                                    close(list->hwLayers[i+1].releaseFenceFd);
+                                    close(list->hwLayers[i].releaseFenceFd);
                                 }
                                 list->hwLayers[i].releaseFenceFd = fb_info.rel_fence_fd[i];
                             }
