@@ -5489,7 +5489,6 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
     }
     if(!context->fb_blanked)
     {
-#ifndef GPU_G6110
         if(context != _contextAnchor1){
             hwc_display_t dpy = NULL;
             hwc_surface_t surf = NULL;
@@ -5498,7 +5497,6 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
             _eglRenderBufferModifiedANDROID((EGLDisplay) dpy, (EGLSurface) surf);
             eglSwapBuffers((EGLDisplay) dpy, (EGLSurface) surf);
         }
-#endif
 
         ALOGV("lcdc config done");
         if(ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info) == -1)
@@ -6712,8 +6710,6 @@ hwc_device_open(
     }
 #endif
 
-//zxl: tmp
-#ifndef G6110_RM_RGA
     /* Get gco2D object pointer. */
     
     context->engine_fd = open("/dev/rga",O_RDWR,0);
@@ -6723,7 +6719,6 @@ hwc_device_open(
         ALOGE("rga open err!");
 
     }
-#endif
 
 #if ENABLE_WFD_OPTIMIZE
 	 property_set("sys.enable.wfd.optimize","1");
@@ -6731,9 +6726,7 @@ hwc_device_open(
     {
         int type = hwc_get_int_property("sys.enable.wfd.optimize","0");
         context->wfdOptimize = type;
-#ifndef G6110_RM_RGA
         init_rga_cfg(context->engine_fd);
-#endif
         if (type>0 && !is_surport_wfd_optimize())
         {
            property_set("sys.enable.wfd.optimize","0");
