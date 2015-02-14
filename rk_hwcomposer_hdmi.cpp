@@ -38,7 +38,7 @@
 			int err = read(fd, statebuf, sizeof(statebuf));
 			if (err < 0)
 			{
-			    ALOGE("error reading vsync timestamp: %s", strerror(errno));
+			    ALOGE("error reading hdmi state: %s", strerror(errno));
 			    return;
 			}
 			close(fd);
@@ -52,7 +52,7 @@
 				property_set("sys.hdmi.mode", "1");
 			}*/
 			handle_hdmi_event(g_hdmi_mode,1);
-			ALOGD("HDMI unevent happened!g_hdmi_mode=%d,LINE=%d",g_hdmi_mode,__LINE__);
+			ALOGD("HDMI unevent happened!g_hdmi_mode=%d,line=%d",g_hdmi_mode,__LINE__);
 			}  
 		else
 		{
@@ -69,7 +69,7 @@
 			int err = read(fd, statebuf, sizeof(statebuf));
 			if (err < 0)
 			{
-			    ALOGE("error reading vsync timestamp: %s", strerror(errno));
+			    ALOGE("error reading hdmi state: %s", strerror(errno));
 			    return;
 			}
 			close(fd);
@@ -77,7 +77,7 @@
 			if(g_hdmi_mode == 1)
 			{
 				handle_hdmi_event(1,3);
-				ALOGD("HDMI unevent happened!g_hdmi_mode=%d,LINE=%d",g_hdmi_mode,__LINE__);
+				ALOGD("HDMI unevent happened!g_hdmi_mode=%d,line=%d",g_hdmi_mode,__LINE__);
 			}
 		}  
         else

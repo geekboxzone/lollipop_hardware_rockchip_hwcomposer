@@ -1853,7 +1853,7 @@ int try_wins_dispatch_mix_v2 (hwcContext * Context,hwc_display_contents_1_t * li
     int bw = 0;
     BpVopInfo  bpvinfo;    
     int tsize = 0;
-    int mix_index;
+    int mix_index = 0;
     int iFirstTransformLayer=-1;
     bool bTransform=false;
 
@@ -2499,7 +2499,7 @@ check_layer(
         /* Get format. */
 		//zxl: remove hwcGetFormat,or it will let fbdc format return gpu.
         if( /* hwcGetFormat(handle, &format) != hwcSTATUS_OK
-            ||*/ (LayerZoneCheck(Layer,HWC_DISPLAY_PRIMARY) != 0))
+            ||*/ (LayerZoneCheck(Layer,Context == _contextAnchor ? HWC_DISPLAY_PRIMARY : HWC_DISPLAY_EXTERNAL) != 0))
         {
              return HWC_FRAMEBUFFER;
         }
@@ -3512,6 +3512,14 @@ int hwc_prepare_virtual(hwc_composer_device_1_t * dev, hwc_display_contents_1_t 
 
 static int hwc_prepare_external(hwc_composer_device_1 *dev,
                                hwc_display_contents_1_t *list) {
+
+#ifdef GPU_G6110
+    if(getHdmiMode() == 0)
+    {
+        return 0;
+    }
+#endif
+
 #if HWC_EXTERNAL
 	size_t i;
     size_t j;
@@ -3972,6 +3980,17 @@ GpuComP   :
 
 static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_1_t *list) 
 {
+#ifdef GPU_G6110
+    if(getHdmiMode() == 1)
+    {
+        for (unsigned int i = 0; i < (list->numHwLayers - 1); i++)
+        {
+            hwc_layer_1_t * layer = &list->hwLayers[i];
+            layer->compositionType = HWC_NODRAW;
+        }
+        return 0;
+    }
+#endif
     size_t i;
     size_t j;
     
@@ -4455,7 +4474,7 @@ hwc_prepare(
         	{
         		if(displays[i] != NULL)
         		{
-        			for(int j=0;j<displays[i]->numHwLayers -1;j++)
+        			for(unsigned int j=0;j<displays[i]->numHwLayers -1;j++)
         			{
                 		hwc_layer_1_t* layer = &displays[i]->hwLayers[j];
                 		if (layer == NULL)
@@ -4772,9 +4791,12 @@ static int hwc_primary_Post( hwcContext * context,hwc_display_contents_1_t* list
         }
     }
 #endif
-
-        ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info);
-
+#ifdef GPU_G6110
+        if(getHdmiMode() == 0)
+#endif
+        {
+            ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info);
+        }
 #if USE_HWC_FENCE
 
         for(int k=0;k<RK_MAX_BUF_NUM;k++)
@@ -4951,7 +4973,11 @@ static int hwc_external_Post( hwcContext * context,hwc_display_contents_1_t* lis
         ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info);
 
 #if USE_HWC_FENCE
-		if(last_fenceFd_flag == 0)
+		if(1
+#ifndef GPU_G6110
+		&& last_fenceFd_flag == 0
+#endif
+		)
         {
             for(int k=0;k<RK_MAX_BUF_NUM;k++)
             {
@@ -5499,13 +5525,21 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
         }
 
         ALOGV("lcdc config done");
-        if(ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info) == -1)
+#ifdef GPU_G6110
+        if(getHdmiMode() == 0 || context == _contextAnchor1)
+#endif
         {
-            ALOGE("RK_FBIOSET_CONFIG_DONE err line=%d !",__LINE__);
-        }           
-
+            if(ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info) == -1)
+            {
+                ALOGE("RK_FBIOSET_CONFIG_DONE err line=%d !",__LINE__);
+            }           
+        }
 #if USE_HWC_FENCE
-        if(context == _contextAnchor ) //hdmi remove:close rest fenceFd
+        if(1 
+#ifndef GPU_G6110
+        && context == _contextAnchor 
+#endif  
+        ) 
         {
             for(unsigned int i=0;i<RK_MAX_BUF_NUM;i++)
         	{
@@ -5548,7 +5582,9 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
             }
     		if(fb_info.ret_fence_fd >= 0)
             	list->retireFenceFd = fb_info.ret_fence_fd;
-        }else
+        }
+#if HWC_EXTERNAL
+        else
         {
             if(last_fenceFd_flag == 0 && last_frame_flag == 1)
             {
@@ -5616,6 +5652,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
                 last_frame_flag = 1;
             }
         }
+#endif
 #else
 
     	for(i=0;i<RK_MAX_BUF_NUM;i++)
@@ -5623,7 +5660,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
     	   
             if(fb_info.rel_fence_fd[i] >= 0 )
             {
-                if(i< (list->numHwLayers -1))
+                if(i< (int)(list->numHwLayers -1))
                 {
                     list->hwLayers[i].releaseFenceFd = -1;
                     close(fb_info.rel_fence_fd[i]);
@@ -5836,6 +5873,13 @@ int hwc_set_virtual(hwc_composer_device_1_t * dev, hwc_display_contents_1_t  **c
 }
 static int hwc_set_external(hwc_composer_device_1_t *dev, hwc_display_contents_1_t* list, int dpy)
 {
+#ifdef GPU_G6110
+    if(getHdmiMode() == 0)
+    {
+        return 0;
+    }
+#endif
+
 #if HWC_EXTERNAL
 
     hwcContext * context = _contextAnchor1;
@@ -6066,6 +6110,7 @@ void handle_hdmi_event(int hdmi_mode ,int flag )
     if(flag == 3)
     {
         if(flag_external == 1){
+			_contextAnchor->dpyAttr[HWC_DISPLAY_EXTERNAL].connected = false;
             _contextAnchor->procs->hotplug(_contextAnchor->procs, HWC_DISPLAY_EXTERNAL, 0);
 #if OPTIMIZATION_FOR_DIMLAYER
 			if(_contextAnchor1->mDimHandle)
@@ -6103,6 +6148,7 @@ void handle_hdmi_event(int hdmi_mode ,int flag )
 					gettimeofday(&tstart,NULL);
                     last_frame_flag = 0;
                     {
+#ifndef GPU_G6110 //rk3368 not need wait last frame
                         while(last_frame_flag == 0 && flag_blank == 1)
                         {   
         					gettimeofday(&tend,NULL);
@@ -6115,54 +6161,8 @@ void handle_hdmi_event(int hdmi_mode ,int flag )
                             	break;
                             }                        
                         }
-                    }
-#if 0					
-					while(_contextAnchor1->fb_blanked == 0 )
-					{
-						gettimeofday(&tend,NULL);
-						if((((tend.tv_sec - tstart.tv_sec)*1000000)+(tend.tv_usec - tstart.tv_usec)) % 2000  == 0 )
-						{
-							ALOGW("Try to remove external screen spent time = %ld us",(((tend.tv_sec - tstart.tv_sec)*1000000)+(tend.tv_usec - tstart.tv_usec)));
-						}
-						for(int i=0;i<RK_MAX_BUF_NUM ;i++)
-						{
-							if(last_rel_fence[i] != -1)
-							{
-								close(last_rel_fence[i]);
-								last_rel_fence[i] = -1;
-							}	
-						}
-						if(last_ret_fence != -1)
-						{
-							close(last_ret_fence);
-							last_ret_fence = -1;
-						}
-						if((((tend.tv_sec - tstart.tv_sec)*1000000)+(tend.tv_usec - tstart.tv_usec)) > 100000 && _contextAnchor->fb_blanked == 0)
-						{
-							_contextAnchor1->fb_blanked = 1;
-							int err = 0;
-							//err = ioctl(_contextAnchor1->fbFd, FBIOBLANK, FB_BLANK_POWERDOWN);
-							ALOGW("Remove external screen LCDC0 not blank");
-							if(err < 0)
-							{
-								ALOGW("ioctl to blank[FB_BLANK_POWERDOWN] lcdc1 fail,try again");
-								//err = ioctl(_contextAnchor1->fbFd, FBIOBLANK, FB_BLANK_POWERDOWN);
-							}
-							if(err < 0)
-							{
-								ALOGE("Try to ioctl to blank[FB_BLANK_POWERDOWN] lcdc1 fail");
-							}
-							break;
-						}
-						if(((tend.tv_sec - tstart.tv_sec)*1000000)+(tend.tv_usec - tstart.tv_usec)>500000)
-						{
-							ALOGW("Try to remove external screen time out");
-							break;
-						}
-					}
-					gettimeofday(&tend,NULL);
-					ALOGD("Remove external screen spent time = %ld us",(tend.tv_sec - tstart.tv_sec)*1000000+(tend.tv_usec - tstart.tv_usec));
 #endif
+                    }
                     _contextAnchor1->fb_blanked = 1;
 					_contextAnchor->dpyAttr[HWC_DISPLAY_EXTERNAL].connected = false;
 	                _contextAnchor->procs->hotplug(_contextAnchor->procs, HWC_DISPLAY_EXTERNAL, hdmi_mode);
@@ -6178,6 +6178,7 @@ void handle_hdmi_event(int hdmi_mode ,int flag )
             	}
             }
             //if(last_fenceFd_flag == 1)
+#ifndef GPU_G6110
             {
                 for(unsigned int i = 0; i < RK_MAX_BUF_NUM; i++)
                 {
@@ -6194,7 +6195,8 @@ void handle_hdmi_event(int hdmi_mode ,int flag )
                     close(last_ret_fenceFd); 
                     last_ret_fenceFd = -1;
                 }
-            }       
+            }   
+#endif
         }    
     }
 
@@ -7075,11 +7077,19 @@ int get_hdmi_config(){
 	info.grayscale = 0;
 	info.grayscale |= info.xres<< 8;
 	info.grayscale |= info.yres<<20;
-	if(context->fbFd==0){
-        fd  =  open("/dev/graphics/fb4", O_RDWR, 0);
+#ifdef GPU_G6110
+    if(_contextAnchor->fbFd > 0){
+        fd  =  _contextAnchor->fbFd;
     }else{
-        fd  =  context->fbFd;
+        fd  =  open("/dev/graphics/fb0", O_RDWR, 0);
     }
+#else
+	if(context->fbFd > 0){
+	    fd  =  context->fbFd;
+    }else{
+        fd  =  open("/dev/graphics/fb4", O_RDWR, 0);
+    }
+#endif
 	if (fd < 0)
 	{   
 	    ALOGE("get_hdmi_config:open /dev/graphics/fb4 fail");

@@ -55,7 +55,7 @@
 #ifdef GPU_G6110
 #define G6110_SUPPORT_FBDC              1
 #define USE_QUEUE_DDRFREQ               0
-#define HWC_EXTERNAL                    0           //1:hwc control two lcdc for display
+#define HWC_EXTERNAL                    1           //1:hwc control two lcdc for display
 #else
 #define HWC_EXTERNAL                    1           //1:hwc control two lcdc for display
 #define USE_QUEUE_DDRFREQ               0
