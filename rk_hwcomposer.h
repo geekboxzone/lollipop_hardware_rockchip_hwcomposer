@@ -25,10 +25,10 @@
 #ifdef GPU_G6110
 #include  <hardware/img_gralloc_public.h>
 #else
-#include "../libgralloc/gralloc_priv.h"
+#include <gralloc_priv.h>
 #endif
-#include "../librkvpu/vpu_global.h"
-#include "../librkvpu/vpu_mem.h"
+#include <vpu_global.h>
+#include <vpu_mem.h>
 
 //Control macro
 #define hwcDEBUG                    0
