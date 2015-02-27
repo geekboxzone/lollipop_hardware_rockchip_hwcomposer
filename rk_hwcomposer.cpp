@@ -5515,6 +5515,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
     }
     if(!context->fb_blanked)
     {
+#ifndef GPU_G6110  //This will lead nenamark fps go down in rk3368.
         if(context != _contextAnchor1){
             hwc_display_t dpy = NULL;
             hwc_surface_t surf = NULL;
@@ -5523,7 +5524,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
             _eglRenderBufferModifiedANDROID((EGLDisplay) dpy, (EGLSurface) surf);
             eglSwapBuffers((EGLDisplay) dpy, (EGLSurface) surf);
         }
-
+#endif
         ALOGV("lcdc config done");
 #ifdef GPU_G6110
         if(getHdmiMode() == 0 || context == _contextAnchor1)
