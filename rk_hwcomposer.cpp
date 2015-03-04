@@ -7442,7 +7442,8 @@ void *try_hotplug_external(void *arg)
     	gettimeofday(&tend,NULL);
         if((((tend.tv_sec - tstart.tv_sec)*1000000)+(tend.tv_usec - tstart.tv_usec)) % 6000 == 0 )
         {
-    	    //ALOGW("Try to try_hotplug_external spent time = %ld us",(((tend.tv_sec - tstart.tv_sec)*1000000)+(tend.tv_usec - tstart.tv_usec)));	
+    	    //ALOGW("Try to try_hotplug_external spent time = %ld us",
+    	    //    (((tend.tv_sec - tstart.tv_sec)*1000000)+(tend.tv_usec - tstart.tv_usec)));	
         }                        
         ALOGV("getHdmiMode()=%d,flag_external=%d,flag_blank=%d,flag_hwcup_external=%d",
               getHdmiMode(),flag_external,flag_blank,flag_hwcup_external);
