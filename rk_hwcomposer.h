@@ -51,14 +51,11 @@
 #define ENABLE_TRANSFORM_BY_RGA     1               //1: It will need reserve a phyical memory for transform.
 #define OPTIMIZATION_FOR_TRANSFORM_UI   1
 #define OPTIMIZATION_FOR_DIMLAYER       1           //1: optimise for dim layer
+#define HWC_EXTERNAL                    1           //1:hwc control two lcdc for display
+#define USE_QUEUE_DDRFREQ               0
 
 #ifdef GPU_G6110
-#define G6110_SUPPORT_FBDC              1
-#define USE_QUEUE_DDRFREQ               0
-#define HWC_EXTERNAL                    1           //1:hwc control two lcdc for display
-#else
-#define HWC_EXTERNAL                    1           //1:hwc control two lcdc for display
-#define USE_QUEUE_DDRFREQ               0
+#define G6110_SUPPORT_FBDC              0
 #endif
 
 //Command macro
@@ -94,8 +91,9 @@
 Author:wzq \
 Version:2.015 \
 "
-#if G6110_SUPPORT_FBDC
 
+#ifdef GPU_G6110
+#if G6110_SUPPORT_FBDC
 //lcdc support fbdc format
 enum data_format {
 FBDC_RGB_565 = 0x26,
@@ -112,7 +110,7 @@ FBDC_RGBX_888,
 #define HAL_FB_COMPRESSION_INDIRECT_16x4       5
 #define HAL_FB_COMPRESSION_INDIRECT_4TILE_8x8  6
 #define HAL_FB_COMPRESSION_INDIRECT_4TILE_16x4 7
-
+#endif //end of G6110_SUPPORT_FBDC
 
 #define HAL_PIXEL_FORMAT_BAD		 0xff
 
@@ -143,7 +141,8 @@ FBDC_RGBX_888,
 /*      Free for customer use        HAL_PIXEL_FORMAT_VENDOR_EXT(14) */
 /*      Free for customer use        HAL_PIXEL_FORMAT_VENDOR_EXT(15) */
 
-#endif
+#endif  //end of GPU_G6110
+
 /* Set it to 1 to enable swap rectangle optimization;
  * Set it to 0 to disable. */
 /* Set it to 1 to enable pmem cache flush.

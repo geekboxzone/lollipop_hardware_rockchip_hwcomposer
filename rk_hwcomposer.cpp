@@ -187,6 +187,90 @@ _HasAlpha(RgaSURF_FORMAT Format)
                 (Format == RK_FORMAT_BGRA_8888)
             );
 }
+
+#if G6110_SUPPORT_FBDC
+int HALPixelFormatGetCompression(int iFormat)
+{
+	/* Extension format. Return only the compression bits. */
+	if (iFormat >= 0x100 && iFormat <= 0x1FF)
+		return (iFormat & 0x70) >> 4;
+
+	/* Upstream formats are not compressible unless they are redefined as
+	 * extension formats (e.g. RGB_565, BGRA_8888).
+	 */
+	return HAL_FB_COMPRESSION_NONE;
+}
+
+int HALPixelFormatGetRawFormat(int iFormat)
+{
+	/* If the format is within the "vendor format" range, just mask out the
+	 * compression bits.
+	 */
+	if (iFormat >= 0x100 && iFormat <= 0x1FF)
+	{
+		switch (iFormat & 0xF)
+		{
+			/* These formats will be *rendered* by the GPU and we want to
+			 * support compression, but they are "upstream" formats too, so
+			 * remap them.
+			 */
+			case HAL_PIXEL_FORMAT_RGB_565:
+				return HAL_PIXEL_FORMAT_RGB_565;
+			case HAL_PIXEL_FORMAT_BGRA_8888:
+				return HAL_PIXEL_FORMAT_BGRA_8888;
+			/* Vendor format */
+			default:
+				return iFormat & ~0xF0;
+		}
+	}
+
+	/* Upstream format */
+	return iFormat;
+}
+
+int HALPixelFormatSetCompression(int iFormat, int iCompression)
+{
+	/* We can support compressing some "upstream" formats. If the compression
+	 * is not disabled, convert the formats to our extension formats.
+	 */
+	if (iCompression != HAL_FB_COMPRESSION_NONE)
+	{
+		switch (iFormat)
+		{
+			case HAL_PIXEL_FORMAT_RGB_565:
+			case HAL_PIXEL_FORMAT_BGRA_8888:
+				iFormat |= 0x100;
+				break;
+		}
+	}
+
+	/* Can only set compression on extension formats */
+	if (iFormat < 0x100 || iFormat > 0x1FF)
+		return iFormat;
+
+	/* Clear any existing compression bits */
+	iFormat &= ~0x70;
+
+	/* Mask out invalid compression formats */
+	switch (iCompression)
+	{
+		case HAL_FB_COMPRESSION_NONE:
+		case HAL_FB_COMPRESSION_DIRECT_8x8:
+		case HAL_FB_COMPRESSION_DIRECT_16x4:
+		case HAL_FB_COMPRESSION_DIRECT_32x2:
+		case HAL_FB_COMPRESSION_INDIRECT_8x8:
+		case HAL_FB_COMPRESSION_INDIRECT_16x4:
+		case HAL_FB_COMPRESSION_INDIRECT_4TILE_8x8:
+		case HAL_FB_COMPRESSION_INDIRECT_4TILE_16x4:
+			return iFormat | (iCompression << 4);
+		default:
+			return iFormat;
+	}
+}
+
+#endif
+
+
 //return property value of pcProperty
 static int hwc_get_int_property(const char* pcProperty,const char* default_value)
 {
@@ -1507,7 +1591,11 @@ int try_wins_dispatch_mix (hwcContext * Context,hwc_display_contents_1_t * list)
                     ALOGD("Donot support video ");
                 return -1;
             }    
-            if(((!Context->bHasDimLayer)&&(gmixinfo[mix_index].gpu_draw_fd[pzone_mag->zone_info[i].layer_index] != pzone_mag->zone_info[i].layer_fd))
+            if((
+#if OPTIMIZATION_FOR_DIMLAYER
+            (!Context->bHasDimLayer)&&
+#endif
+            (gmixinfo[mix_index].gpu_draw_fd[pzone_mag->zone_info[i].layer_index] != pzone_mag->zone_info[i].layer_fd))
                 || gmixinfo[mix_index].alpha[pzone_mag->zone_info[i].layer_index] != pzone_mag->zone_info[i].zone_alpha)
             {
             	ALOGV("bk fd=%d,cur fd=%d;bk alpha=%x,cur alpha=%x,i=%d,layer_index=%d",gmixinfo[mix_index].gpu_draw_fd[pzone_mag->zone_info[i].layer_index], \
@@ -2348,6 +2436,37 @@ int try_wins_dispatch_ver(hwcContext * Context)
     }
        
     Context->zone_manager.composter_mode = HWC_LCDC;
+    return 0;
+}
+
+static int check_zone(hwcContext * Context)
+{
+    ZoneManager* pzone_mag = &(Context->zone_manager);
+    int iCountFBDC = 0;
+
+    if(Context == NULL)
+    {
+        LOGE("Context is null");
+        return -1;
+    }
+
+#if G6110_SUPPORT_FBDC
+    for(int i=0;i<pzone_mag->zone_cnt;i++)
+    {
+        //Count layers which used fbdc
+        if(HALPixelFormatGetCompression(pzone_mag->zone_info[i].format) != HAL_FB_COMPRESSION_NONE)
+        {
+            iCountFBDC++;
+        }
+    }
+
+    //If FBDC layers bigger than one,then go into GPU composition.
+    if(iCountFBDC > 1)
+    {
+        LOGGPUCOP("%s:line=%d,iCountFBDC=%d",__func__,__LINE__,iCountFBDC);
+        return -1;
+    }
+#endif
     return 0;
 }
 
@@ -3574,7 +3693,9 @@ static int hwc_prepare_external(hwc_composer_device_1 *dev,
     context->mVideoRotate=false;
     context->mNV12_VIDEO_VideoMode=false;
     context->mIsMediaView=false;
+#if OPTIMIZATION_FOR_DIMLAYER
     context->bHasDimLayer = false;
+#endif
     context->mtrsformcnt  = 0;
     for (i = 0; i < (list->numHwLayers - 1); i++)
     {
@@ -4044,7 +4165,9 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
     context->mVideoRotate=false;
     context->mNV12_VIDEO_VideoMode=false;
     context->mIsMediaView=false;
+#if OPTIMIZATION_FOR_DIMLAYER
     context->bHasDimLayer = false;
+#endif
     context->mtrsformcnt  = 0;
     for (i = 0; i < (list->numHwLayers - 1); i++)
     {
@@ -4145,9 +4268,8 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
                     context->video_fmt = HAL_PIXEL_FORMAT_YCrCb_NV12;   // Compatible old sf lib 
                 ALOGV("context->video_fmt =%d",context->video_fmt);
             }
-
-
         }
+
         if(list->hwLayers[i].realtransform == HAL_TRANSFORM_ROT_90
             || list->hwLayers[i].realtransform == HAL_TRANSFORM_ROT_270 )
         {
@@ -4344,6 +4466,12 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
             }
         }
     }
+
+    //G6110 FBDC: only let video case continue.
+    if(!context->mVideoMode)
+    {
+        goto GpuComP;
+    }
     
     ret = collect_all_zones(context,list);
     if(ret !=0 )
@@ -4407,13 +4535,21 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
              }
         }
     }
+
     if(context->zone_manager.composter_mode != HWC_MIX)
     {
         for(i = 0;i<GPUDRAWCNT;i++)
         {
             gmixinfo[mix_index].gpu_draw_fd[i] = 0;
         }
-    }    
+    }
+
+    if(check_zone(context))
+    {
+        LOGGPUCOP("Back to gpu compositon line[%d],fun[%s]",__LINE__,__FUNCTION__);
+        goto GpuComP;
+    }
+
     return 0;
 GpuComP   :
     for (i = 0; i < (list->numHwLayers - 1); i++)
@@ -4635,48 +4771,6 @@ static int hwc_fbPost(hwc_composer_device_1_t * dev, size_t numDisplays, hwc_dis
     return 0;
 }
 
-#if G6110_SUPPORT_FBDC
-int HALPixelFormatGetCompression(int iFormat)
-{
-	/* Extension format. Return only the compression bits. */
-	if (iFormat >= 0x100 && iFormat <= 0x1FF)
-		return (iFormat & 0x70) >> 4;
-
-	/* Upstream formats are not compressible unless they are redefined as
-	 * extension formats (e.g. RGB_565, BGRA_8888).
-	 */
-	return HAL_FB_COMPRESSION_NONE;
-}
-
-int HALPixelFormatGetRawFormat(int iFormat)
-{
-	/* If the format is within the "vendor format" range, just mask out the
-	 * compression bits.
-	 */
-	if (iFormat >= 0x100 && iFormat <= 0x1FF)
-	{
-		switch (iFormat & 0xF)
-		{
-			/* These formats will be *rendered* by the GPU and we want to
-			 * support compression, but they are "upstream" formats too, so
-			 * remap them.
-			 */
-			case HAL_PIXEL_FORMAT_RGB_565:
-				return HAL_PIXEL_FORMAT_RGB_565;
-			case HAL_PIXEL_FORMAT_BGRA_8888:
-				return HAL_PIXEL_FORMAT_BGRA_8888;
-			/* Vendor format */
-			default:
-				return iFormat & ~0xF0;
-		}
-	}
-
-	/* Upstream format */
-	return iFormat;
-}
-
-#endif
-
 static int hwc_primary_Post( hwcContext * context,hwc_display_contents_1_t* list)
 {
 
@@ -4703,6 +4797,7 @@ static int hwc_primary_Post( hwcContext * context,hwc_display_contents_1_t* list
         }
         info = context->info;
         struct private_handle_t*  handle = (struct private_handle_t*)fbLayer->handle;
+
         if (!handle)
         {
             ALOGE("hanndle=NULL at line %d",__LINE__);
@@ -4768,29 +4863,6 @@ static int hwc_primary_Post( hwcContext * context,hwc_display_contents_1_t* list
 	    fb_info.wait_fs=0;
 #endif
 
-#if G6110_SUPPORT_FBDC
-    if(HALPixelFormatGetCompression(context->fbhandle.format) != HAL_FB_COMPRESSION_NONE)
-    {
-        switch(HALPixelFormatGetRawFormat(context->fbhandle.format))
-        {
-            case HAL_PIXEL_FORMAT_RGB_565:
-                fb_info.win_par[0].area_par[0].data_format = FBDC_RGB_565;
-                fb_info.win_par[0].area_par[0].fbdc_data_format = FBDC_RGB_565;
-                fb_info.win_par[0].area_par[0].fbdc_en= 1;
-                fb_info.win_par[0].area_par[0].fbdc_cor_en = 0;
-                break;
-            case HAL_PIXEL_FORMAT_BGRA_8888:
-                fb_info.win_par[0].area_par[0].data_format = FBDC_ARGB_888;
-                fb_info.win_par[0].area_par[0].fbdc_data_format = FBDC_ARGB_888;
-                fb_info.win_par[0].area_par[0].fbdc_en= 1;
-                fb_info.win_par[0].area_par[0].fbdc_cor_en = 0;
-                break;
-            default:
-                ALOGE("Unsupport format 0x%x",HALPixelFormatGetRawFormat(context->fbhandle.format));
-                break;
-        }
-    }
-#endif
 #ifdef GPU_G6110
         if(getHdmiMode() == 0)
 #endif
@@ -4947,29 +5019,6 @@ static int hwc_external_Post( hwcContext * context,hwc_display_contents_1_t* lis
 	    fb_info.wait_fs=0;
 #endif
 
-#if G6110_SUPPORT_FBDC
-    if(HALPixelFormatGetCompression(context->fbhandle.format) != HAL_FB_COMPRESSION_NONE)
-    {
-        switch(HALPixelFormatGetRawFormat(context->fbhandle.format))
-        {
-            case HAL_PIXEL_FORMAT_RGB_565:
-                fb_info.win_par[0].area_par[0].data_format = FBDC_RGB_565;
-                fb_info.win_par[0].area_par[0].fbdc_data_format = FBDC_RGB_565;
-                fb_info.win_par[0].area_par[0].fbdc_en= 1;
-                fb_info.win_par[0].area_par[0].fbdc_cor_en = 0;
-                break;
-            case HAL_PIXEL_FORMAT_BGRA_8888:
-                fb_info.win_par[0].area_par[0].data_format = FBDC_ARGB_888;
-                fb_info.win_par[0].area_par[0].fbdc_data_format = FBDC_ARGB_888;
-                fb_info.win_par[0].area_par[0].fbdc_en= 1;
-                fb_info.win_par[0].area_par[0].fbdc_cor_en = 0;
-                break;
-            default:
-                ALOGE("Unsupport format 0x%x",HALPixelFormatGetRawFormat(context->fbhandle.format));
-                break;
-        }
-    }
-#endif
         ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info);
 
 #if USE_HWC_FENCE
@@ -5188,7 +5237,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
                 return -1;
          }    
 
-#if 0 //G6110_SUPPORT_FBDC
+#if G6110_SUPPORT_FBDC
     if(HALPixelFormatGetCompression(pzone_mag->zone_info[i].format) != HAL_FB_COMPRESSION_NONE)
     {
         raw_format = HALPixelFormatGetRawFormat(pzone_mag->zone_info[i].format);
@@ -6701,7 +6750,6 @@ hwc_device_open(
     context->mVideoRotate = false;
     context->mGtsStatus   = false;
     context->mTrsfrmbyrga = false;
-    context->bHasDimLayer = false;
 
 #if GET_VPU_INTO_FROM_HEAD
     /* initialize params of video source info*/
@@ -6769,10 +6817,14 @@ hwc_device_open(
 	context->fbhandle.width = info.xres;
 	context->fbhandle.height = info.yres;
 #ifdef GPU_G6110
+    #if G6110_SUPPORT_FBDC
+    context->fbhandle.format = FBDC_ARGB_888;
+    #else
     context->fbhandle.format = HAL_PIXEL_FORMAT_BGRA_8888;
+    #endif
 #else
-    context->fbhandle.format = info.nonstd & 0xff;
-#endif
+    context->fbhandle.format = info.nonstd & 0xfff;
+#endif //end of GPU_G6110
     context->fbhandle.stride = (info.xres+ 31) & (~31);
     context->pmemPhysical = ~0U;
     context->pmemLength   = 0;
@@ -6818,6 +6870,7 @@ hwc_device_open(
 	}
 
 #if OPTIMIZATION_FOR_DIMLAYER
+    context->bHasDimLayer = false;
     err = context->mAllocDev->alloc(context->mAllocDev, context->fbhandle.width, \
                                     context->fbhandle.height,HAL_PIXEL_FORMAT_RGB_565, \
                                     GRALLOC_USAGE_HW_COMPOSER|GRALLOC_USAGE_HW_RENDER, \
