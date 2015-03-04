@@ -798,7 +798,8 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
         }
         if((dstRects[m].right - dstRects[m].left) < 16 || (dstRects[m].bottom - dstRects[m].top) < 16)
         {
-	    	ALOGD("lcdc dont support too small area cnt =%d,name=%s,zone[%d,%d,%d,%d]",
+            if(Context == _contextAnchor)
+	    	    ALOGD("lcdc dont support too small area cnt =%d,name=%s,zone[%d,%d,%d,%d]",
 	    	        Region->numRects,layer->LayerName,dstRects[m].left,dstRects[m].top,dstRects[m].right,dstRects[m].bottom);
 	        return -1;
         }
@@ -7435,10 +7436,19 @@ int close_hdmi()
 }
 void *try_hotplug_external(void *arg)
 {
-    do{
+    struct timeval tstart,tend;
+    gettimeofday(&tstart,NULL);
+    do{  		
+    	gettimeofday(&tend,NULL);
+        if((((tend.tv_sec - tstart.tv_sec)*1000000)+(tend.tv_usec - tstart.tv_usec)) % 6000 == 0 )
+        {
+    	    ALOGW("Try to try_hotplug_external spent time = %ld us",(((tend.tv_sec - tstart.tv_sec)*1000000)+(tend.tv_usec - tstart.tv_usec)));	
+        }                        
+        ALOGV("getHdmiMode()=%d,flag_external=%d,flag_blank=%d,flag_hwcup_external=%d",
+              getHdmiMode(),flag_external,flag_blank,flag_hwcup_external);
         if(getHdmiMode() == 1 && flag_external == 0 && flag_blank == 0 && flag_hwcup_external == 2)
         {
-			ALOGD("try_hotplug_external at line = %d",__LINE__);
+			ALOGI("try_hotplug_external at line = %d",__LINE__);
             handle_hdmi_event(getHdmiMode(), 0);
 			break;
         }
