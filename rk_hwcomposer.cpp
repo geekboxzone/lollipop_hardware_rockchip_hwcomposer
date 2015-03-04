@@ -6823,7 +6823,7 @@ hwc_device_open(
     context->fbhandle.format = HAL_PIXEL_FORMAT_BGRA_8888;
     #endif
 #else
-    context->fbhandle.format = info.nonstd & 0xfff;
+    context->fbhandle.format = info.nonstd & 0xff;
 #endif //end of GPU_G6110
     context->fbhandle.stride = (info.xres+ 31) & (~31);
     context->pmemPhysical = ~0U;
