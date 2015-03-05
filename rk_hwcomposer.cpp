@@ -2471,6 +2471,39 @@ static int check_zone(hwcContext * Context)
     return 0;
 }
 
+static hwcSTATUS
+hwcCheckFormat(
+    IN  struct private_handle_t * Handle,
+    OUT RgaSURF_FORMAT * Format
+
+    )
+{
+    struct private_handle_t *handle = Handle;
+    if (Format != NULL)
+    {
+        switch (GPU_FORMAT)
+        {
+        case HAL_PIXEL_FORMAT_RGB_565:
+        case HAL_PIXEL_FORMAT_RGB_888:
+        case HAL_PIXEL_FORMAT_RGBA_8888:
+        case HAL_PIXEL_FORMAT_RGBX_8888:
+        case HAL_PIXEL_FORMAT_BGRA_8888:
+        case HAL_PIXEL_FORMAT_YCrCb_NV12:
+        case HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO:
+#if G6110_SUPPORT_FBDC
+        case FBDC_BGRA_8888:
+#endif
+             return hwcSTATUS_OK;
+        default:
+            ALOGE("%s:line=%d invalid format=0x%x",__func__,__LINE__,GPU_FORMAT);
+            return hwcSTATUS_INVALID_ARGUMENT;
+        }
+    }
+
+
+    return hwcSTATUS_OK;
+}
+
 static int skip_count = 0;
 static uint32_t
 check_layer(
@@ -2618,7 +2651,7 @@ check_layer(
 
         /* Get format. */
 		//zxl: remove hwcGetFormat,or it will let fbdc format return gpu.
-        if( /* hwcGetFormat(handle, &format) != hwcSTATUS_OK
+        if(  /*hwcCheckFormat(handle, &format) != hwcSTATUS_OK
             ||*/ (LayerZoneCheck(Layer,Context == _contextAnchor ? HWC_DISPLAY_PRIMARY : HWC_DISPLAY_EXTERNAL) != 0))
         {
              return HWC_FRAMEBUFFER;
@@ -2663,19 +2696,21 @@ _Dump(
     for (i = 0; list && (i < (list->numHwLayers - 1)); i++)
     {
         hwc_layer_1_t const * l = &list->hwLayers[i];
-
+        struct private_handle_t * handle = (struct private_handle_t *) (l->handle);
         if(l->flags & HWC_SKIP_LAYER)
         {
             LOGD("layer %p skipped", l);
         }
         else
         {
+            if(handle)
             LOGD("layer=%p, "
                  "name=%s "
                  "type=%d, "
                  "hints=%08x, "
                  "flags=%08x, "
                  "handle=%p, "
+                 "format=0x%x, "
                  "tr=%02x, "
                  "blend=%04x, "
                  "{%d,%d,%d,%d}, "
@@ -2686,6 +2721,7 @@ _Dump(
                  l->hints,
                  l->flags,
                  l->handle,
+                 handle->format,
                  l->transform,
                  l->blending,
                  l->sourceCrop.left,
@@ -4469,11 +4505,13 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
     }
 
     //G6110 FBDC: only let video case continue.
+#if G6110_SUPPORT_FBDC
     if(!context->mVideoMode)
     {
         goto GpuComP;
     }
-    
+#endif
+
     ret = collect_all_zones(context,list);
     if(ret !=0 )
     {
@@ -5141,7 +5179,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
         int raw_format=hwChangeFormatandroidL(pzone_mag->zone_info[i].format);
         ALOGV("hwc_set_lcdc Zone[%d]->layer[%d],dispatched=%d,"
         "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
-        "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],"
+        "w_h_s_f[%d,%d,%d,0x%x],tr_rtr_bled[%d,%d,%d],"
         "layer_fd[%d],addr=%x,acq_fence_fd=%d"
         "layname=%s",    
         pzone_mag->zone_info[i].zone_index,
