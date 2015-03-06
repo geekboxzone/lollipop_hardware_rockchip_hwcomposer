@@ -43,6 +43,8 @@
 			}
 			close(fd);
 			g_hdmi_mode = atoi(statebuf);
+			if(g_hdmi_mode == 0)
+			    hdmi_noready = 1;
 			/* if (g_hdmi_mode==0)
 			{
 				property_set("sys.hdmi.mode", "0");
