@@ -63,8 +63,6 @@ static hwbkupmanage bkupmanage;
 static PFNEGLRENDERBUFFERMODIFYEDANDROIDPROC _eglRenderBufferModifiedANDROID;
 static mix_info gmixinfo[2];
 
-int hdmi_noready = 1;
-int hdmi_anm = 0;
 int flag_blank = 0;
 int flag_external = 0;
 int flag_hwcup_external = 0;
@@ -351,7 +349,7 @@ void hwc_sync(hwc_display_contents_1_t  *list)
 	{
 		if (list->hwLayers[i].acquireFenceFd>0)
 		{
-			sync_wait(list->hwLayers[i].acquireFenceFd,3001);  // add 40ms timeout
+			sync_wait(list->hwLayers[i].acquireFenceFd,500);  // add 40ms timeout
 			ALOGV("acquireFenceFd=%d,name=%s",list->hwLayers[i].acquireFenceFd,list->hwLayers[i].LayerName);
 		}
 
@@ -2575,10 +2573,7 @@ check_layer(
 #endif
           )
 #endif
-#ifndef GPU_G6110
-        || skip_count<10 
-#endif
-        || (handle->type == 1 && !Context->iommuEn)
+        || skip_count<10 || (handle->type == 1 && !Context->iommuEn)
         || (Context->mGtsStatus && !strcmp(Layer->LayerName,"SurfaceView")
         && (handle && GPU_FORMAT == HAL_PIXEL_FORMAT_RGBA_8888))
     )
@@ -3675,7 +3670,7 @@ static int hwc_prepare_external(hwc_composer_device_1 *dev,
                                hwc_display_contents_1_t *list) {
 
 #ifdef GPU_G6110
-    if(hdmi_noready == 1)
+    if(getHdmiMode() == 0)
     {
         return 0;
     }
@@ -4144,7 +4139,7 @@ GpuComP   :
 static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_1_t *list) 
 {
 #ifdef GPU_G6110
-    if(hdmi_noready == 0) //hdmi is ready ,primary need nodraw
+    if(getHdmiMode() == 1)
     {
         for (unsigned int i = 0; i < (list->numHwLayers - 1); i++)
         {
@@ -4643,7 +4638,7 @@ hwc_prepare(
     hwcContext * context = _contextAnchor;
     int ret = 0;
     size_t i;
-    hwc_display_contents_1_t* list = displays[0];  // ignore displays beyond the first  
+    hwc_display_contents_1_t* list = displays[0];  // ignore displays beyond the first
     /*check layers of every list*/
     {
         char pro_value[PROPERTY_VALUE_MAX];
@@ -4666,33 +4661,6 @@ hwc_prepare(
         	}
 	    }
 	}
-#ifdef GPU_G6110
-    for(int i=0;i<2;i++)
-    {
-        if(displays[i] != NULL)
-    	{
-    	    unsigned int numlayer = displays[i]->numHwLayers;
-        	for(unsigned int j=0;j<numlayer -1;j++)
-    		{
-        		hwc_layer_1_t* layer = &displays[i]->hwLayers[j];
-                struct private_handle_t* SrcHnd = (struct private_handle_t *) layer->handle;
-        		if (layer == NULL)
-        			;
-        		else
-        		{
-    	            if(strstr(layer->LayerName,"BootAnimation") != NULL)
-    	            {
-                        layer->sourceCrop.left = 0;
-                        layer->sourceCrop.top = 0;
-                        layer->sourceCrop.right = SrcHnd->stride;
-                        layer->sourceCrop.bottom = SrcHnd->height;
-                        hdmi_anm = 1;
-    	            }
-                }
-    		}
-        }
-    }
-#endif
     /* Check device handle. */
     if (context == NULL
     || &context->device.common != (hw_device_t *) dev
@@ -4712,26 +4680,15 @@ hwc_prepare(
 	}
 #endif
     context->zone_manager.composter_mode = HWC_FRAMEBUFFER;
-    if(_contextAnchor1 != NULL)
-        _contextAnchor1->zone_manager.composter_mode = HWC_FRAMEBUFFER;
+
     /* Roll back to FRAMEBUFFER if any layer can not be handled. */
-    if(hwc_get_int_property("sys.hwc.compose_policy","0") <= 0 )
+    if(hwc_get_int_property("sys.hwc.compose_policy","0")<= 0 )
     {
         for (i = 0; i < (list->numHwLayers - 1); i++)
         {
             list->hwLayers[i].compositionType = HWC_FRAMEBUFFER;
         }
-#ifdef GPU_G6110
-        if(hdmi_noready == 0) //hdmi is ready ,primary need nodraw
-        {
-            for (unsigned int i = 0; i < (list->numHwLayers - 1); i++)
-            {
-                hwc_layer_1_t * layer = &list->hwLayers[i];
-                layer->compositionType = HWC_NODRAW;
-            }
-        }
-#endif
-        LOGGPUCOP("Back to gpu compositon line[%d],fun[%s]",__LINE__,__FUNCTION__);
+		LOGGPUCOP("Back to gpu compositon line[%d],fun[%s]",__LINE__,__FUNCTION__);
         return 0;
     }
 
@@ -4792,8 +4749,6 @@ int hwc_blank(struct hwc_composer_device_1 *dev, int dpy, int blank)
     case HWC_DISPLAY_EXTERNAL:{
 #if HWC_EXTERNAL
 		flag_blank = 1;
-		if(blank == 0)
-		    hdmi_noready = blank;
 		_contextAnchor1->fb_blanked = blank;
         int fb_blank = blank ? FB_BLANK_POWERDOWN : FB_BLANK_UNBLANK;
 /*        int err = ioctl(_contextAnchor1->fbFd, FBIOBLANK, fb_blank);
@@ -4857,12 +4812,7 @@ static int hwc_fbPost(hwc_composer_device_1_t * dev, size_t numDisplays, hwc_dis
 
 static int hwc_primary_Post( hwcContext * context,hwc_display_contents_1_t* list)
 {
-#ifdef GPU_G6110
-    if(hdmi_noready == 0) //hdmi is ready ,primary need nodraw
-    {
-        return 0;
-    }
-#endif
+
     if (list == NULL)
     {
        return -1;
@@ -4953,7 +4903,7 @@ static int hwc_primary_Post( hwcContext * context,hwc_display_contents_1_t* list
 #endif
 
 #ifdef GPU_G6110
-        if(hdmi_noready == 1)
+        if(getHdmiMode() == 0)
 #endif
         {
             ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info);
@@ -5195,6 +5145,12 @@ static int hwc_external_Post( hwcContext * context,hwc_display_contents_1_t* lis
     }
     return 0;
 }
+
+
+
+
+
+
 
 static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int mix_flag) 
 {
@@ -5659,16 +5615,9 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
 #endif
         ALOGV("lcdc config done");
 #ifdef GPU_G6110
-        if(hdmi_noready == 1 || context == _contextAnchor1)
+        if(getHdmiMode() == 0 || context == _contextAnchor1)
 #endif
         {
-#ifdef GPU_G6110       
-            if(hdmi_anm == 1){
-                fb_info.win_par[0].area_par[0].xsize = context->dpyAttr[HWC_DISPLAY_EXTERNAL].xres;
-                fb_info.win_par[0].area_par[0].ysize = context->dpyAttr[HWC_DISPLAY_EXTERNAL].yres;
-                hdmi_anm = 0;
-            }  
-#endif            
             if(ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info) == -1)
             {
                 ALOGE("RK_FBIOSET_CONFIG_DONE err line=%d !",__LINE__);
@@ -6014,7 +5963,7 @@ int hwc_set_virtual(hwc_composer_device_1_t * dev, hwc_display_contents_1_t  **c
 static int hwc_set_external(hwc_composer_device_1_t *dev, hwc_display_contents_1_t* list, int dpy)
 {
 #ifdef GPU_G6110
-    if(hdmi_noready == 1)
+    if(getHdmiMode() == 0)
     {
         return 0;
     }
