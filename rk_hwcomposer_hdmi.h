@@ -16,6 +16,6 @@ void      rk_check_hdmi_uevents(const char *buf);
 void      rk_handle_uevents(const char *buff);
 void     *rk_hwc_hdmi_thread(void *arg);
 extern  int         g_hdmi_mode;
-extern  int         hdmi_noready;
+extern  bool        hdmi_noready;
 void     handle_hdmi_event(int hdmi_mode,int flag);
 

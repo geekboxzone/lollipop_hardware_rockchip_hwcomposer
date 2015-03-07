@@ -459,7 +459,17 @@ typedef struct _hwcContext
      bool      mVideoRotate;
      bool      mGtsStatus;
      bool      mTrsfrmbyrga;
-     int        mtrsformcnt;       
+     int        mtrsformcnt;
+
+     /* */
+     int hdmi_anm;
+     int flag_blank;
+     int flag_external;
+     int flag_hwcup_external;
+     int last_fenceFd_flag;
+     int last_rel_fenceFd[11];
+     int last_ret_fenceFd;
+     int last_frame_flag;
 
      /* The index of video buffer will be used */
      int      mCurVideoIndex;
