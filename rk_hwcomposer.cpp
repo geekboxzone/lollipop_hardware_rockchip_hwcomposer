@@ -2699,6 +2699,7 @@ int try_wins_dispatch_mix_vh (hwcContext * Context,hwc_display_contents_1_t * li
     }
 #endif   
     //Mark the composer mode to HWC_MIX_V2
+    Context->mix_vh = true;
     Context->zone_manager.composter_mode = HWC_MIX_V2;
     return 0;    
 }
@@ -5927,8 +5928,11 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
         ALOGV("mix_flag=%d,win_no =%d,z_order = %d",mix_flag,win_no,z_order);
         unsigned int offset = handle->offset;
         fb_info.win_par[win_no-1].area_par[0].data_format = format;
-        if(list->numHwLayers == 3 && mix_flag == 2)
+        if(context->mix_vh && mix_flag == 2)
+        {
             fb_info.win_par[win_no-1].win_id = 1;
+            context->mix_vh = false;
+        }    
         else
             fb_info.win_par[win_no-1].win_id = 3;
         fb_info.win_par[win_no-1].z_order = z_order-1;
