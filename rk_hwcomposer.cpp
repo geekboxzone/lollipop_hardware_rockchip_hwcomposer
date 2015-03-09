@@ -2365,14 +2365,14 @@ int try_wins_dispatch_mix_vh (hwcContext * Context,hwc_display_contents_1_t * li
         mix_index = 0;
         return -1;
     }
-    if(pzone_mag->zone_cnt < 3)
+    if(list->numHwLayers - 1 < 3)
     {
-		LOGGPUCOP("Back to gpu compositon line[%d],fun[%s]",__LINE__,__FUNCTION__);
     	return -1;
     }
 
     hwc_layer_1_t * layer = &list->hwLayers[0];
-    if(pzone_mag->zone_info[0].format != HAL_PIXEL_FORMAT_YCrCb_NV12)
+    if(!(pzone_mag->zone_info[0].format == HAL_PIXEL_FORMAT_YCrCb_NV12 
+            || pzone_mag->zone_info[0].format == HAL_PIXEL_FORMAT_YCrCb_NV12_10))
     {
 		ALOGV("Is NOT video format,not need do this");
         return -1;
@@ -2491,6 +2491,7 @@ int try_wins_dispatch_mix_vh (hwcContext * Context,hwc_display_contents_1_t * li
     {
         if(is_out_log())
             ALOGD("lcdc dont support 5 wins");
+		LOGGPUCOP("Back to gpu compositon line[%d],fun[%s]",__LINE__,__FUNCTION__);
         return -1;
     }    
     for(i=0;i<pzone_mag->zone_cnt;i++)
@@ -2606,7 +2607,7 @@ int try_wins_dispatch_mix_vh (hwcContext * Context,hwc_display_contents_1_t * li
                 pzone_mag->zone_info[i].dispatched = srot_tal[2][1]++;            
                 break;
             default:
-                ALOGE("try_wins_dispatch_mix_v2 sort err!");
+                ALOGE("try_wins_dispatch_mix_vh sort err!");
                 return -1;
         }
         ALOGV("zone[%d].dispatched[%d]=%s,sort=%d", \
