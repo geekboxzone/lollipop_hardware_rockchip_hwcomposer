@@ -461,7 +461,7 @@ typedef struct _hwcContext
      bool      mTrsfrmbyrga;
      int        mtrsformcnt;
 
-     /* */
+     /*dual display */
      int hdmi_anm;
      int flag_blank;
      int flag_external;
