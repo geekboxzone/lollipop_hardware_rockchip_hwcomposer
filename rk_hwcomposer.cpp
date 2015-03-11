@@ -686,6 +686,25 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
         hwc_rect_t  rect_merge;
         bool haveStartwin = false;
         bool trsfrmbyrga = false;
+#ifdef RK3368_BOX
+        int d_w = 0;  //external weight & height
+        int d_h = 0;
+        int s_w = 0;
+        int s_h = 0;
+        float v_scale = 0.0;  //source v_scale & h_scale
+        float h_scale = 0.0;
+        bool NeedScale = false;
+        hwcRECT DstRectScale;
+        char value[PROPERTY_VALUE_MAX];
+        property_get("persist.sys.video.cvrs", value, "false");
+        NeedScale = !strcmp(value,"true");
+        get_external_full_screen_size(&d_w,&d_h);
+        DstRectScale.left  = 0; 
+        DstRectScale.top   = 0; 
+        DstRectScale.right = d_w; 
+        DstRectScale.bottom= d_h;
+#endif
+
         if(strstr(layer->LayerName,"Starting@# "))
         {
             haveStartwin = true;
@@ -769,7 +788,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
         rect_merge.top = top_min;
         rect_merge.right = right_max;
         rect_merge.bottom = bottom_max;
-
+        
         //zxl:If in video mode,then use all area.
         if(SrcHnd->format == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO || SrcHnd->format == HAL_PIXEL_FORMAT_YCrCb_NV12)
         {
@@ -777,6 +796,28 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
             dstRects[0].top    = DstRect->top;
             dstRects[0].right  = DstRect->right;
             dstRects[0].bottom = DstRect->bottom;
+#ifdef RK3368_BOX
+            if(Context == _contextAnchor1 && NeedScale)
+            {
+                s_w = SrcRect->right - SrcRect->left;
+                s_h = SrcRect->bottom - SrcRect->top;
+                if(s_w*d_h-s_h*d_w > 0) //d_w standard
+                {
+                    ALOGV("%s,%d,[%d,%d][%d,%d]",__FUNCTION__,__LINE__,d_w,d_h,s_w,s_h);
+                    DstRectScale.left   = 0;
+                    DstRectScale.top    = ((d_h-s_h*d_w/s_w)%2==0)?((d_h-s_h*d_w/s_w)/2):((d_h-s_h*d_w/s_w)/2);
+                    DstRectScale.right  = d_w;
+                    DstRectScale.bottom = d_h - DstRectScale.top;
+                }else
+                {
+                    ALOGV("%s,%d,[%d,%d][%d,%d]",__FUNCTION__,__LINE__,d_w,d_h,s_w,s_h);
+                    DstRectScale.left   = ((d_w-s_w*d_h/s_h)%2==0)?((d_w-s_w*d_h/s_h)/2):((d_w-s_w*d_h/s_h+1)/2);;
+                    DstRectScale.top    = 0;
+                    DstRectScale.right  = d_w - DstRectScale.left;
+                    DstRectScale.bottom = d_h;
+                }
+            }
+#endif
         }
         else
         {
@@ -784,7 +825,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
             dstRects[0].top    = hwcMAX(DstRect->top,    rect_merge.top);
             dstRects[0].right  = hwcMIN(DstRect->right,  rect_merge.right);
             dstRects[0].bottom = hwcMIN(DstRect->bottom, rect_merge.bottom);
-        }
+        }        
             /* Check dest area. */
         if ((dstRects[m].right <= dstRects[m].left) ||  (dstRects[m].bottom <= dstRects[m].top))
         {
@@ -1115,6 +1156,16 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
         }        
         else
             Context->zone_manager.zone_info[j].is_large = 0; 
+#ifdef RK3368_BOX
+        if((SrcHnd->format == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO ||
+            SrcHnd->format == HAL_PIXEL_FORMAT_YCrCb_NV12) &&(Context == _contextAnchor1 && NeedScale))
+        {
+            Context->zone_manager.zone_info[j].disp_rect.left  = DstRectScale.left;  
+            Context->zone_manager.zone_info[j].disp_rect.top   = DstRectScale.top;   
+            Context->zone_manager.zone_info[j].disp_rect.right = DstRectScale.right; 
+            Context->zone_manager.zone_info[j].disp_rect.bottom = DstRectScale.bottom;
+        }
+#endif
     }
     Context->zone_manager.zone_cnt = j;
     if(tsize)
