@@ -71,8 +71,14 @@ endif
 
 ifeq ($(strip $(TARGET_BOARD_PLATFORM)),rk3368)
 LOCAL_CFLAGS += -DTARGET_BOARD_PLATFORM_RK3368
-ifeq ($(strip $(TARGET_BOARD_PLATFORM_TABLET)),true)
+ifeq ($(strip $(TARGET_BOARD_PLATFORM_TABLET)),tablet)
 LOCAL_CFLAGS += -DRK3368_MID
+endif
+ifeq ($(strip $(TARGET_BOARD_PLATFORM_TABLET)),box)
+LOCAL_CFLAGS += -DRK3368_BOX
+endif
+ifeq ($(strip $(TARGET_BOARD_PLATFORM_TABLET)),phone)
+LOCAL_CFLAGS += -DRK3368_PHONE
 endif
 endif
 

@@ -4170,9 +4170,9 @@ static int hwc_prepare_external(hwc_composer_device_1 *dev,
                 memcpy(&vpu_hd,(void*)(GPU_BASE),sizeof(tVPU_FRAME));
 #else
 #if defined(__arm64__) || defined(__aarch64__)
-                memcpy(&vpu_hd,(long*)(GPU_BASE)+2*handle->stride*handle->height,sizeof(tVPU_FRAME));
+                memcpy(&vpu_hd,(void*)(GPU_BASE + 2*handle->stride*handle->height),sizeof(tVPU_FRAME));
 #else
-                memcpy(&vpu_hd,(int*)(GPU_BASE)+2*handle->stride*handle->height,sizeof(tVPU_FRAME));
+                memcpy(&vpu_hd,(void*)(GPU_BASE + 2*handle->stride*handle->height),sizeof(tVPU_FRAME));
 #endif
 #endif
                 //if find invalid params,then increase iVideoSources and try again.
@@ -4650,9 +4650,9 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
                 memcpy(&vpu_hd,(void*)(GPU_BASE),sizeof(tVPU_FRAME));
 #else
 #if defined(__arm64__) || defined(__aarch64__)
-                memcpy(&vpu_hd,(long*)(GPU_BASE)+2*handle->stride*handle->height,sizeof(tVPU_FRAME));
+                memcpy(&vpu_hd,(void*)(GPU_BASE + 2*handle->stride*handle->height),sizeof(tVPU_FRAME));
 #else
-                memcpy(&vpu_hd,(int*)(GPU_BASE)+2*handle->stride*handle->height,sizeof(tVPU_FRAME));
+                memcpy(&vpu_hd,(void*)(GPU_BASE + 2*handle->stride*handle->height),sizeof(tVPU_FRAME));
 #endif
 #endif
                 //if find invalid params,then increase iVideoSources and try again.
@@ -5053,8 +5053,8 @@ hwc_prepare(
         	}
 	    }
 	}
-#ifdef GPU_G6110
-#ifndef RK3368_MID
+
+#ifdef RK3368_BOX
     for(int i=0;i<2;i++)
     {
         if(displays[i] != NULL)
@@ -5078,7 +5078,7 @@ hwc_prepare(
         }
     }
 #endif
-#endif
+
     /* Check device handle. */
     if (context == NULL
     || &context->device.common != (hw_device_t *) dev
@@ -5108,8 +5108,7 @@ hwc_prepare(
         {
             list->hwLayers[i].compositionType = HWC_FRAMEBUFFER;
         }
-#ifdef GPU_G6110
-#ifndef RK3368_MID
+#ifdef RK3368_BOX
         if(!hdmi_noready && getHdmiMode() == 1) //rk3368 box: hdmi is ready ,primary need nodraw
         {
             for (unsigned int i = 0; i < (list->numHwLayers - 1); i++)
@@ -5118,7 +5117,6 @@ hwc_prepare(
                 layer->compositionType = HWC_NODRAW;
             }
         }
-#endif
 #endif
         LOGGPUCOP("Back to gpu compositon line[%d],fun[%s]",__LINE__,__FUNCTION__);
         return 0;
@@ -6061,15 +6059,13 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
         if(hdmi_noready || context == _contextAnchor1)
 #endif
         {
-#ifdef GPU_G6110 //fix BootAnimation when turn on rk3368_box 
-#ifndef RK3368_MID
+#ifdef RK3368_BOX //fix BootAnimation when turn on rk3368_box 
             if(_contextAnchor->hdmi_anm == 1){
                 fb_info.win_par[0].area_par[0].xsize = context->dpyAttr[HWC_DISPLAY_EXTERNAL].xres;
                 fb_info.win_par[0].area_par[0].ysize = context->dpyAttr[HWC_DISPLAY_EXTERNAL].yres;
                 _contextAnchor->hdmi_anm = 0;
             }  
-#endif            
-#endif            
+#endif                   
             if(ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info) == -1)
             {
                 ALOGE("RK_FBIOSET_CONFIG_DONE err line=%d !",__LINE__);
