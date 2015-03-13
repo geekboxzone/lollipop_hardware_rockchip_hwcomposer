@@ -95,6 +95,7 @@ Version:2.018 \
 #ifdef GPU_G6110
 #if G6110_SUPPORT_FBDC
 #define FBDC_BGRA_8888 0x125 //HALPixelFormatSetCompression(HAL_PIXEL_FORMAT_BGRA_8888,HAL_FB_COMPRESSION_DIRECT_16x4)
+#define FBDC_RGBA_8888 0x121 //HALPixelFormatSetCompression(HAL_PIXEL_FORMAT_RGBA_8888,HAL_FB_COMPRESSION_DIRECT_16x4)
 
 
 //lcdc support fbdc format
@@ -102,6 +103,7 @@ enum data_format {
 FBDC_RGB_565 = 0x26,
 FBDC_ARGB_888,
 FBDC_RGBX_888,
+FBDC_ABGR_888
 };
 
 //G6110 support fbdc compression methods

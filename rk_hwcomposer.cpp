@@ -146,7 +146,7 @@ int hwChangeFormatandroidL(IN int fmt)
 			return 0x22;				        /*android4.4 HAL_PIXEL_FORMAT_YCrCb_NV12_10 is 0x20*/
 #ifdef GPU_G6110
 		case HAL_PIXEL_FORMAT_BGRX_8888:
-		    return HAL_PIXEL_FORMAT_BGRA_8888;
+		    return HAL_PIXEL_FORMAT_RGBA_8888;
 #endif
 		default:
 			return fmt;
@@ -221,6 +221,8 @@ int HALPixelFormatGetRawFormat(int iFormat)
 				return HAL_PIXEL_FORMAT_RGB_565;
 			case HAL_PIXEL_FORMAT_BGRA_8888:
 				return HAL_PIXEL_FORMAT_BGRA_8888;
+		    case HAL_PIXEL_FORMAT_RGBA_8888:
+				return HAL_PIXEL_FORMAT_RGBA_8888;
 			/* Vendor format */
 			default:
 				return iFormat & ~0xF0;
@@ -242,6 +244,7 @@ int HALPixelFormatSetCompression(int iFormat, int iCompression)
 		{
 			case HAL_PIXEL_FORMAT_RGB_565:
 			case HAL_PIXEL_FORMAT_BGRA_8888:
+			case HAL_PIXEL_FORMAT_RGBA_8888:
 				iFormat |= 0x100;
 				break;
 		}
@@ -2936,6 +2939,7 @@ hwcCheckFormat(
         case HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO:
 #if G6110_SUPPORT_FBDC
         case FBDC_BGRA_8888:
+        case FBDC_RGBA_8888:
 #endif
              return hwcSTATUS_OK;
         default:
@@ -5771,8 +5775,9 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
                 fb_info.win_par[win_no-1].area_par[area_no].fbdc_cor_en = 0;
                 break;
             case HAL_PIXEL_FORMAT_BGRA_8888:
-                raw_format = FBDC_ARGB_888;
-                fb_info.win_par[win_no-1].area_par[area_no].fbdc_data_format = FBDC_ARGB_888;
+            case HAL_PIXEL_FORMAT_RGBA_8888:
+                raw_format = FBDC_ABGR_888;
+                fb_info.win_par[win_no-1].area_par[area_no].fbdc_data_format = FBDC_ABGR_888;
                 fb_info.win_par[win_no-1].area_par[area_no].fbdc_en= 1;
                 fb_info.win_par[win_no-1].area_par[area_no].fbdc_cor_en = 0;
                 break;
@@ -5978,11 +5983,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
         }
         else if(mix_flag == 2)
         {
-#ifdef GPU_G6110
-            format = HAL_PIXEL_FORMAT_BGRA_8888;
-#else
             format = HAL_PIXEL_FORMAT_RGBA_8888;
-#endif
             z_order++;
         }
 
@@ -7371,9 +7372,9 @@ hwc_device_open(
 	context->fbhandle.height = info.yres;
 #ifdef GPU_G6110
     #if G6110_SUPPORT_FBDC
-    context->fbhandle.format = FBDC_ARGB_888;
+    context->fbhandle.format = FBDC_ABGR_888;
     #else
-    context->fbhandle.format = HAL_PIXEL_FORMAT_BGRA_8888;
+    context->fbhandle.format = HAL_PIXEL_FORMAT_RGBA_8888;
     #endif
 #else
     context->fbhandle.format = info.nonstd & 0xff;
@@ -7793,7 +7794,7 @@ int get_hdmi_config(){
 	context->fbhandle.width = info.xres;
 	context->fbhandle.height = info.yres;
 #ifdef GPU_G6110
-    context->fbhandle.format = HAL_PIXEL_FORMAT_BGRA_8888;
+    context->fbhandle.format = HAL_PIXEL_FORMAT_RGBA_8888;
 #else
     context->fbhandle.format = info.nonstd & 0xff;
 #endif
