@@ -4225,9 +4225,9 @@ static int hwc_prepare_external(hwc_composer_device_1 *dev,
                 memcpy(&vpu_hd,(void*)(GPU_BASE),sizeof(tVPU_FRAME));
 #else
 #if defined(__arm64__) || defined(__aarch64__)
-                memcpy(&vpu_hd,(void*)(GPU_BASE + 2*handle->stride*handle->height),sizeof(tVPU_FRAME));
+                memcpy(&vpu_hd,(void*)((unsigned long)GPU_BASE+2*handle->stride*handle->height),sizeof(tVPU_FRAME));
 #else
-                memcpy(&vpu_hd,(void*)(GPU_BASE + 2*handle->stride*handle->height),sizeof(tVPU_FRAME));
+                memcpy(&vpu_hd,(void*)((unsigned int)GPU_BASE+2*handle->stride*handle->height),sizeof(tVPU_FRAME));
 #endif
 #endif
                 //if find invalid params,then increase iVideoSources and try again.
@@ -4705,9 +4705,9 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
                 memcpy(&vpu_hd,(void*)(GPU_BASE),sizeof(tVPU_FRAME));
 #else
 #if defined(__arm64__) || defined(__aarch64__)
-                memcpy(&vpu_hd,(void*)(GPU_BASE + 2*handle->stride*handle->height),sizeof(tVPU_FRAME));
+                memcpy(&vpu_hd,(void*)((unsigned long)GPU_BASE+2*handle->stride*handle->height),sizeof(tVPU_FRAME));
 #else
-                memcpy(&vpu_hd,(void*)(GPU_BASE + 2*handle->stride*handle->height),sizeof(tVPU_FRAME));
+                memcpy(&vpu_hd,(void*)((unsigned int)GPU_BASE+2*handle->stride*handle->height),sizeof(tVPU_FRAME));
 #endif
 #endif
                 //if find invalid params,then increase iVideoSources and try again.
