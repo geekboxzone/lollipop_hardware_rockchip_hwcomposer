@@ -134,6 +134,10 @@ set_overscan(
     int flag
     );
 
+int
+change_dst_position_external(
+    struct rk_fb_win_cfg_data * fb_info,
+    int flag);
 
 int hwChangeFormatandroidL(IN int fmt)
 {
@@ -5550,6 +5554,13 @@ static int hwc_external_Post( hwcContext * context,hwc_display_contents_1_t* lis
 	    fb_info.wait_fs=0;
 #endif
 
+#ifdef GPU_G6110
+        if(_contextAnchor->NeedReDst)
+        {
+            change_dst_position_external(&fb_info,0);
+        }          
+#endif
+
         ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info);
 
 #if USE_HWC_FENCE
@@ -6111,12 +6122,18 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
         if(hdmi_noready || context == _contextAnchor1)
 #endif
         {
+#ifdef GPU_G6110 
 #ifdef RK3368_BOX //fix BootAnimation when turn on rk3368_box 
             if(_contextAnchor->hdmi_anm == 1){
                 fb_info.win_par[0].area_par[0].xsize = context->dpyAttr[HWC_DISPLAY_EXTERNAL].xres;
                 fb_info.win_par[0].area_par[0].ysize = context->dpyAttr[HWC_DISPLAY_EXTERNAL].yres;
                 _contextAnchor->hdmi_anm = 0;
-            }  
+            }
+#endif 
+            if(_contextAnchor->NeedReDst)
+            {
+                change_dst_position_external(&fb_info,0);
+            }          
 #endif                   
             if(ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info) == -1)
             {
@@ -6715,7 +6732,7 @@ void handle_hdmi_event(int hdmi_mode ,int flag )
 #if GPU_G6110
             set_overscan(1);
 #endif 
-            usleep(10000);
+            usleep(50000);
             _contextAnchor->procs->hotplug(_contextAnchor->procs, HWC_DISPLAY_EXTERNAL, 1);
 #if GPU_G6110
             set_overscan(0);
@@ -7389,10 +7406,10 @@ hwc_device_open(
     context->hdmi_anm = 0;
     context->flag_blank = 0;
     context->flag_external = 0;
-    context->flag_hwcup_external = 0;
-    context->last_fenceFd_flag = 1;
-    context->last_ret_fenceFd;
+    context->NeedReDst = false;
     context->last_frame_flag = 1;
+    context->last_fenceFd_flag = 1;
+    context->flag_hwcup_external = 0;
   
     err = hw_get_module(GRALLOC_HARDWARE_MODULE_ID, &module_gr);
     ALOGE_IF(err, "FATAL: can't find the %s module", GRALLOC_HARDWARE_MODULE_ID);
@@ -7942,6 +7959,20 @@ int set_hdmi_config(){
         _contextAnchor->dpyAttr[HWC_DISPLAY_EXTERNAL].ydpi = _contextAnchor1->dpyAttr[HWC_DISPLAY_EXTERNAL].ydpi;
         _contextAnchor->dpyAttr[HWC_DISPLAY_EXTERNAL].vsync_period = _contextAnchor1->dpyAttr[HWC_DISPLAY_EXTERNAL].vsync_period;
         _contextAnchor->dpyAttr[HWC_DISPLAY_EXTERNAL].connected = true;
+#ifdef RK3368_BOX
+        if(_contextAnchor->dpyAttr[HWC_DISPLAY_EXTERNAL].yres > 1080)  //box source can not be bigger than 1080p
+        {
+            _contextAnchor->dpyAttr[HWC_DISPLAY_EXTERNAL].xres = 1920;
+            _contextAnchor->dpyAttr[HWC_DISPLAY_EXTERNAL].yres = 1080;
+            _contextAnchor->NeedReDst = true;
+            LOGV("w_source,h_source,w_dst,h_dst = [%d,%d,%d,%d]",
+                _contextAnchor->dpyAttr[HWC_DISPLAY_EXTERNAL].xres,
+                _contextAnchor->dpyAttr[HWC_DISPLAY_EXTERNAL].yres,
+                _contextAnchor1->dpyAttr[HWC_DISPLAY_EXTERNAL].xres,
+                _contextAnchor1->dpyAttr[HWC_DISPLAY_EXTERNAL].yres);
+        }else
+            _contextAnchor->NeedReDst = false;    
+#endif
         return 1;
     }
     else{
@@ -8053,5 +8084,55 @@ int set_overscan(int flag)
     }
     ALOGV("new_value=[%s]",new_value);     
     close(fd);
+    return 0;
+}
+
+int change_dst_position_external(struct rk_fb_win_cfg_data * fb_info,int flag)
+{
+    unsigned int w_source = _contextAnchor->dpyAttr[HWC_DISPLAY_EXTERNAL].xres;
+    unsigned int h_source = _contextAnchor->dpyAttr[HWC_DISPLAY_EXTERNAL].yres;
+    unsigned int w_dst    = _contextAnchor1->dpyAttr[HWC_DISPLAY_EXTERNAL].xres;
+    unsigned int h_dst    = _contextAnchor1->dpyAttr[HWC_DISPLAY_EXTERNAL].yres;
+    LOGV("w_source,h_source,w_dst,h_dst = [%d,%d,%d,%d]",
+        _contextAnchor->dpyAttr[HWC_DISPLAY_EXTERNAL].xres,
+        _contextAnchor->dpyAttr[HWC_DISPLAY_EXTERNAL].yres,
+        _contextAnchor1->dpyAttr[HWC_DISPLAY_EXTERNAL].xres,
+        _contextAnchor1->dpyAttr[HWC_DISPLAY_EXTERNAL].yres
+    );
+    float w_scale = (float)w_dst / w_source; 
+    float h_scale = (float)h_dst / h_source;
+    
+    if(h_source != h_dst)
+    {   
+        char pro_value[PROPERTY_VALUE_MAX];
+        property_get("sys.dump",pro_value,0);
+        for(int i = 0;i<4;i++)
+        {
+            for(int j=0;j<4;j++)
+            {
+                if(fb_info->win_par[i].area_par[j].ion_fd || fb_info->win_par[i].area_par[j].phy_addr)
+                {
+                    fb_info->win_par[i].area_par[j].xpos  =
+                        (unsigned short)(fb_info->win_par[i].area_par[j].xpos * w_scale);
+                    fb_info->win_par[i].area_par[j].ypos  =
+                        (unsigned short)(fb_info->win_par[i].area_par[j].ypos * h_scale);
+                    fb_info->win_par[i].area_par[j].xsize =
+                        (unsigned short)(fb_info->win_par[i].area_par[j].xsize * w_scale);
+                    fb_info->win_par[i].area_par[j].ysize =
+                        (unsigned short)(fb_info->win_par[i].area_par[j].ysize * h_scale);
+                    if(!strcmp(pro_value,"true"))
+                    {
+                        ALOGD("Adjust dst to => [%d,%d,%d,%d]",
+                            fb_info->win_par[i].area_par[j].xpos,
+                            fb_info->win_par[i].area_par[j].ypos,
+                            fb_info->win_par[i].area_par[j].xsize,
+                            fb_info->win_par[i].area_par[j].ysize);
+                    }
+
+                }
+            }
+        }
+    }
+
     return 0;
 }

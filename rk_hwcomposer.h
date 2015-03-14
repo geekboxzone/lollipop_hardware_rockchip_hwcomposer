@@ -473,6 +473,7 @@ typedef struct _hwcContext
      int last_ret_fenceFd;
      int last_frame_flag;
      bool mix_vh;
+     bool NeedReDst;
 
      /* The index of video buffer will be used */
      int      mCurVideoIndex;
