@@ -54,7 +54,7 @@
 				property_set("sys.hdmi.mode", "1");
 			}*/
 			handle_hdmi_event(g_hdmi_mode,1);
-			ALOGD("HDMI unevent happened!g_hdmi_mode=%d,line=%d",g_hdmi_mode,__LINE__);
+			ALOGD("HDMI uevent happened!g_hdmi_mode=%d,line=%d",g_hdmi_mode,__LINE__);
 			}  
 		else
 		{
@@ -79,7 +79,7 @@
 			if(g_hdmi_mode == 1)
 			{
 				handle_hdmi_event(1,3);
-				ALOGD("HDMI unevent happened!g_hdmi_mode=%d,line=%d",g_hdmi_mode,__LINE__);
+				ALOGD("HDMI uevent happened!g_hdmi_mode=%d,line=%d",g_hdmi_mode,__LINE__);
 			}
 		}  
         else
