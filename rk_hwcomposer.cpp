@@ -3028,7 +3028,7 @@ check_layer(
 #ifndef GPU_G6110
         || skip_count<10 
 #endif
-        || (handle->type == 1 && !Context->iommuEn)
+        || (handle->type == 1 && !_contextAnchor->iommuEn)
         || (Context->mGtsStatus && !strcmp(Layer->LayerName,"SurfaceView")
         && (handle && GPU_FORMAT == HAL_PIXEL_FORMAT_RGBA_8888))
     )
@@ -4359,7 +4359,17 @@ static int hwc_prepare_external(hwc_composer_device_1 *dev,
 		LOGGPUCOP("Back to gpu compositon line[%d],fun[%s]",__LINE__,__FUNCTION__);
         goto GpuComP;
     }
-
+#ifdef GPU_G6110
+    {
+        struct private_handle_t * handle = (struct private_handle_t *) list->hwLayers[0].handle;
+        if( _contextAnchor->NeedReDst && (list->numHwLayers-1) > 2 && 
+                GPU_FORMAT != HAL_PIXEL_FORMAT_YCrCb_NV12 && GPU_FORMAT != HAL_PIXEL_FORMAT_YCrCb_NV12_10)
+        {
+               LOGGPUCOP("Back to gpu compositon line[%d],fun[%s]",__LINE__,__FUNCTION__);
+            goto GpuComP;
+    	}
+    }
+#endif
 
 
 #if !ENABLE_LCDC_IN_NV12_TRANSFORM
