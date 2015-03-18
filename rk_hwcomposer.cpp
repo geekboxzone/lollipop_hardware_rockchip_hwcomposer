@@ -107,35 +107,35 @@ hwc_device_close(
     );
 
 void
-*try_hotplug_external(
+*hdmi_try_hotplug(
     void *arg
     );
 
 void
-get_external_full_screen_size(
+hdmi_get_resolution(
     int* w,
     int* h
     );
 
 int 
-set_hdmi_config();
+hdmi_set_config();
 
 int
-parseHdmiMode(
+hdmi_parse_mode(
     int *outX,
     int *outY
     );
 
 int
-get_hdmi_config();
+hdmi_get_config();
 
 int
-set_overscan(
+hdmi_set_overscan(
     int flag
     );
 
 int
-change_dst_position_external(
+hdmi_reset_dstposition(
     struct rk_fb_win_cfg_data * fb_info,
     int flag);
 
@@ -705,7 +705,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
         char value[PROPERTY_VALUE_MAX];
         property_get("persist.sys.video.cvrs", value, "false");
         NeedScale = !strcmp(value,"true");
-        get_external_full_screen_size(&d_w,&d_h);
+        hdmi_get_resolution(&d_w,&d_h);
         DstRectScale.left  = 0; 
         DstRectScale.top   = 0; 
         DstRectScale.right = d_w; 
@@ -4940,7 +4940,7 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
 #ifdef GPU_G6110
         if(_contextAnchor->NeedReDst && context == _contextAnchor1)
         {
-            change_dst_position_external(&fb_info,0);
+            hdmi_reset_dstposition(&fb_info,0);
         }          
 #endif
 
@@ -5526,7 +5526,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
             }
             if(_contextAnchor->NeedReDst)
             {
-                change_dst_position_external(&fb_info,0);
+                hdmi_reset_dstposition(&fb_info,0);
             }          
 #endif                   
             if(ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info) == -1)
@@ -5888,7 +5888,7 @@ hwc_set(
     int ret = 0;
 #ifdef GPU_G6110
     if(getHdmiMode() == 1)
-        set_overscan(0);
+        hdmi_set_overscan(0);
 #endif
     for (uint32_t i = 0; i < numDisplays; i++) {
         hwc_display_contents_1_t* list = displays[i];
@@ -6015,32 +6015,32 @@ void handle_hdmi_event(int hdmi_mode ,int flag )
 				ALOGW_IF(err, "free mDimHandle (...) failed %d (%s)", err, strerror(-err));
 			}
 #endif
-            get_hdmi_config();
-            set_hdmi_config();
+            hdmi_get_config();
+            hdmi_set_config();
 #if GPU_G6110
-            set_overscan(1);
+            hdmi_set_overscan(1);
 #endif 
             usleep(50000);
             _contextAnchor->procs->hotplug(_contextAnchor->procs, HWC_DISPLAY_EXTERNAL, 1);
 #if GPU_G6110
-            set_overscan(0);
+            hdmi_set_overscan(0);
 #endif 
         }
     }
     else
     {
         if(hdmi_mode && _contextAnchor->flag_external == 0){
-            if(get_hdmi_config()==1){
-                if(set_hdmi_config()==1){
+            if(hdmi_get_config()==1){
+                if(hdmi_set_config()==1){
                     _contextAnchor->last_fenceFd_flag = 0;
                     _contextAnchor->procs->hotplug(_contextAnchor->procs, HWC_DISPLAY_EXTERNAL, hdmi_mode);
                     _contextAnchor->flag_external = 1;
                     ALOGD("TRY to connet to hotplug device line=%d",__LINE__);
 #if GPU_G6110
-	                set_overscan(0);
+	                hdmi_set_overscan(0);
 #endif 
                 }else{
-                    ALOGE("handle_hdmi_event:set_hdmi_config FAIL");
+                    ALOGE("handle_hdmi_event:hdmi_set_config FAIL");
                 }
             }
         }
@@ -6073,7 +6073,7 @@ void handle_hdmi_event(int hdmi_mode ,int flag )
 					_contextAnchor->dpyAttr[HWC_DISPLAY_EXTERNAL].connected = false;
 	                _contextAnchor->procs->hotplug(_contextAnchor->procs, HWC_DISPLAY_EXTERNAL, hdmi_mode);
 #if GPU_G6110
-	                set_overscan(1);
+	                hdmi_set_overscan(1);
 #endif        
 	                _contextAnchor->flag_external = 0;
 					_contextAnchor->flag_blank = 0;
@@ -6846,9 +6846,9 @@ hwc_device_open(
     }
 #if HWC_EXTERNAL
 	pthread_t t0;
-	if (pthread_create(&t0, NULL, try_hotplug_external, NULL))
+	if (pthread_create(&t0, NULL, hdmi_try_hotplug, NULL))
     {
-        LOGD("Create try_hotplug_external thread error .");
+        LOGD("Create hdmi_try_hotplug thread error .");
     }
 #endif
     return 0;
@@ -6955,8 +6955,8 @@ void init_hdmi_mode()
 
     if(g_hdmi_mode == 1)
     {
-        //get_hdmi_config();
-        //set_hdmi_config();
+        //hdmi_get_config();
+        //hdmi_set_config();
     }
         
 }
@@ -6976,7 +6976,7 @@ int closeFb(int fd)
     }
     return -1;
 }
-int get_hdmi_config(){
+int hdmi_get_config(){
     ALOGD("enter %s", __FUNCTION__);
     //memset(values, 0, sizeof(values));
     int fd;
@@ -6987,7 +6987,7 @@ int get_hdmi_config(){
     if(context == NULL ){
         context = (hwcContext *) malloc(sizeof (hwcContext));
         if(context==NULL){
-            ALOGE("get_hdmi_config:Alloc context fail");
+            ALOGE("hdmi_get_config:Alloc context fail");
             return -1;
         }
         memset(context, 0, sizeof (hwcContext));
@@ -6995,7 +6995,7 @@ int get_hdmi_config(){
 	struct fb_var_screeninfo info = _contextAnchor->info;
 	int outX = 0;
 	int outY = 0;
-	parseHdmiMode(&outX, &outY);
+	hdmi_parse_mode(&outX, &outY);
 	info.xres = outX;
 	info.yres = outY;
 	info.yres_virtual = info.yres * 3;
@@ -7018,13 +7018,13 @@ int get_hdmi_config(){
 #endif
 	if (fd < 0)
 	{   
-	    ALOGE("get_hdmi_config:open /dev/graphics/fb4 fail");
+	    ALOGE("hdmi_get_config:open /dev/graphics/fb4 fail");
         return -errno;
 	}
 #ifndef GPU_G6110
 	if (ioctl(fd, FBIOPUT_VSCREENINFO, &info) == -1)
 	{
-	    ALOGE("get_hdmi_config:FBIOPUT_VSCREENINFO error,hdmifd=%d",fd);
+	    ALOGE("hdmi_get_config:FBIOPUT_VSCREENINFO error,hdmifd=%d",fd);
         return -errno;
 	}
 #endif
@@ -7179,7 +7179,7 @@ OnError:
 
 }
 
-int parseHdmiMode(int *outX, int *outY)
+int hdmi_parse_mode(int *outX, int *outY)
 {
    int fd = open("/sys/class/display/HDMI/mode", O_RDONLY);
    ALOGD("enter %s", __FUNCTION__);
@@ -7239,7 +7239,7 @@ int parseHdmiMode(int *outX, int *outY)
     }
 }
 
-int set_hdmi_config(){
+int hdmi_set_config(){
     if(_contextAnchor != NULL){
         _contextAnchor->dpyAttr[HWC_DISPLAY_EXTERNAL].fd = _contextAnchor1->dpyAttr[HWC_DISPLAY_EXTERNAL].fd;
         _contextAnchor->dpyAttr[HWC_DISPLAY_EXTERNAL].stride = _contextAnchor1->dpyAttr[HWC_DISPLAY_EXTERNAL].stride;
@@ -7271,13 +7271,13 @@ int set_hdmi_config(){
     }
 }
 
-void get_external_full_screen_size(int* w,int* h)
+void hdmi_get_resolution(int* w,int* h)
 {
     *w = int(_contextAnchor->dpyAttr[HWC_DISPLAY_EXTERNAL].xres);
     *h = int(_contextAnchor->dpyAttr[HWC_DISPLAY_EXTERNAL].yres);
 }
 
-int close_hdmi()
+int hdmi_close_device()
 {
     int i;
     int err=0;
@@ -7325,7 +7325,7 @@ int close_hdmi()
     return 0;
 }
 
-void *try_hotplug_external(void *arg)
+void *hdmi_try_hotplug(void *arg)
 {
     struct timeval tstart,tend;
     gettimeofday(&tstart,NULL);
@@ -7333,14 +7333,14 @@ void *try_hotplug_external(void *arg)
     	gettimeofday(&tend,NULL);
         if((((tend.tv_sec - tstart.tv_sec)*1000000)+(tend.tv_usec - tstart.tv_usec)) % 6000 == 0 )
         {
-    	    //ALOGW("Try to try_hotplug_external spent time = %ld us",
+    	    //ALOGW("Try to hdmi_try_hotplug spent time = %ld us",
     	    //    (((tend.tv_sec - tstart.tv_sec)*1000000)+(tend.tv_usec - tstart.tv_usec)));	
         }                        
         ALOGV("getHdmiMode()=%d,_contextAnchor->flag_external=%d,_contextAnchor->flag_blank=%d,_contextAnchor->flag_hwcup_external=%d",
               getHdmiMode(),_contextAnchor->flag_external,_contextAnchor->flag_blank,_contextAnchor->flag_hwcup_external);
         if(getHdmiMode() == 1 && _contextAnchor->flag_external == 0 && _contextAnchor->flag_blank == 0 && _contextAnchor->flag_hwcup_external == 2)
         {
-			ALOGI("try_hotplug_external at line = %d",__LINE__);
+			ALOGI("hdmi_try_hotplug at line = %d",__LINE__);
             handle_hdmi_event(getHdmiMode(), 0);
 			break;
         }
@@ -7349,7 +7349,7 @@ void *try_hotplug_external(void *arg)
     return NULL;
 }
 
-int set_overscan(int flag)
+int hdmi_set_overscan(int flag)
 {
     char new_value[PROPERTY_VALUE_MAX];
     
@@ -7377,8 +7377,9 @@ int set_overscan(int flag)
     return 0;
 }
 
-int change_dst_position_external(struct rk_fb_win_cfg_data * fb_info,int flag)
+int hdmi_reset_dstposition(struct rk_fb_win_cfg_data * fb_info,int flag)
 {
+    
     unsigned int w_source = _contextAnchor->dpyAttr[HWC_DISPLAY_EXTERNAL].xres;
     unsigned int h_source = _contextAnchor->dpyAttr[HWC_DISPLAY_EXTERNAL].yres;
     unsigned int w_dst    = _contextAnchor1->dpyAttr[HWC_DISPLAY_EXTERNAL].xres;
