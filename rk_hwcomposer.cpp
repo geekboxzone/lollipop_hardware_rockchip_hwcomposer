@@ -4947,12 +4947,24 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
         ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info);
 
 #if USE_HWC_FENCE
-		if(1
+        if(1
 #ifndef GPU_G6110
-		&& _contextAnchor->last_fenceFd_flag == 0 
-		&& context == _contextAnchor
+        && context == _contextAnchor
 #endif
-		)
+        )
+        {
+            for(int k=0;k<RK_MAX_BUF_NUM;k++)
+            {
+                if(fb_info.rel_fence_fd[k]>=0)
+                   // close(fb_info.rel_fence_fd[k]);
+                   fbLayer->releaseFenceFd = fb_info.rel_fence_fd[k];
+
+            }
+    		if(fb_info.ret_fence_fd >=0 )
+            	list->retireFenceFd = fb_info.ret_fence_fd;
+        }
+#ifndef GPU_G6110
+        else if(_contextAnchor->last_fenceFd_flag == 0)
         {
             for(int k=0;k<RK_MAX_BUF_NUM;k++)
             {
@@ -4965,7 +4977,6 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
             }
                 if(fb_info.ret_fence_fd >= 0)
                     _contextAnchor->last_ret_fenceFd = list->retireFenceFd = fb_info.ret_fence_fd;
-            //ALOGD("_contextAnchor->last_ret_fenceFd=%d",_contextAnchor->last_ret_fenceFd);
         }
         else
         {
@@ -4982,7 +4993,7 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
             fbLayer->releaseFenceFd = -1;
             list->retireFenceFd = -1;        
         }
-
+#endif
 #else
         for(int k=0;k<RK_MAX_BUF_NUM;k++)
         {
@@ -5583,7 +5594,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
     		if(fb_info.ret_fence_fd >= 0)
             	list->retireFenceFd = fb_info.ret_fence_fd;
         }
-#if HWC_EXTERNAL
+#ifndef GPU_G6110
         else
         {
             if(_contextAnchor->last_fenceFd_flag == 0 && _contextAnchor->last_frame_flag == 1)
