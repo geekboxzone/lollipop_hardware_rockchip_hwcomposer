@@ -4949,7 +4949,8 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
 #if USE_HWC_FENCE
 		if(1
 #ifndef GPU_G6110
-		&& _contextAnchor->last_fenceFd_flag == 0
+		&& _contextAnchor->last_fenceFd_flag == 0 
+		&& context == _contextAnchor
 #endif
 		)
         {
