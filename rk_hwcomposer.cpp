@@ -59,6 +59,8 @@ static hwbkupmanage bkupmanage;
 static PFNEGLRENDERBUFFERMODIFYEDANDROIDPROC _eglRenderBufferModifiedANDROID;
 static mix_info gmixinfo[2];
 bool hdmi_noready = true;
+bool mix_vh = false;
+bool android_start = false;
 
 int gwin_tab[MaxZones] = {win0,win1,win2_0,win2_1,win2_2,win2_3,win3_0,win3_1,win3_2,win3_3};
 #undef LOGV
@@ -852,7 +854,8 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
             if(Context == _contextAnchor)
 	    	    ALOGD("lcdc dont support too small area cnt =%d,name=%s,zone[%d,%d,%d,%d]",
 	    	        Region->numRects,layer->LayerName,dstRects[m].left,dstRects[m].top,dstRects[m].right,dstRects[m].bottom);
-	        return -1;
+            if(!mix_vh && Context != _contextAnchor)
+	            return -1;
         }
         LOGV("%s(%d): Region rect[%d]:  [%d,%d,%d,%d]",
              __FUNCTION__,
@@ -2444,7 +2447,8 @@ int try_wins_dispatch_mix_vh (hwcContext * Context,hwc_display_contents_1_t * li
 
     hwc_layer_1_t * layer = &list->hwLayers[0];
     if(!(pzone_mag->zone_info[0].format == HAL_PIXEL_FORMAT_YCrCb_NV12 
-            || pzone_mag->zone_info[0].format == HAL_PIXEL_FORMAT_YCrCb_NV12_10))
+            || pzone_mag->zone_info[0].format == HAL_PIXEL_FORMAT_YCrCb_NV12_10
+                    ||pzone_mag->zone_info[0].format == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO))
     {
 		ALOGV("Is NOT video format,not need do this");
         return -1;
@@ -4153,6 +4157,11 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
     {
         return 0;
     }
+    
+#ifdef GPU_G6110
+    if(android_start)
+        goto GpuComP;
+#endif
 
     LOGV("%s(%d):>>> hwc_prepare_primary %d layers <<<",
          __FUNCTION__,
@@ -4167,7 +4176,27 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
         context->video_info[i].bMatch=false;
     }
 #endif
-
+#ifdef GPU_G6110
+    if(context == _contextAnchor1 && list != NULL)
+    {
+        struct private_handle_t * handle = (struct private_handle_t *) list->hwLayers[0].handle;
+        if( handle != NULL && _contextAnchor->NeedReDst && (list->numHwLayers-1) > 2 &&
+            GPU_FORMAT != HAL_PIXEL_FORMAT_YCrCb_NV12 && GPU_FORMAT != HAL_PIXEL_FORMAT_YCrCb_NV12_10
+                &&GPU_FORMAT != HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
+        {
+            LOGGPUCOP("Back to gpu compositon line[%d],fun[%s]",__LINE__,__FUNCTION__);
+            goto GpuComP;
+        }else if(handle != NULL &&(GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12 || GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_10
+                || GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO) && list->numHwLayers-1 > 2)
+        {
+            mix_vh = true;
+        }else
+        {
+            mix_vh = false;
+        }
+    }
+#endif
+    
     for (i = 0; i < (list->numHwLayers - 1); i++)
     {
         struct private_handle_t * handle = (struct private_handle_t *) list->hwLayers[i].handle;
@@ -4195,7 +4224,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
         if(!strcmp(list->hwLayers[i].LayerName,"MediaView"))
             context->mIsMediaView=true;
 
-        if(list->hwLayers[i].transform != 0)    
+        if(list->hwLayers[i].transform != 0)
         {
             context->mtrsformcnt ++;
         }
@@ -4366,19 +4395,6 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
 		LOGGPUCOP("Back to gpu compositon line[%d],fun[%s]",__LINE__,__FUNCTION__);
         goto GpuComP;
     }
-    
-#ifdef GPU_G6110
-    if(context == _contextAnchor1)
-    {
-        struct private_handle_t * handle = (struct private_handle_t *) list->hwLayers[0].handle;
-        if( _contextAnchor->NeedReDst && (list->numHwLayers-1) > 2 && 
-            GPU_FORMAT != HAL_PIXEL_FORMAT_YCrCb_NV12 && GPU_FORMAT != HAL_PIXEL_FORMAT_YCrCb_NV12_10)
-        {
-            LOGGPUCOP("Back to gpu compositon line[%d],fun[%s]",__LINE__,__FUNCTION__);
-            goto GpuComP;
-        }
-    }
-#endif
 
 #if !ENABLE_LCDC_IN_NV12_TRANSFORM
     if(!context->mGtsStatus)
@@ -4520,7 +4536,17 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
             goto GpuComP;
         }
         #else
-        ret = try_wins_dispatch_hor(context); 
+#ifdef GPU_G6110
+        if(mix_vh)
+        {
+            ret = try_wins_dispatch_mix_vh(context,list);
+            if(ret)
+                ret = try_wins_dispatch_hor(context); 
+            mix_vh = false;
+        }
+        else
+#endif
+            ret = try_wins_dispatch_hor(context); 
         if(ret)
         {
             ret = try_wins_dispatch_mix(context,list);
@@ -4548,7 +4574,16 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
     }   
     else
     {
-        ret = try_wins_dispatch_hor(context); 
+#ifdef GPU_G6110    
+        if(mix_vh)
+        {
+           ret = try_wins_dispatch_mix_vh(context,list);
+           if(ret)
+                ret = try_wins_dispatch_hor(context); 
+           mix_vh = false;
+        }else
+#endif
+            ret = try_wins_dispatch_hor(context); 
         if(ret)
         {
             ret = try_wins_dispatch_mix(context,list);
@@ -4676,6 +4711,12 @@ hwc_prepare(
                     layer->sourceCrop.bottom = SrcHnd->height;
                     _contextAnchor->hdmi_anm = 1;
                 }
+                else if(strstr(layer->LayerName,"Android is starting") != NULL && getHdmiMode() == 1)
+                {
+                    _contextAnchor->hdmi_anm = 1;
+                    android_start = true;
+                    //ALOGD("_contextAnchor->hdmi_anm = 1,Android is starting");
+                }
             }
         }
     }
@@ -4694,8 +4735,8 @@ hwc_prepare(
     _DumpSurface(list);
 #endif
 #if HWC_EXTERNAL
-	if(_contextAnchor->flag_hwcup_external < 5 && getHdmiMode() == 1 && 
-	    _contextAnchor->flag_external == 0 && _contextAnchor->flag_blank == 0  )
+	if(_contextAnchor->flag_hwcup_external < 5 && getHdmiMode() == 1 &&
+	    _contextAnchor->flag_external == 0 && _contextAnchor->flag_blank == 0)
 	{
 		_contextAnchor->flag_hwcup_external ++;
 	}
@@ -4740,7 +4781,7 @@ hwc_prepare(
                 if(list)
                 {
                     ret = hwc_prepare_virtual(dev, displays[0]);
-                }    
+                }
                 break;
             default:
                 ret = -EINVAL;
@@ -4833,7 +4874,6 @@ int hwc_query(struct hwc_composer_device_1* dev,int what, int* value)
 
 static int display_commit( int dpy)
 {
- 
     return 0;
 }
 
@@ -4852,7 +4892,7 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
 #endif
     if (list == NULL)
     {
-       return -1;
+        return -1;
     }    
     if (context->fbFd>0 && !context->fb_blanked)
     {      
@@ -4877,7 +4917,6 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
 			ALOGE("hanndle=NULL at line %d",__LINE__);
             return -1;
         }
-
 
         ALOGV("hwc_primary_Post num=%d,ion=%d",numLayers,handle->share_fd);
         #if 0
@@ -4938,9 +4977,18 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
 #endif
 
 #ifdef GPU_G6110
+        if(android_start && context == _contextAnchor)
+        {
+            android_start = false;
+            if(hdmi_reset_dstposition(&fb_info,1))
+                return -1;
+            if(_contextAnchor->NeedReDst)
+                hdmi_reset_dstposition(&fb_info,0);
+        }
         if(_contextAnchor->NeedReDst && context == _contextAnchor1)
         {
-            hdmi_reset_dstposition(&fb_info,0);
+            if(hdmi_reset_dstposition(&fb_info,0))
+                return -1;
         }          
 #endif
 
@@ -4958,7 +5006,6 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
                 if(fb_info.rel_fence_fd[k]>=0)
                    // close(fb_info.rel_fence_fd[k]);
                    fbLayer->releaseFenceFd = fb_info.rel_fence_fd[k];
-
             }
     		if(fb_info.ret_fence_fd >=0 )
             	list->retireFenceFd = fb_info.ret_fence_fd;
@@ -4971,7 +5018,7 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
                 //ALOGD("rel_fence_fd[%d] = %d", k, fb_info.rel_fence_fd[k]);
                 if(fb_info.rel_fence_fd[k] >= 0)
                 {   // close(fb_info.rel_fence_fd[k]);
-                   fbLayer->releaseFenceFd = fb_info.rel_fence_fd[k];
+                    fbLayer->releaseFenceFd = fb_info.rel_fence_fd[k];
     			}
     			_contextAnchor->last_rel_fenceFd[k] = fb_info.rel_fence_fd[k];
             }
@@ -5036,10 +5083,9 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
                             fb_info.win_par[i].area_par[j].phy_addr,
                             context->fbFd);
                 }
-                
-            }    
+            }
         }
-        #endif        
+        #endif
     }
     return 0;
 }
@@ -5520,7 +5566,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
 #ifdef GPU_G6110 
             if(_contextAnchor->hdmi_anm == 1)
             {
-                int index = 0;
+/*                int index = 0;
                 if(fb_info.win_par[1].area_par[0].ion_fd != 0)
                     index = 1;
 #ifdef RK3368_MID
@@ -5532,12 +5578,18 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
                 }
 #endif
                 fb_info.win_par[index].area_par[0].xsize = context->dpyAttr[HWC_DISPLAY_EXTERNAL].xres;
-                fb_info.win_par[index].area_par[0].ysize = context->dpyAttr[HWC_DISPLAY_EXTERNAL].yres;
-                 _contextAnchor->hdmi_anm = 0;
+                fb_info.win_par[index].area_par[0].ysize = context->dpyAttr[HWC_DISPLAY_EXTERNAL].yres;*/
+                _contextAnchor->hdmi_anm = 0;
+                if(context == _contextAnchor)
+                {
+                    if(hdmi_reset_dstposition(&fb_info,1))
+                        return -1;
+                }    
             }
             if(_contextAnchor->NeedReDst)
             {
-                hdmi_reset_dstposition(&fb_info,0);
+                if(hdmi_reset_dstposition(&fb_info,0))
+                    return -1;
             }          
 #endif                   
             if(ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info) == -1)
@@ -6799,18 +6851,17 @@ hwc_device_open(
     context->vsync_fd = open("/sys/class/graphics/fb0/vsync", O_RDONLY, 0);
     //context->vsync_fd = open("/sys/devices/platform/rk30-lcdc.0/vsync", O_RDONLY);
     if (context->vsync_fd < 0) {
-         hwcONERROR(hwcSTATUS_IO_ERR);
+        hwcONERROR(hwcSTATUS_IO_ERR);
     }
-
 
     if (pthread_mutex_init(&context->lock, NULL))
     {
-         hwcONERROR(hwcMutex_ERR);
+        hwcONERROR(hwcMutex_ERR);
     }
 
     if (pthread_create(&context->hdmi_thread, NULL, hwc_thread, context))
     {
-         hwcONERROR(hwcTHREAD_ERR);
+        hwcONERROR(hwcTHREAD_ERR);
     }
 #endif
 
@@ -6841,15 +6892,15 @@ hwc_device_open(
         property_set("sys.rk.soc","rk3368");
 #endif
     /*
-	 context->ippDev = new ipp_device_t();
-	 rel = ipp_open(context->ippDev);
-     if (rel < 0)
-     {
+    context->ippDev = new ipp_device_t();
+    rel = ipp_open(context->ippDev);
+    if (rel < 0)
+    {
         delete context->ippDev;
         context->ippDev = NULL;
-	    ALOGE("Open ipp device fail.");
-     }
-     */
+        ALOGE("Open ipp device fail.");
+    }
+    */
     init_hdmi_mode();
     pthread_t t;
     if (pthread_create(&t, NULL, rk_hwc_hdmi_thread, NULL))
@@ -6909,9 +6960,8 @@ OnError:
         free(context);
 
     }
-
+    
     *device = NULL;
-
     LOGE("%s(%d):Failed!", __FUNCTION__, __LINE__);
 
     return -EINVAL;
@@ -6919,16 +6969,16 @@ OnError:
 
 int  getHdmiMode()
 {
-   #if 0
+#if 0
     char pro_value[16];
     property_get("sys.hdmi.mode",pro_value,0);
-        int mode = atoi(pro_value);
+    int mode = atoi(pro_value);
     return mode;
-   #else
-      // LOGD("g_hdmi_mode=%d",g_hdmi_mode);
-   #endif
-   // LOGD("g_hdmi_mode=%d",g_hdmi_mode);
-   
+#else
+    // LOGD("g_hdmi_mode=%d",g_hdmi_mode);
+#endif
+    // LOGD("g_hdmi_mode=%d",g_hdmi_mode);
+
     return g_hdmi_mode;
 }
 
@@ -6939,36 +6989,37 @@ void init_hdmi_mode()
 	
     if (fd > 0)
     {
-             char statebuf[100];
-             memset(statebuf, 0, sizeof(statebuf));
-             int err = read(fd, statebuf, sizeof(statebuf));
+        char statebuf[100];
+        memset(statebuf, 0, sizeof(statebuf));
+        int err = read(fd, statebuf, sizeof(statebuf));
 
-            if (err < 0)
-             {
-                    ALOGE("error reading vsync timestamp: %s", strerror(errno));
-                    return;
-             }
-            close(fd);
-            g_hdmi_mode = atoi(statebuf);
-           /* if (g_hdmi_mode==0)
-            {
-                property_set("sys.hdmi.mode", "0");
-            }
-            else
-            {
-                property_set("sys.hdmi.mode", "1");
-            }*/
-
+        if (err < 0)
+        {
+            ALOGE("error reading vsync timestamp: %s", strerror(errno));
+            return;
+        }
+        close(fd);
+        g_hdmi_mode = atoi(statebuf);
+        /* if (g_hdmi_mode==0)
+        {
+        property_set("sys.hdmi.mode", "0");
+        }
+        else
+        {
+        property_set("sys.hdmi.mode", "1");
+        }*/
     }
     else
     {
-       LOGE("Open hdmi mode error.");
+        LOGE("Open hdmi mode error.");
     }
 
     if(g_hdmi_mode == 1)
     {
+#ifdef GPU_G6110
         //hdmi_get_config();
-        //hdmi_set_config();
+        //hdmi_set_config();  
+#endif
     }
         
 }
@@ -7113,7 +7164,11 @@ int hdmi_get_config(){
 	context->fbhandle.width = info.xres;
 	context->fbhandle.height = info.yres;
 #ifdef GPU_G6110
+    #if G6110_SUPPORT_FBDC
+    context->fbhandle.format = FBDC_ABGR_888;
+    #else
     context->fbhandle.format = HAL_PIXEL_FORMAT_RGBA_8888;
+    #endif
 #else
     context->fbhandle.format = info.nonstd & 0xff;
 #endif
@@ -7273,7 +7328,7 @@ int hdmi_set_config(){
                 _contextAnchor1->dpyAttr[HWC_DISPLAY_EXTERNAL].xres,
                 _contextAnchor1->dpyAttr[HWC_DISPLAY_EXTERNAL].yres);
         }else
-            _contextAnchor->NeedReDst = false;    
+            _contextAnchor->NeedReDst = false;
 #endif
         return 1;
     }
@@ -7391,17 +7446,33 @@ int hdmi_set_overscan(int flag)
 
 int hdmi_reset_dstposition(struct rk_fb_win_cfg_data * fb_info,int flag)
 {
+    /*flag:HDMI hotplug has two situation
+    *1:
+    *0:NeedReDst case hotplug 1080p when 4k
+    */
+    hwcContext *context = _contextAnchor;
+    unsigned int w_source = 0;
+    unsigned int h_source = 0;
+    unsigned int w_dst = 0;
+    unsigned int h_dst = 0;
+    if(_contextAnchor1 == NULL || fb_info == NULL)
+    {
+        return -1;
+    }
+    if(flag == 0)
+    {
+        w_source = context->dpyAttr[HWC_DISPLAY_EXTERNAL].xres;
+        h_source = context->dpyAttr[HWC_DISPLAY_EXTERNAL].yres;
+        w_dst    = _contextAnchor1->dpyAttr[HWC_DISPLAY_EXTERNAL].xres;
+        h_dst    = _contextAnchor1->dpyAttr[HWC_DISPLAY_EXTERNAL].yres;
+    }else if(flag == 1)
+    {
+        w_source = context->dpyAttr[HWC_DISPLAY_PRIMARY].xres;
+        h_source = context->dpyAttr[HWC_DISPLAY_PRIMARY].yres;
+        w_dst    = context->dpyAttr[HWC_DISPLAY_EXTERNAL].xres;
+        h_dst    = context->dpyAttr[HWC_DISPLAY_EXTERNAL].yres;
+    }
     
-    unsigned int w_source = _contextAnchor->dpyAttr[HWC_DISPLAY_EXTERNAL].xres;
-    unsigned int h_source = _contextAnchor->dpyAttr[HWC_DISPLAY_EXTERNAL].yres;
-    unsigned int w_dst    = _contextAnchor1->dpyAttr[HWC_DISPLAY_EXTERNAL].xres;
-    unsigned int h_dst    = _contextAnchor1->dpyAttr[HWC_DISPLAY_EXTERNAL].yres;
-    LOGV("w_source,h_source,w_dst,h_dst = [%d,%d,%d,%d]",
-        _contextAnchor->dpyAttr[HWC_DISPLAY_EXTERNAL].xres,
-        _contextAnchor->dpyAttr[HWC_DISPLAY_EXTERNAL].yres,
-        _contextAnchor1->dpyAttr[HWC_DISPLAY_EXTERNAL].xres,
-        _contextAnchor1->dpyAttr[HWC_DISPLAY_EXTERNAL].yres
-    );
     float w_scale = (float)w_dst / w_source; 
     float h_scale = (float)h_dst / h_source;
     
@@ -7431,11 +7502,10 @@ int hdmi_reset_dstposition(struct rk_fb_win_cfg_data * fb_info,int flag)
                             fb_info->win_par[i].area_par[j].xsize,
                             fb_info->win_par[i].area_par[j].ysize);
                     }
-
                 }
             }
         }
     }
-
     return 0;
 }
+
