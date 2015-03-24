@@ -59,8 +59,6 @@ static hwbkupmanage bkupmanage;
 static PFNEGLRENDERBUFFERMODIFYEDANDROIDPROC _eglRenderBufferModifiedANDROID;
 static mix_info gmixinfo[2];
 bool hdmi_noready = true;
-bool mix_vh = false;
-bool android_start = false;
 
 int gwin_tab[MaxZones] = {win0,win1,win2_0,win2_1,win2_2,win2_3,win3_0,win3_1,win3_2,win3_3};
 #undef LOGV
@@ -854,7 +852,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
             if(Context == _contextAnchor)
 	    	    ALOGD("lcdc dont support too small area cnt =%d,name=%s,zone[%d,%d,%d,%d]",
 	    	        Region->numRects,layer->LayerName,dstRects[m].left,dstRects[m].top,dstRects[m].right,dstRects[m].bottom);
-            if(!mix_vh && Context != _contextAnchor)
+            if(!_contextAnchor->mHdmiSI.vh_flag && Context != _contextAnchor)
 	            return -1;
         }
         LOGV("%s(%d): Region rect[%d]:  [%d,%d,%d,%d]",
@@ -2776,7 +2774,7 @@ int try_wins_dispatch_mix_vh (hwcContext * Context,hwc_display_contents_1_t * li
     }
 #endif   
     //Mark the composer mode to HWC_MIX_V2
-    Context->mix_vh = true;
+    Context->mHdmiSI.mix_vh = true;
     Context->zone_manager.composter_mode = HWC_MIX_V2;
     return 0;    
 }
@@ -4159,7 +4157,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
     }
     
 #ifdef GPU_G6110
-    if(android_start)
+    if(_contextAnchor->mHdmiSI.anroidSt)
         goto GpuComP;
 #endif
 
@@ -4180,7 +4178,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
     if(context == _contextAnchor1 && list != NULL)
     {
         struct private_handle_t * handle = (struct private_handle_t *) list->hwLayers[0].handle;
-        if( handle != NULL && _contextAnchor->NeedReDst && (list->numHwLayers-1) > 2 &&
+        if( handle != NULL && _contextAnchor->mHdmiSI.NeedReDst && (list->numHwLayers-1) > 2 &&
             GPU_FORMAT != HAL_PIXEL_FORMAT_YCrCb_NV12 && GPU_FORMAT != HAL_PIXEL_FORMAT_YCrCb_NV12_10
                 &&GPU_FORMAT != HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
         {
@@ -4189,10 +4187,10 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
         }else if(handle != NULL &&(GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12 || GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_10
                 || GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO) && list->numHwLayers-1 > 2)
         {
-            mix_vh = true;
+            _contextAnchor->mHdmiSI.vh_flag = true;
         }else
         {
-            mix_vh = false;
+            _contextAnchor->mHdmiSI.vh_flag = false;
         }
     }
 #endif
@@ -4384,7 +4382,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
         }
     }
 
-    if(hwc_get_int_property("sys.hwc.disable","0")== 1 || (_contextAnchor->last_fenceFd_flag == 1 && dpyID == 1))
+    if(hwc_get_int_property("sys.hwc.disable","0")== 1 || (_contextAnchor->mHdmiSI.last_fenceFd_flag == 1 && dpyID == 1))
     {
 		LOGGPUCOP("Back to gpu compositon line[%d],fun[%s]",__LINE__,__FUNCTION__);
         goto GpuComP;
@@ -4537,12 +4535,12 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
         }
         #else
 #ifdef GPU_G6110
-        if(mix_vh)
+        if(_contextAnchor->mHdmiSI.vh_flag)
         {
             ret = try_wins_dispatch_mix_vh(context,list);
             if(ret)
                 ret = try_wins_dispatch_hor(context); 
-            mix_vh = false;
+            _contextAnchor->mHdmiSI.vh_flag = false;
         }
         else
 #endif
@@ -4575,12 +4573,12 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
     else
     {
 #ifdef GPU_G6110    
-        if(mix_vh)
+        if(_contextAnchor->mHdmiSI.vh_flag)
         {
            ret = try_wins_dispatch_mix_vh(context,list);
            if(ret)
                 ret = try_wins_dispatch_hor(context); 
-           mix_vh = false;
+           _contextAnchor->mHdmiSI.vh_flag = false;
         }else
 #endif
             ret = try_wins_dispatch_hor(context); 
@@ -4709,13 +4707,13 @@ hwc_prepare(
                     layer->sourceCrop.top = 0;
                     layer->sourceCrop.right = SrcHnd->stride;
                     layer->sourceCrop.bottom = SrcHnd->height;
-                    _contextAnchor->hdmi_anm = 1;
+                    _contextAnchor->mHdmiSI.hdmi_anm = 1;
                 }
                 else if(strstr(layer->LayerName,"Android is starting") != NULL && getHdmiMode() == 1)
                 {
-                    _contextAnchor->hdmi_anm = 1;
-                    android_start = true;
-                    //ALOGD("_contextAnchor->hdmi_anm = 1,Android is starting");
+                    _contextAnchor->mHdmiSI.hdmi_anm = 1;
+                    _contextAnchor->mHdmiSI.anroidSt = true;
+                    //ALOGD("_contextAnchor->mHdmiSI.hdmi_anm = 1,Android is starting");
                 }
             }
         }
@@ -4735,10 +4733,10 @@ hwc_prepare(
     _DumpSurface(list);
 #endif
 #if HWC_EXTERNAL
-	if(_contextAnchor->flag_hwcup_external < 5 && getHdmiMode() == 1 &&
-	    _contextAnchor->flag_external == 0 && _contextAnchor->flag_blank == 0)
+	if(_contextAnchor->mHdmiSI.flag_hwcup_external < 5 && getHdmiMode() == 1 &&
+	    _contextAnchor->mHdmiSI.flag_external == 0 && _contextAnchor->mHdmiSI.flag_blank == 0)
 	{
-		_contextAnchor->flag_hwcup_external ++;
+		_contextAnchor->mHdmiSI.flag_hwcup_external ++;
 	}
 #endif
     context->zone_manager.composter_mode = HWC_FRAMEBUFFER;
@@ -4819,7 +4817,7 @@ int hwc_blank(struct hwc_composer_device_1 *dev, int dpy, int blank)
 
     case HWC_DISPLAY_EXTERNAL:{
 #if HWC_EXTERNAL
-		_contextAnchor->flag_blank = 1;
+		_contextAnchor->mHdmiSI.flag_blank = 1;
 		if(blank == 0)
 		    hdmi_noready = false;
 		_contextAnchor1->fb_blanked = blank;
@@ -4977,15 +4975,15 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
 #endif
 
 #ifdef GPU_G6110
-        if(android_start && context == _contextAnchor)
+        if(_contextAnchor->mHdmiSI.anroidSt && context == _contextAnchor)
         {
-            android_start = false;
+            _contextAnchor->mHdmiSI.anroidSt = false;
             if(hdmi_reset_dstposition(&fb_info,1))
                 return -1;
-            if(_contextAnchor->NeedReDst)
+            if(_contextAnchor->mHdmiSI.NeedReDst)
                 hdmi_reset_dstposition(&fb_info,0);
         }
-        if(_contextAnchor->NeedReDst && context == _contextAnchor1)
+        if(_contextAnchor->mHdmiSI.NeedReDst && context == _contextAnchor1)
         {
             if(hdmi_reset_dstposition(&fb_info,0))
                 return -1;
@@ -5011,7 +5009,7 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
             	list->retireFenceFd = fb_info.ret_fence_fd;
         }
 #ifndef GPU_G6110
-        else if(_contextAnchor->last_fenceFd_flag == 0)
+        else if(_contextAnchor->mHdmiSI.last_fenceFd_flag == 0)
         {
             for(int k=0;k<RK_MAX_BUF_NUM;k++)
             {
@@ -5020,10 +5018,10 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
                 {   // close(fb_info.rel_fence_fd[k]);
                     fbLayer->releaseFenceFd = fb_info.rel_fence_fd[k];
     			}
-    			_contextAnchor->last_rel_fenceFd[k] = fb_info.rel_fence_fd[k];
+    			_contextAnchor->mHdmiSI.last_rel_fenceFd[k] = fb_info.rel_fence_fd[k];
             }
                 if(fb_info.ret_fence_fd >= 0)
-                    _contextAnchor->last_ret_fenceFd = list->retireFenceFd = fb_info.ret_fence_fd;
+                    _contextAnchor->mHdmiSI.last_ret_fenceFd = list->retireFenceFd = fb_info.ret_fence_fd;
         }
         else
         {
@@ -5064,7 +5062,8 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
                 for(int j=0;j<4;j++)
                 {
                     if(fb_info.win_par[i].area_par[j].ion_fd || fb_info.win_par[i].area_par[j].phy_addr)
-                        ALOGD("ext_post win[%d],area[%d],z_win[%d,%d],[%d,%d,%d,%d]=>[%d,%d,%d,%d],w_h_f[%d,%d,%d],fd=%d,addr=%x,fbFd=%d",
+                        ALOGD("%s win[%d],area[%d],z_win[%d,%d],[%d,%d,%d,%d]=>[%d,%d,%d,%d],w_h_f[%d,%d,%d],fd=%d,addr=%x,fbFd=%d",
+                            context==_contextAnchor?"Primary post:":"External post:",
                             i,j,
                             fb_info.win_par[i].z_order,
                             fb_info.win_par[i].win_id,
@@ -5442,10 +5441,10 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
         ALOGV("mix_flag=%d,win_no =%d,z_order = %d",mix_flag,win_no,z_order);
         unsigned int offset = handle->offset;
         fb_info.win_par[win_no-1].area_par[0].data_format = format;
-        if(context->mix_vh && mix_flag == 2)
+        if(context->mHdmiSI.mix_vh && mix_flag == 2)
         {
             fb_info.win_par[win_no-1].win_id = 1;
-            context->mix_vh = false;
+            context->mHdmiSI.mix_vh = false;
         }    
         else
             fb_info.win_par[win_no-1].win_id = 3;
@@ -5478,16 +5477,13 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
         property_get("sys.dump",pro_value,0);
         if(!strcmp(pro_value,"true"))
         {
-            if(context == _contextAnchor1)
-                ALOGD("external screen:");
-            else
-                ALOGD("primary  screen:");
             for(int i = 0;i<4;i++)
             {
                 for(int j=0;j<4;j++)
                 {
                     if(fb_info.win_par[i].area_par[j].ion_fd || fb_info.win_par[i].area_par[j].phy_addr)
-                        ALOGD("Mix win[%d],area[%d],z_win[%d,%d],[%d,%d,%d,%d]=>[%d,%d,%d,%d],w_h_f[%d,%d,%d],fd=%d,addr=%x,fbFd=%d",
+                        ALOGD("Mix %s win[%d],area[%d],z_win[%d,%d],[%d,%d,%d,%d]=>[%d,%d,%d,%d],w_h_f[%d,%d,%d],fd=%d,addr=%x,fbFd=%d",
+                            context==_contextAnchor?"Primary set:":"External set:",
                             i,j,
                             fb_info.win_par[i].z_order,
                             fb_info.win_par[i].win_id,
@@ -5515,16 +5511,13 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
         property_get("sys.dump",pro_value,0);
         if(!strcmp(pro_value,"true"))
         {
-            if(context == _contextAnchor1)
-                ALOGD("external screen:");
-            else
-                ALOGD("primary  screen:");
             for(int i = 0;i<4;i++)
             {
                 for(int j=0;j<4;j++)
                 {
                     if(fb_info.win_par[i].area_par[j].ion_fd || fb_info.win_par[i].area_par[j].phy_addr)
-                        ALOGD("win[%d],area[%d],z_win[%d,%d],[%d,%d,%d,%d]=>[%d,%d,%d,%d],w_h_f[%d,%d,%d],fd=%d,addr=%x,fbFd=%d",
+                        ALOGD("%s win[%d],area[%d],z_win[%d,%d],[%d,%d,%d,%d]=>[%d,%d,%d,%d],w_h_f[%d,%d,%d],fd=%d,addr=%x,fbFd=%d",
+                            context==_contextAnchor?"Primary set:":"External set:",
                             i,j,
                             fb_info.win_par[i].z_order,
                             fb_info.win_par[i].win_id,
@@ -5564,29 +5557,16 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
 #endif
         {
 #ifdef GPU_G6110 
-            if(_contextAnchor->hdmi_anm == 1)
+            if(_contextAnchor->mHdmiSI.hdmi_anm == 1)
             {
-/*                int index = 0;
-                if(fb_info.win_par[1].area_par[0].ion_fd != 0)
-                    index = 1;
-#ifdef RK3368_MID
-                if(context == _contextAnchor1)
-                {
-                    fb_info.win_par[index].area_par[0].xpos = 0;
-                    fb_info.win_par[index].area_par[0].ypos = 0;
-
-                }
-#endif
-                fb_info.win_par[index].area_par[0].xsize = context->dpyAttr[HWC_DISPLAY_EXTERNAL].xres;
-                fb_info.win_par[index].area_par[0].ysize = context->dpyAttr[HWC_DISPLAY_EXTERNAL].yres;*/
-                _contextAnchor->hdmi_anm = 0;
+                _contextAnchor->mHdmiSI.hdmi_anm = 0;
                 if(context == _contextAnchor)
                 {
                     if(hdmi_reset_dstposition(&fb_info,1))
                         return -1;
                 }    
             }
-            if(_contextAnchor->NeedReDst)
+            if(_contextAnchor->mHdmiSI.NeedReDst)
             {
                 if(hdmi_reset_dstposition(&fb_info,0))
                     return -1;
@@ -5649,7 +5629,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
 #ifndef GPU_G6110
         else
         {
-            if(_contextAnchor->last_fenceFd_flag == 0 && _contextAnchor->last_frame_flag == 1)
+            if(_contextAnchor->mHdmiSI.last_fenceFd_flag == 0 && _contextAnchor->mHdmiSI.last_frame_flag == 1)
             {
                 for(unsigned int i=0;i<RK_MAX_BUF_NUM;i++)
             	{
@@ -5678,12 +5658,12 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
                             close(fb_info.rel_fence_fd[i]);
                     		fb_info.rel_fence_fd[i] = -1;
         				} 
-                        _contextAnchor->last_rel_fenceFd[i] = fb_info.rel_fence_fd[i];
+                        _contextAnchor->mHdmiSI.last_rel_fenceFd[i] = fb_info.rel_fence_fd[i];
         			}
             	}
             	if(fb_info.ret_fence_fd >= 0)
-                    _contextAnchor->last_ret_fenceFd = list->retireFenceFd = fb_info.ret_fence_fd;
-                //ALOGD("_contextAnchor->last_ret_fenceFd=%d",_contextAnchor->last_ret_fenceFd);
+                    _contextAnchor->mHdmiSI.last_ret_fenceFd = list->retireFenceFd = fb_info.ret_fence_fd;
+                //ALOGD("_contextAnchor->mHdmiSI.last_ret_fenceFd=%d",_contextAnchor->mHdmiSI.last_ret_fenceFd);
             }
             else
             {
@@ -5712,7 +5692,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
                     fb_info.ret_fence_fd = -1;
                 //list->retireFenceFd = fb_info.ret_fence_fd;  
                 }
-                _contextAnchor->last_frame_flag = 1;
+                _contextAnchor->mHdmiSI.last_frame_flag = 1;
             }
         }
 #endif
@@ -6069,7 +6049,7 @@ void handle_hdmi_event(int hdmi_mode ,int flag )
     }
     if(flag == 3)
     {
-        if(context->flag_external == 1){
+        if(context->mHdmiSI.flag_external == 1){
 			context->dpyAttr[HWC_DISPLAY_EXTERNAL].connected = false;
             context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 0);
 #if OPTIMIZATION_FOR_DIMLAYER
@@ -6093,12 +6073,12 @@ void handle_hdmi_event(int hdmi_mode ,int flag )
     }
     else
     {
-        if(hdmi_mode && context->flag_external == 0){
+        if(hdmi_mode && context->mHdmiSI.flag_external == 0){
             if(hdmi_get_config()==1){
                 if(hdmi_set_config()==1){
-                    context->last_fenceFd_flag = 0;
+                    context->mHdmiSI.last_fenceFd_flag = 0;
                     context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, hdmi_mode);
-                    context->flag_external = 1;
+                    context->mHdmiSI.flag_external = 1;
                     ALOGD("TRY to connet to hotplug device line=%d",__LINE__);
 #if GPU_G6110
 	                hdmi_set_overscan(0);
@@ -6109,17 +6089,17 @@ void handle_hdmi_event(int hdmi_mode ,int flag )
             }
         }
         else{       
-            if(context->flag_external == 1)
+            if(context->mHdmiSI.flag_external == 1)
             {
-                context->last_fenceFd_flag = 1;
-                //if(context->flag_blank)
+                context->mHdmiSI.last_fenceFd_flag = 1;
+                //if(context->mHdmiSI.flag_blank)
 				{	
 					struct timeval tstart,tend;
 					gettimeofday(&tstart,NULL);
-                    context->last_frame_flag = 0;
+                    context->mHdmiSI.last_frame_flag = 0;
                     {
 #ifndef GPU_G6110 //rk3368 not need wait last frame
-                        while(context->last_frame_flag == 0 && context->flag_blank == 1)
+                        while(context->mHdmiSI.last_frame_flag == 0 && context->mHdmiSI.flag_blank == 1)
                         {   
         					gettimeofday(&tend,NULL);
                             if((((tend.tv_sec - tstart.tv_sec)*1000000)+(tend.tv_usec - tstart.tv_usec)) % 6000 == 0 )
@@ -6139,8 +6119,8 @@ void handle_hdmi_event(int hdmi_mode ,int flag )
 #if GPU_G6110
 	                hdmi_set_overscan(1);
 #endif        
-	                context->flag_external = 0;
-					context->flag_blank = 0;
+	                context->mHdmiSI.flag_external = 0;
+					context->mHdmiSI.flag_blank = 0;
 #if OPTIMIZATION_FOR_DIMLAYER
 						if(_contextAnchor1->mDimHandle)
 						{
@@ -6150,23 +6130,23 @@ void handle_hdmi_event(int hdmi_mode ,int flag )
 #endif
             	}
             }
-            //if(context->last_fenceFd_flag == 1)
+            //if(context->mHdmiSI.last_fenceFd_flag == 1)
 #ifndef GPU_G6110
             {
                 for(unsigned int i = 0; i < RK_MAX_BUF_NUM; i++)
                 {
-                    if(context->last_rel_fenceFd[i] >= 0)
+                    if(context->mHdmiSI.last_rel_fenceFd[i] >= 0)
                     {
-                        ALOGD("context->last_rel_fenceFd[%d]=%d",i,context->last_rel_fenceFd[i]);
-                        close(context->last_rel_fenceFd[i]);
-                        context->last_rel_fenceFd[i] = -1;
+                        ALOGD("context->mHdmiSI.last_rel_fenceFd[%d]=%d",i,context->mHdmiSI.last_rel_fenceFd[i]);
+                        close(context->mHdmiSI.last_rel_fenceFd[i]);
+                        context->mHdmiSI.last_rel_fenceFd[i] = -1;
                     }
                 }
-                if(context->last_ret_fenceFd >= 0)
+                if(context->mHdmiSI.last_ret_fenceFd >= 0)
                 {
-                    ALOGD("context->last_ret_fenceFd=%d",context->last_ret_fenceFd);
-                    close(context->last_ret_fenceFd); 
-                    context->last_ret_fenceFd = -1;
+                    ALOGD("context->mHdmiSI.last_ret_fenceFd=%d",context->mHdmiSI.last_ret_fenceFd);
+                    close(context->mHdmiSI.last_ret_fenceFd); 
+                    context->mHdmiSI.last_ret_fenceFd = -1;
                 }
             }   
 #endif
@@ -6755,13 +6735,15 @@ hwc_device_open(
     context->fbSize = info.xres*info.yres*4*3;
     context->lcdSize = info.xres*info.yres*4; 
 
-    context->hdmi_anm = 0;
-    context->flag_blank = 0;
-    context->flag_external = 0;
-    context->NeedReDst = false;
-    context->last_frame_flag = 1;
-    context->last_fenceFd_flag = 1;
-    context->flag_hwcup_external = 0;
+    context->mHdmiSI.hdmi_anm = 0;
+    context->mHdmiSI.flag_blank = 0;
+    context->mHdmiSI.flag_external = 0;
+    context->mHdmiSI.anroidSt = false;
+    context->mHdmiSI.NeedReDst = false;
+    context->mHdmiSI.vh_flag = false;
+    context->mHdmiSI.last_frame_flag = 1;
+    context->mHdmiSI.last_fenceFd_flag = 1;
+    context->mHdmiSI.flag_hwcup_external = 0;
   
     err = hw_get_module(GRALLOC_HARDWARE_MODULE_ID, &module_gr);
     ALOGE_IF(err, "FATAL: can't find the %s module", GRALLOC_HARDWARE_MODULE_ID);
@@ -7321,14 +7303,14 @@ int hdmi_set_config(){
         {
             _contextAnchor->dpyAttr[HWC_DISPLAY_EXTERNAL].xres = 1920;
             _contextAnchor->dpyAttr[HWC_DISPLAY_EXTERNAL].yres = 1080;
-            _contextAnchor->NeedReDst = true;
+            _contextAnchor->mHdmiSI.NeedReDst = true;
             LOGV("w_source,h_source,w_dst,h_dst = [%d,%d,%d,%d]",
                 _contextAnchor->dpyAttr[HWC_DISPLAY_EXTERNAL].xres,
                 _contextAnchor->dpyAttr[HWC_DISPLAY_EXTERNAL].yres,
                 _contextAnchor1->dpyAttr[HWC_DISPLAY_EXTERNAL].xres,
                 _contextAnchor1->dpyAttr[HWC_DISPLAY_EXTERNAL].yres);
         }else
-            _contextAnchor->NeedReDst = false;
+            _contextAnchor->mHdmiSI.NeedReDst = false;
 #endif
         return 1;
     }
@@ -7403,15 +7385,15 @@ void *hdmi_try_hotplug(void *arg)
     	    //ALOGW("Try to hdmi_try_hotplug spent time = %ld us",
     	    //    (((tend.tv_sec - tstart.tv_sec)*1000000)+(tend.tv_usec - tstart.tv_usec)));	
         }                        
-        ALOGV("getHdmiMode()=%d,_contextAnchor->flag_external=%d,_contextAnchor->flag_blank=%d,_contextAnchor->flag_hwcup_external=%d",
-              getHdmiMode(),_contextAnchor->flag_external,_contextAnchor->flag_blank,_contextAnchor->flag_hwcup_external);
-        if(getHdmiMode() == 1 && _contextAnchor->flag_external == 0 && _contextAnchor->flag_blank == 0 && _contextAnchor->flag_hwcup_external == 2)
+        ALOGV("getHdmiMode()=%d,_contextAnchor->mHdmiSI.flag_external=%d,_contextAnchor->mHdmiSI.flag_blank=%d,_contextAnchor->mHdmiSI.flag_hwcup_external=%d",
+              getHdmiMode(),_contextAnchor->mHdmiSI.flag_external,_contextAnchor->mHdmiSI.flag_blank,_contextAnchor->mHdmiSI.flag_hwcup_external);
+        if(getHdmiMode() == 1 && _contextAnchor->mHdmiSI.flag_external == 0 && _contextAnchor->mHdmiSI.flag_blank == 0 && _contextAnchor->mHdmiSI.flag_hwcup_external == 2)
         {
 			ALOGI("hdmi_try_hotplug at line = %d",__LINE__);
             handle_hdmi_event(getHdmiMode(), 0);
 			break;
         }
-    }while(_contextAnchor->flag_hwcup_external < 3 && getHdmiMode()==1);
+    }while(_contextAnchor->mHdmiSI.flag_hwcup_external < 3 && getHdmiMode()==1);
     pthread_exit(NULL);
     return NULL;
 }
@@ -7448,7 +7430,7 @@ int hdmi_reset_dstposition(struct rk_fb_win_cfg_data * fb_info,int flag)
 {
     /*flag:HDMI hotplug has two situation
     *1:
-    *0:NeedReDst case hotplug 1080p when 4k
+    *0:mHdmiSI.NeedReDst case hotplug 1080p when 4k
     */
     hwcContext *context = _contextAnchor;
     unsigned int w_source = 0;

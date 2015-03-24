@@ -401,6 +401,22 @@ typedef struct _videoCacheInfo
     bool bMatch;
 }videoCacheInfo;
 
+typedef struct _hdmiStateInfo
+{
+     int hdmi_anm;
+     int flag_blank;
+     int flag_external;
+     int flag_hwcup_external;
+     int last_fenceFd_flag;
+     int last_rel_fenceFd[11];
+     int last_ret_fenceFd;
+     int last_frame_flag;
+     bool mix_vh;
+     bool vh_flag;
+     bool anroidSt;
+     bool NeedReDst;
+}hdmiStateInfo;
+
 typedef struct _hwcContext
 {
     hwc_composer_device_1_t device;
@@ -461,19 +477,10 @@ typedef struct _hwcContext
      bool      mVideoRotate;
      bool      mGtsStatus;
      bool      mTrsfrmbyrga;
-     int        mtrsformcnt;
+     int       mtrsformcnt;
 
      /*dual display */
-     int hdmi_anm;
-     int flag_blank;
-     int flag_external;
-     int flag_hwcup_external;
-     int last_fenceFd_flag;
-     int last_rel_fenceFd[11];
-     int last_ret_fenceFd;
-     int last_frame_flag;
-     bool mix_vh;
-     bool NeedReDst;
+     hdmiStateInfo mHdmiSI;
 
      /* The index of video buffer will be used */
      int      mCurVideoIndex;
