@@ -1267,6 +1267,8 @@ int try_wins_dispatch_hor(hwcContext * Context)
         pzone_mag->zone_info[i].sort = sort;
         sort_pre  = sort;
         cnt = 0;
+        if(_contextAnchor->mHdmiSI.NeedReDst && Context == _contextAnchor1)
+            break;
         //means 4: win2 or win3 most has 4 zones 
         for(j=1;j<MOST_WIN_ZONES && (i+j) < pzone_mag->zone_cnt;j++)
         {
@@ -4178,6 +4180,11 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
     if(context == _contextAnchor1 && list != NULL)
     {
         struct private_handle_t * handle = (struct private_handle_t *) list->hwLayers[0].handle;
+        if( handle == NULL && _contextAnchor->mHdmiSI.NeedReDst)
+        {
+            LOGGPUCOP("Back to gpu compositon line[%d],fun[%s]",__LINE__,__FUNCTION__);
+            goto GpuComP;
+        }
         if( handle != NULL && _contextAnchor->mHdmiSI.NeedReDst && (list->numHwLayers-1) > 2 &&
             GPU_FORMAT != HAL_PIXEL_FORMAT_YCrCb_NV12 && GPU_FORMAT != HAL_PIXEL_FORMAT_YCrCb_NV12_10
                 &&GPU_FORMAT != HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
