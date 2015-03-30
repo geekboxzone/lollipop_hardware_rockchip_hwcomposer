@@ -571,7 +571,7 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
             ALOGV("rga_video_copybit fd_dst=%d,base=%d,index_v=%d",fd_dst,context->base_video_bk[index_v],index_v);
         }
         RGA_set_mmu_info(&Rga_Request, 1, 0, 0, 0, 0, 2);
-        Rga_Request.mmu_info.mmu_flag |= (1<<31) | (1<<10);
+        Rga_Request.mmu_info.mmu_flag |= (1<<31) | (1<<10) | (1<<8);
 
     }
 
