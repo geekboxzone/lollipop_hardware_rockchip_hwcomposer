@@ -3232,7 +3232,12 @@ _DumpSurface(
                 pfile = fopen(layername,"wb");
                 if(pfile)
                 {
-                    fwrite((const void *)(GPU_BASE),(size_t)(SrcStride * handle_pre->stride*handle_pre->height),1,pfile);
+#ifdef GPU_G6110
+                    fwrite((const void *)(handle_pre->pvBase),(size_t)(SrcStride * handle_pre->stride*handle_pre->height),1,pfile);
+
+#else
+                    fwrite((const void *)(handle_pre->base),(size_t)(SrcStride * handle_pre->stride*handle_pre->height),1,pfile);
+#endif
                     fclose(pfile);
                     LOGI(" dump surface layername %s,w:%d,h:%d,formatsize :%d",layername,handle_pre->width,handle_pre->height,SrcStride);
                 }
@@ -6579,9 +6584,15 @@ hwc_device_open(
     {
          hwcONERROR(hwcSTATUS_IO_ERR);
     }
-    
-    xdpi = 1000 * (info.xres * 25.4f) / info.width;
-    ydpi = 1000 * (info.yres * 25.4f) / info.height;
+    if (int(info.width) <= 0 || int(info.height) <= 0)
+	{
+		// the driver doesn't return that information
+		// default to 160 dpi
+		info.width  = ((info.xres * 25.4f)/160.0f + 0.5f);
+		info.height = ((info.yres * 25.4f)/160.0f + 0.5f);
+	}
+    xdpi =  (info.xres * 25.4f) / info.width;
+    ydpi =  (info.yres * 25.4f) / info.height;
 
     refreshRate = 1000000000000LLU /
     (
