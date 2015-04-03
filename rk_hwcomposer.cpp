@@ -6121,6 +6121,7 @@ void handle_hdmi_event(int hdmi_mode ,int flag )
 #endif
                     }
                     _contextAnchor1->fb_blanked = 1;
+                    _contextAnchor->mHdmiSI.NeedReDst = false;
 					context->dpyAttr[HWC_DISPLAY_EXTERNAL].connected = false;
 	                context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, hdmi_mode);
 #if GPU_G6110
