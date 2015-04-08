@@ -127,7 +127,7 @@ hdmi_parse_mode(
     );
 
 int
-hdmi_get_config();
+hdmi_get_config(int flag);
 
 int
 hdmi_set_overscan(
@@ -4118,7 +4118,7 @@ int hwc_prepare_virtual(hwc_composer_device_1_t * dev, hwc_display_contents_1_t 
 static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1_t *list, int dpyID) 
 {
 #ifdef GPU_G6110
-    if(!hdmi_noready && getHdmiMode() == 1 && dpyID == 0) //hdmi is ready ,primary need nodraw
+    if(((!hdmi_noready && getHdmiMode() == 1) || _contextAnchor->mHdmiSI.CvbsOn) && dpyID == 0 ) 
     {
         for (unsigned int i = 0; i < (list->numHwLayers - 1); i++)
         {
@@ -4890,7 +4890,7 @@ static int hwc_fbPost(hwc_composer_device_1_t * dev, size_t numDisplays, hwc_dis
 static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
 {
 #ifdef GPU_G6110
-    if(!hdmi_noready && getHdmiMode() == 1 && context == _contextAnchor) //hdmi is ready ,primary need nodraw
+    if(((!hdmi_noready && getHdmiMode() == 1) || _contextAnchor->mHdmiSI.CvbsOn) && context == _contextAnchor)
     {
         return 0;
     }
@@ -6066,7 +6066,7 @@ void handle_hdmi_event(int hdmi_mode ,int flag )
 				ALOGW_IF(err, "free mDimHandle (...) failed %d (%s)", err, strerror(-err));
 			}
 #endif
-            hdmi_get_config();
+            hdmi_get_config(0);
             hdmi_set_config();
 #if GPU_G6110
             hdmi_set_overscan(1);
@@ -6077,25 +6077,42 @@ void handle_hdmi_event(int hdmi_mode ,int flag )
             hdmi_set_overscan(0);
 #endif 
         }
-    }
-    else
+    }else
     {
-        if(hdmi_mode && context->mHdmiSI.flag_external == 0){
-            if(hdmi_get_config()==1){
-                if(hdmi_set_config()==1){
-                    context->mHdmiSI.last_fenceFd_flag = 0;
-                    context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, hdmi_mode);
-                    context->mHdmiSI.flag_external = 1;
-                    ALOGD("TRY to connet to hotplug device line=%d",__LINE__);
-#if GPU_G6110
-	                hdmi_set_overscan(0);
-#endif 
-                }else{
-                    ALOGE("handle_hdmi_event:hdmi_set_config FAIL");
-                }
+        if(hdmi_mode && context->mHdmiSI.flag_external == 0)
+        {
+#ifdef RK3368_BOX
+            if(context->mHdmiSI.CvbsOn)
+            {
+#if OPTIMIZATION_FOR_DIMLAYER
+    			if(_contextAnchor1->mDimHandle)
+    			{
+    				int err = context->mAllocDev->free(context->mAllocDev, _contextAnchor1->mDimHandle);
+    				ALOGW_IF(err, "free mDimHandle (...) failed %d (%s)", err, strerror(-err));
+    			}
+#endif
+                context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 0);
+                context->mHdmiSI.CvbsOn = false;
+                usleep(50000);
             }
-        }
-        else{       
+#endif
+            if(hdmi_get_config(0) != 1)
+            {
+                return;
+            }
+            if(hdmi_set_config() != 1)
+            {
+                return;
+            }
+            context->mHdmiSI.last_fenceFd_flag = 0;
+            context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, hdmi_mode);
+            context->mHdmiSI.flag_external = 1;
+            ALOGD("TRY to connet to hotplug device line=%d",__LINE__);
+#if GPU_G6110
+            hdmi_set_overscan(0);
+#endif  
+        }else
+        {       
             if(context->mHdmiSI.flag_external == 1)
             {
                 context->mHdmiSI.last_fenceFd_flag = 1;
@@ -6137,6 +6154,25 @@ void handle_hdmi_event(int hdmi_mode ,int flag )
 						}
 #endif
             	}
+#ifdef RK3368_BOX
+                usleep(500000);
+                if(hdmi_get_config(1) != 1)
+                {
+                    context->mHdmiSI.CvbsOn = false;
+                    return;
+                }
+                if(hdmi_set_config() != 1)
+                {
+                    context->mHdmiSI.CvbsOn = false;
+                    return;
+                }
+                context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 1);
+                ALOGD("TRY to connet to hotplug cvbs device line=%d",__LINE__);
+#if GPU_G6110
+                hdmi_set_overscan(0);
+#endif 
+                context->mHdmiSI.CvbsOn = true;
+#endif
             }
             //if(context->mHdmiSI.last_fenceFd_flag == 1)
 #ifndef GPU_G6110
@@ -6169,8 +6205,6 @@ void handle_hdmi_event(int hdmi_mode ,int flag )
 static void *hwc_thread(void *data)
 {
     hwcContext * context = _contextAnchor;
-
-
 
 #if 0
     uint64_t timestamp = 0;
@@ -7013,7 +7047,7 @@ void init_hdmi_mode()
     if(g_hdmi_mode == 1)
     {
 #ifdef GPU_G6110
-        //hdmi_get_config();
+        //hdmi_get_config(0);
         //hdmi_set_config();  
 #endif
     }
@@ -7035,7 +7069,8 @@ int closeFb(int fd)
     }
     return -1;
 }
-int hdmi_get_config(){
+int hdmi_get_config(int flag){
+    /*flag:0 hdmi;1 cvbs*/
     ALOGD("enter %s", __FUNCTION__);
     //memset(values, 0, sizeof(values));
     int fd;
@@ -7086,6 +7121,31 @@ int hdmi_get_config(){
 	    ALOGE("hdmi_get_config:FBIOPUT_VSCREENINFO error,hdmifd=%d",fd);
         return -errno;
 	}
+#endif
+#ifdef RK3368_BOX
+    if(flag == 1)
+    {
+        char buf[100];
+        int width = 0;
+        int height = 0;
+        int fd_cvbs = -1;
+        fd_cvbs = open("/sys/class/graphics/fb0/screen_info", O_RDONLY);
+        if(fd_cvbs < 0)
+    	{
+    	    ALOGE("hdmi_get_config:open fb0 screen_info error,cvbsfd=%d",fd_cvbs);
+            return -errno;
+    	}
+    	if(read(fd_cvbs,buf,sizeof(buf)) < 0)
+        {
+            ALOGE("error reading fb0 screen_info: %s", strerror(errno));
+            return -1;
+        }
+        close(fd_cvbs);
+		sscanf(buf,"xres:%d yres:%d",&width,&height);
+        ALOGD("width=%d,height=%d",width,height);
+    	info.xres = width;
+    	info.yres = height;
+    }
 #endif
     int refreshRate = 0;
 	if ( info.pixclock > 0 )
@@ -7257,7 +7317,7 @@ int hdmi_parse_mode(int *outX, int *outY)
             ALOGE("error reading hdmi mode: %s", strerror(errno));
             return -1;
         }
-        ALOGV("statebuf=%s",statebuf);
+        //ALOGD("statebuf=%s",statebuf);
         close(fd);
         char xres[10];
         char yres[10];
@@ -7399,15 +7459,41 @@ void *hdmi_try_hotplug(void *arg)
     	    //ALOGW("Try to hdmi_try_hotplug spent time = %ld us",
     	    //    (((tend.tv_sec - tstart.tv_sec)*1000000)+(tend.tv_usec - tstart.tv_usec)));	
         }                        
-        ALOGV("getHdmiMode()=%d,_contextAnchor->mHdmiSI.flag_external=%d,_contextAnchor->mHdmiSI.flag_blank=%d,_contextAnchor->mHdmiSI.flag_hwcup_external=%d",
-              getHdmiMode(),_contextAnchor->mHdmiSI.flag_external,_contextAnchor->mHdmiSI.flag_blank,_contextAnchor->mHdmiSI.flag_hwcup_external);
-        if(getHdmiMode() == 1 && _contextAnchor->mHdmiSI.flag_external == 0 && _contextAnchor->mHdmiSI.flag_blank == 0 && _contextAnchor->mHdmiSI.flag_hwcup_external == 2)
+        ALOGV("getHdmiMode()=%d,flag_external=%d,flag_blank=%d,flag_hwcup_external=%d",getHdmiMode(),
+            _contextAnchor->mHdmiSI.flag_external,_contextAnchor->mHdmiSI.flag_blank,
+                _contextAnchor->mHdmiSI.flag_hwcup_external);
+        if(getHdmiMode() == 1 && _contextAnchor->mHdmiSI.flag_external == 0 && 
+            _contextAnchor->mHdmiSI.flag_blank == 0 && _contextAnchor->mHdmiSI.flag_hwcup_external == 2)
         {
-			ALOGI("hdmi_try_hotplug at line = %d",__LINE__);
             handle_hdmi_event(getHdmiMode(), 0);
+			ALOGI("hdmi_try_hotplug at line = %d",__LINE__);
 			break;
         }
     }while(_contextAnchor->mHdmiSI.flag_hwcup_external < 3 && getHdmiMode()==1);
+#ifdef RK3368_BOX
+    if(getHdmiMode() == 0)
+    {
+        _contextAnchor->mHdmiSI.CvbsOn = true;
+        usleep(800000);
+        if(hdmi_get_config(1) != 1)
+        {
+            ALOGE("%s,%d,hdmi_get_config(1) ERROR",__FUNCTION__,__LINE__);
+            return NULL;
+        }
+        if(hdmi_set_config() != 1)
+        {
+            ALOGE("%s,%d,hdmi_set_config() ERROR",__FUNCTION__,__LINE__);
+            return NULL;
+        }
+        _contextAnchor->procs->hotplug(_contextAnchor->procs, HWC_DISPLAY_EXTERNAL, 1);
+        ALOGD("TRY to connet to hotplug cvbs device line=%d",__LINE__);
+#if GPU_G6110
+        hdmi_set_overscan(0);
+#endif 
+        _contextAnchor->mHdmiSI.CvbsOn = true;
+    }else
+        _contextAnchor->mHdmiSI.CvbsOn = false;
+#endif
     pthread_exit(NULL);
     return NULL;
 }
