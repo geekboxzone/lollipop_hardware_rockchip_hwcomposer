@@ -2445,9 +2445,10 @@ int try_wins_dispatch_mix_vh (hwcContext * Context,hwc_display_contents_1_t * li
     }
 
     hwc_layer_1_t * layer = &list->hwLayers[0];
-    if(!(pzone_mag->zone_info[0].format == HAL_PIXEL_FORMAT_YCrCb_NV12 
-            || pzone_mag->zone_info[0].format == HAL_PIXEL_FORMAT_YCrCb_NV12_10
-                    ||pzone_mag->zone_info[0].format == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO))
+    struct private_handle_t * handle = (struct private_handle_t *) list->hwLayers[0].handle;
+    if(!(handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12 
+            || handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12_10
+                    || handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO))
     {
 		ALOGV("Is NOT video format,not need do this");
         return -1;
