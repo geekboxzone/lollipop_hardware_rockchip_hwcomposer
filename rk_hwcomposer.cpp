@@ -5938,7 +5938,7 @@ hwc_set(
 
     int ret = 0;
 #ifdef GPU_G6110
-    if(getHdmiMode() == 1)
+    if(getHdmiMode() == 1 || _contextAnchor->mHdmiSI.CvbsOn)
         hdmi_set_overscan(0);
 #endif
     for (uint32_t i = 0; i < numDisplays; i++) {
@@ -7504,7 +7504,7 @@ int hdmi_set_overscan(int flag)
     char new_value[PROPERTY_VALUE_MAX];
     
     if(flag == 0) //HDMI connet 
-        property_get("persist.sys.overscan.aux", new_value, "false");
+        property_get("persist.sys.overscan.main", new_value, "false");
     else if(flag == 1) //HDMI remove
         strcpy(new_value,"overscan 100,100,100,100");
         
