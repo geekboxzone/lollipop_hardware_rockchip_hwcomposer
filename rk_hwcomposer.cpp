@@ -5975,14 +5975,15 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
             context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, hdmi_mode);
             context->mHdmiSI.flag_external = 1;
             ALOGD("TRY to connet to hotplug device line=%d",__LINE__);
-#if GPU_G6110
+#ifdef GPU_G6110
             hdmi_set_overscan(0);
 #endif  
         }else
-        {       
+        {
             if(context->mHdmiSI.flag_external == 1)
             {
                 context->mHdmiSI.last_fenceFd_flag = 1;
+#ifndef GPU_G6110
                 if(hdmi_set_frame(_contextAnchor1,0))
                 {
                     usleep(50000);
@@ -5990,7 +5991,8 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
                     {
                         ALOGE("set last frame but kernel return fenceFd not -1");
                     }
-                }    
+                }
+#endif
                 context->mHdmiSI.last_frame_flag = 0;
                 _contextAnchor1->fb_blanked = 1;
                 _contextAnchor->mHdmiSI.NeedReDst = false;
