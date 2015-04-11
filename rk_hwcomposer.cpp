@@ -139,6 +139,10 @@ hdmi_reset_dstposition(
     struct rk_fb_win_cfg_data * fb_info,
     int flag);
 
+int
+hdmi_set_frame( hwcContext * context,int flag);
+
+
 int hwChangeFormatandroidL(IN int fmt)
 {
 	switch (fmt) 
@@ -5001,52 +5005,14 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
         ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info);
 
 #if USE_HWC_FENCE
-        if(1
-#ifndef GPU_G6110
-        && context == _contextAnchor
-#endif
-        )
+        for(int k=0;k<RK_MAX_BUF_NUM;k++)
         {
-            for(int k=0;k<RK_MAX_BUF_NUM;k++)
-            {
-                if(fb_info.rel_fence_fd[k]>=0)
-                   // close(fb_info.rel_fence_fd[k]);
-                   fbLayer->releaseFenceFd = fb_info.rel_fence_fd[k];
-            }
-    		if(fb_info.ret_fence_fd >=0 )
-            	list->retireFenceFd = fb_info.ret_fence_fd;
+            if(fb_info.rel_fence_fd[k]>=0)
+               close(fb_info.rel_fence_fd[k]);
+               fbLayer->releaseFenceFd = fb_info.rel_fence_fd[k];
         }
-#ifndef GPU_G6110
-        else if(_contextAnchor->mHdmiSI.last_fenceFd_flag == 0)
-        {
-            for(int k=0;k<RK_MAX_BUF_NUM;k++)
-            {
-                //ALOGD("rel_fence_fd[%d] = %d", k, fb_info.rel_fence_fd[k]);
-                if(fb_info.rel_fence_fd[k] >= 0)
-                {   // close(fb_info.rel_fence_fd[k]);
-                    fbLayer->releaseFenceFd = fb_info.rel_fence_fd[k];
-    			}
-    			_contextAnchor->mHdmiSI.last_rel_fenceFd[k] = fb_info.rel_fence_fd[k];
-            }
-                if(fb_info.ret_fence_fd >= 0)
-                    _contextAnchor->mHdmiSI.last_ret_fenceFd = list->retireFenceFd = fb_info.ret_fence_fd;
-        }
-        else
-        {
-            ALOGD("HDMI has remove post");
-            for(int k=0;k<RK_MAX_BUF_NUM;k++)
-            {
-                if(fb_info.rel_fence_fd[k] >=0 )
-                {   
-                    close(fb_info.rel_fence_fd[k]);
-    			}
-            }
-                if(fb_info.ret_fence_fd >= 0)
-                    close(fb_info.ret_fence_fd);
-            fbLayer->releaseFenceFd = -1;
-            list->retireFenceFd = -1;        
-        }
-#endif
+		if(fb_info.ret_fence_fd >=0 )
+        	list->retireFenceFd = fb_info.ret_fence_fd;
 #else
         for(int k=0;k<RK_MAX_BUF_NUM;k++)
         {
@@ -5586,144 +5552,66 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
             }           
         }
 #if USE_HWC_FENCE
-        if(1 
-#ifndef GPU_G6110
-        && context == _contextAnchor 
-#endif  
-        ) 
-        {
-            for(unsigned int i=0;i<RK_MAX_BUF_NUM;i++)
-        	{
-                //ALOGD("rel_fence_fd[%d] = %d", i, fb_info.rel_fence_fd[i]);
-                if(fb_info.rel_fence_fd[i] >= 0)
-                {
-                    if(i< (list->numHwLayers -1))
-                    {
-                        if(fb_info.win_par[0].area_par[0].data_format == HAL_PIXEL_FORMAT_YCrCb_NV12_OLD
-                            &&list->hwLayers[0].transform != 0)  
-                        {
-                            list->hwLayers[i].releaseFenceFd = -1;
-                            close(fb_info.rel_fence_fd[i]);
-                        }
-                        else
-                        {
-                            if(mix_flag == 1)  // mix
-                            {
-                                if(list->hwLayers[i+1].releaseFenceFd > 0)
-                                    close(list->hwLayers[i+1].releaseFenceFd);
-                                list->hwLayers[i+1].releaseFenceFd = fb_info.rel_fence_fd[i];
-                            }
-                            else
-                            {
-                                if(list->hwLayers[i].releaseFenceFd>0)
-                                {
-                                    close(list->hwLayers[i].releaseFenceFd);
-                                }
-                                list->hwLayers[i].releaseFenceFd = fb_info.rel_fence_fd[i];
-                            }
-                        }        
-                    }    
-                    else
-                        close(fb_info.rel_fence_fd[i]);
-                 }
-        	}
-            if(list->retireFenceFd > 0)
-            {
-                close(list->retireFenceFd);
-            }
-    		if(fb_info.ret_fence_fd >= 0)
-            	list->retireFenceFd = fb_info.ret_fence_fd;
-        }
-#ifndef GPU_G6110
-        else
-        {
-            if(_contextAnchor->mHdmiSI.last_fenceFd_flag == 0 && _contextAnchor->mHdmiSI.last_frame_flag == 1)
-            {
-                for(unsigned int i=0;i<RK_MAX_BUF_NUM;i++)
-            	{
-                    //ALOGD("rel_fence_fd[%d] = %d", i, fb_info.rel_fence_fd[i]);
-                    if(fb_info.rel_fence_fd[i] >= 0)
-                    {
-                        if(i< (list->numHwLayers -1))
-                        {
-                            if(fb_info.win_par[0].area_par[0].data_format == HAL_PIXEL_FORMAT_YCrCb_NV12_OLD
-                                &&list->hwLayers[0].transform != 0)  
-                            {
-                                list->hwLayers[i].releaseFenceFd = -1;
-                                close(fb_info.rel_fence_fd[i]);
-        						fb_info.rel_fence_fd[i] = -1;
-                            }
-                            else
-                            {
-                            if(mix_flag == 1)  // mix
-                                list->hwLayers[i+1].releaseFenceFd = fb_info.rel_fence_fd[i];
-                            else
-                                list->hwLayers[i].releaseFenceFd = fb_info.rel_fence_fd[i];
-                            }        
-                        }    
-                        else
-        				{
-                            close(fb_info.rel_fence_fd[i]);
-                    		fb_info.rel_fence_fd[i] = -1;
-        				} 
-                        _contextAnchor->mHdmiSI.last_rel_fenceFd[i] = fb_info.rel_fence_fd[i];
-        			}
-            	}
-            	if(fb_info.ret_fence_fd >= 0)
-                    _contextAnchor->mHdmiSI.last_ret_fenceFd = list->retireFenceFd = fb_info.ret_fence_fd;
-                //ALOGD("_contextAnchor->mHdmiSI.last_ret_fenceFd=%d",_contextAnchor->mHdmiSI.last_ret_fenceFd);
-            }
-            else
-            {
-                //ALOGD("HDMI has remove");
-            	for(unsigned int i=0;i<RK_MAX_BUF_NUM;i++)
-            	{
-                    if(fb_info.rel_fence_fd[i] >= 0)
-                    {
-                        if(i< (list->numHwLayers -1))
-                        {
-                            list->hwLayers[i].releaseFenceFd = -1;
-                            close(fb_info.rel_fence_fd[i]);
-                            fb_info.rel_fence_fd[i] = -1;
-                        }     
-                        else
-                        {
-                            close(fb_info.rel_fence_fd[i]);
-                            fb_info.rel_fence_fd[i] = -1;
-                        }
-                    }
-            	}
-                list->retireFenceFd = -1;
-                if(fb_info.ret_fence_fd >= 0)
-                {
-                    close(fb_info.ret_fence_fd);
-                    fb_info.ret_fence_fd = -1;
-                //list->retireFenceFd = fb_info.ret_fence_fd;  
-                }
-                _contextAnchor->mHdmiSI.last_frame_flag = 1;
-            }
-        }
-#endif
-#else
-
-    	for(i=0;i<RK_MAX_BUF_NUM;i++)
+        for(unsigned int i=0;i<RK_MAX_BUF_NUM;i++)
     	{
-    	   
-            if(fb_info.rel_fence_fd[i] >= 0 )
+            ALOGV("rel_fence_fd[%d] = %d", i, fb_info.rel_fence_fd[i]);
+            if(fb_info.rel_fence_fd[i] >= 0)
             {
-                if(i< (int)(list->numHwLayers -1))
+                if(i< (list->numHwLayers -1))
                 {
-                    list->hwLayers[i].releaseFenceFd = -1;
-                    close(fb_info.rel_fence_fd[i]);
-                }     
+                    if(fb_info.win_par[0].area_par[0].data_format == HAL_PIXEL_FORMAT_YCrCb_NV12_OLD
+                        &&list->hwLayers[0].transform != 0)  
+                    {
+                        list->hwLayers[i].releaseFenceFd = -1;
+                        close(fb_info.rel_fence_fd[i]);
+                    }
+                    else
+                    {
+                        if(mix_flag == 1)  // mix
+                        {
+                            if(list->hwLayers[i+1].releaseFenceFd > 0)
+                                close(list->hwLayers[i+1].releaseFenceFd);
+                            list->hwLayers[i+1].releaseFenceFd = fb_info.rel_fence_fd[i];
+                        }
+                        else
+                        {
+                            if(list->hwLayers[i].releaseFenceFd>0)
+                            {
+                                close(list->hwLayers[i].releaseFenceFd);
+                            }
+                            list->hwLayers[i].releaseFenceFd = fb_info.rel_fence_fd[i];
+                        }
+                    }        
+                }    
                 else
                     close(fb_info.rel_fence_fd[i]);
-             }            
+             }
     	}
-        list->retireFenceFd = -1;
-        if(fb_info.ret_fence_fd >= 0)
-            close(fb_info.ret_fence_fd);
-        //list->retireFenceFd = fb_info.ret_fence_fd;        
+        if(list->retireFenceFd > 0)
+        {
+            close(list->retireFenceFd);
+        }
+		if(fb_info.ret_fence_fd >= 0)
+        	list->retireFenceFd = fb_info.ret_fence_fd;
+#else
+	for(i=0;i<RK_MAX_BUF_NUM;i++)
+	{
+	   
+        if(fb_info.rel_fence_fd[i] >= 0 )
+        {
+            if(i< (int)(list->numHwLayers -1))
+            {
+                list->hwLayers[i].releaseFenceFd = -1;
+                close(fb_info.rel_fence_fd[i]);
+            }     
+            else
+                close(fb_info.rel_fence_fd[i]);
+         }            
+	}
+    list->retireFenceFd = -1;
+    if(fb_info.ret_fence_fd >= 0)
+        close(fb_info.ret_fence_fd);
+    //list->retireFenceFd = fb_info.ret_fence_fd;        
 #endif
     }
     else
@@ -6048,38 +5936,16 @@ static void handle_vsync_event(hwcContext * context )
     }
 }
 
-void handle_hdmi_event(int hdmi_mode ,int flag )
+void handle_hotplug_event(int hdmi_mode ,int flag )
 {
     hwcContext * context = _contextAnchor;
 #if HWC_EXTERNAL
-    if (!context->procs){
+    if (!context->procs)
         return;
-    }
-    if(flag == 3)
-    {
-        if(context->mHdmiSI.flag_external == 1){
-			context->dpyAttr[HWC_DISPLAY_EXTERNAL].connected = false;
-            context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 0);
-#if OPTIMIZATION_FOR_DIMLAYER
-			if(_contextAnchor1->mDimHandle)
-			{
-				int err = context->mAllocDev->free(context->mAllocDev, _contextAnchor1->mDimHandle);
-				ALOGW_IF(err, "free mDimHandle (...) failed %d (%s)", err, strerror(-err));
-			}
-#endif
-            hdmi_get_config(0);
-            hdmi_set_config();
-#if GPU_G6110
-            hdmi_set_overscan(1);
-#endif 
-            usleep(50000);
-            context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 1);
-#if GPU_G6110
-            hdmi_set_overscan(0);
-#endif 
-        }
-    }else
-    {
+        
+    switch(flag){
+    case 0:
+    case 1:
         if(hdmi_mode && context->mHdmiSI.flag_external == 0)
         {
 #ifdef RK3368_BOX
@@ -6117,44 +5983,31 @@ void handle_hdmi_event(int hdmi_mode ,int flag )
             if(context->mHdmiSI.flag_external == 1)
             {
                 context->mHdmiSI.last_fenceFd_flag = 1;
-                //if(context->mHdmiSI.flag_blank)
-				{	
-					struct timeval tstart,tend;
-					gettimeofday(&tstart,NULL);
-                    context->mHdmiSI.last_frame_flag = 0;
+                if(hdmi_set_frame(_contextAnchor1,0))
+                {
+                    usleep(50000);
+                    if(hdmi_set_frame(_contextAnchor1,0))
                     {
-#ifndef GPU_G6110 //rk3368 not need wait last frame
-                        while(context->mHdmiSI.last_frame_flag == 0 && context->mHdmiSI.flag_blank == 1)
-                        {   
-        					gettimeofday(&tend,NULL);
-                            if((((tend.tv_sec - tstart.tv_sec)*1000000)+(tend.tv_usec - tstart.tv_usec)) % 6000 == 0 )
-                            {
-    						    ALOGW("Try to remove external screen spent time = %ld us",(((tend.tv_sec - tstart.tv_sec)*1000000)+(tend.tv_usec - tstart.tv_usec)));	
-                            }
-                            if((((tend.tv_sec - tstart.tv_sec)*1000000)+(tend.tv_usec - tstart.tv_usec)) > 32000 )
-                            {
-                            	break;
-                            }                        
-                        }
-#endif
+                        ALOGE("set last frame but kernel return fenceFd not -1");
                     }
-                    _contextAnchor1->fb_blanked = 1;
-                    _contextAnchor->mHdmiSI.NeedReDst = false;
-					context->dpyAttr[HWC_DISPLAY_EXTERNAL].connected = false;
-	                context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, hdmi_mode);
+                }    
+                context->mHdmiSI.last_frame_flag = 0;
+                _contextAnchor1->fb_blanked = 1;
+                _contextAnchor->mHdmiSI.NeedReDst = false;
+				context->dpyAttr[HWC_DISPLAY_EXTERNAL].connected = false;
+                context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, hdmi_mode);
 #if GPU_G6110
-	                hdmi_set_overscan(1);
+                hdmi_set_overscan(1);
 #endif        
-	                context->mHdmiSI.flag_external = 0;
-					context->mHdmiSI.flag_blank = 0;
+                context->mHdmiSI.flag_external = 0;
+				context->mHdmiSI.flag_blank = 0;
 #if OPTIMIZATION_FOR_DIMLAYER
-						if(_contextAnchor1->mDimHandle)
-						{
-							int err = context->mAllocDev->free(context->mAllocDev, _contextAnchor1->mDimHandle);
-							ALOGW_IF(err, "free mDimHandle (...) failed %d (%s)", err, strerror(-err));
-						}
+				if(_contextAnchor1->mDimHandle)
+				{
+					int err = context->mAllocDev->free(context->mAllocDev, _contextAnchor1->mDimHandle);
+					ALOGW_IF(err, "free mDimHandle (...) failed %d (%s)", err, strerror(-err));
+				}
 #endif
-            	}
 #ifdef RK3368_BOX
                 usleep(500000);
                 if(hdmi_get_config(1) != 1)
@@ -6175,32 +6028,43 @@ void handle_hdmi_event(int hdmi_mode ,int flag )
                 context->mHdmiSI.CvbsOn = true;
 #endif
             }
-            //if(context->mHdmiSI.last_fenceFd_flag == 1)
-#ifndef GPU_G6110
-            {
-                for(unsigned int i = 0; i < RK_MAX_BUF_NUM; i++)
-                {
-                    if(context->mHdmiSI.last_rel_fenceFd[i] >= 0)
-                    {
-                        ALOGD("context->mHdmiSI.last_rel_fenceFd[%d]=%d",i,context->mHdmiSI.last_rel_fenceFd[i]);
-                        close(context->mHdmiSI.last_rel_fenceFd[i]);
-                        context->mHdmiSI.last_rel_fenceFd[i] = -1;
-                    }
-                }
-                if(context->mHdmiSI.last_ret_fenceFd >= 0)
-                {
-                    ALOGD("context->mHdmiSI.last_ret_fenceFd=%d",context->mHdmiSI.last_ret_fenceFd);
-                    close(context->mHdmiSI.last_ret_fenceFd); 
-                    context->mHdmiSI.last_ret_fenceFd = -1;
-                }
-            }   
-#endif
         }    
+        break;
+        
+    case 2:
+        break;
+        
+    case 3:
+        if(context->mHdmiSI.flag_external == 1)
+        {
+			context->dpyAttr[HWC_DISPLAY_EXTERNAL].connected = false;
+            context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 0);
+#if OPTIMIZATION_FOR_DIMLAYER
+			if(_contextAnchor1->mDimHandle)
+			{
+				int err = context->mAllocDev->free(context->mAllocDev, _contextAnchor1->mDimHandle);
+				ALOGW_IF(err, "free mDimHandle (...) failed %d (%s)", err, strerror(-err));
+			}
+#endif
+            hdmi_get_config(0);
+            hdmi_set_config();
+#if GPU_G6110
+            hdmi_set_overscan(1);
+#endif 
+            usleep(50000);
+            context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 1);
+#if GPU_G6110
+            hdmi_set_overscan(0);
+#endif 
+        }
+        break;
+        
+    default:
+        ALOGI("handle hotplug:do nothing");
+        break;
     }
-
 #endif    
 }
-
 
 
 static void *hwc_thread(void *data)
@@ -7466,7 +7330,7 @@ void *hdmi_try_hotplug(void *arg)
         if(getHdmiMode() == 1 && _contextAnchor->mHdmiSI.flag_external == 0 && 
             _contextAnchor->mHdmiSI.flag_blank == 0 && _contextAnchor->mHdmiSI.flag_hwcup_external == 2)
         {
-            handle_hdmi_event(getHdmiMode(), 0);
+            handle_hotplug_event(getHdmiMode(), 0);
 			ALOGI("hdmi_try_hotplug at line = %d",__LINE__);
 			break;
         }
@@ -7590,5 +7454,57 @@ int hdmi_reset_dstposition(struct rk_fb_win_cfg_data * fb_info,int flag)
         }
     }
     return 0;
+}
+
+int hdmi_set_frame( hwcContext * context,int flag)
+{
+    int ret = 0;
+    struct rk_fb_win_cfg_data fb_info;
+    memset(&fb_info,0,sizeof(fb_info));
+    fb_info.ret_fence_fd = -1;
+    for(int i=0;i<RK_MAX_BUF_NUM;i++) {
+        fb_info.rel_fence_fd[i] = -1;
+    }
+    
+    fb_info.win_par[0].area_par[0].data_format = context->fbhandle.format;
+    fb_info.win_par[0].win_id = 0;
+    fb_info.win_par[0].z_order = 0;
+    fb_info.win_par[0].area_par[0].ion_fd = 0;
+    fb_info.win_par[0].area_par[0].acq_fence_fd = -1;
+    fb_info.win_par[0].area_par[0].x_offset = 0;
+    fb_info.win_par[0].area_par[0].y_offset = 0;
+    fb_info.win_par[0].area_par[0].xpos = 0;
+    fb_info.win_par[0].area_par[0].ypos = 0;
+    fb_info.win_par[0].area_par[0].xsize = 0;
+    fb_info.win_par[0].area_par[0].ysize = 0;
+    fb_info.win_par[0].area_par[0].xact = 0;
+    fb_info.win_par[0].area_par[0].yact = 0;
+    fb_info.win_par[0].area_par[0].xvir = 0;
+    fb_info.win_par[0].area_par[0].yvir = 0;
+    fb_info.wait_fs = 0;
+
+    if(ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info) == -1)
+    {
+        ALOGE("%s,%d,RK_FBIOSET_CONFIG_DONE fail",__FUNCTION__,__LINE__);
+    }
+
+#if USE_HWC_FENCE
+    for(int k=0;k<RK_MAX_BUF_NUM;k++)
+    {
+        //ALOGD("%s,%d,fb_info.rel_fence_fd[%d]=%d",__FUNCTION__,__LINE__,k,fb_info.rel_fence_fd[k]);
+        if(fb_info.rel_fence_fd[k] >=0 )
+        {
+            ret = 1;
+            close(fb_info.rel_fence_fd[k]);
+        }    
+    }
+    //ALOGD("%s,%d,fb_info.ret_fence_fd=%d",__FUNCTION__,__LINE__,fb_info.ret_fence_fd);
+    if(fb_info.ret_fence_fd >= 0)
+    {
+        ret = 1;
+        close(fb_info.ret_fence_fd);
+    }
+#endif
+    return ret;
 }
 
