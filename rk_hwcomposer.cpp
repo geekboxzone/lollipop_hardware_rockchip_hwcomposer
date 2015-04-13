@@ -4400,7 +4400,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
         goto GpuComP;
 	}
     /* Roll back to FRAMEBUFFER if any layer can not be handled. */
-    if (i != (list->numHwLayers - 1) /*|| context->mtrsformcnt > 1*/)
+    if (i != (list->numHwLayers - 1) || (list->numHwLayers==1) /*|| context->mtrsformcnt > 1*/)
     {
 		LOGGPUCOP("Back to gpu compositon line[%d],fun[%s]",__LINE__,__FUNCTION__);
         goto GpuComP;
