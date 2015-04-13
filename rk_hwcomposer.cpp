@@ -140,8 +140,14 @@ hdmi_reset_dstposition(
     int flag);
 
 int
-hdmi_set_frame( hwcContext * context,int flag);
+hdmi_set_frame(
+    hwcContext * context,
+    int flag);
 
+int
+hdmi_get_fbinfo(
+    hwc_display_contents_1_t *list,
+    int flag);
 
 int hwChangeFormatandroidL(IN int fmt)
 {
@@ -5636,7 +5642,19 @@ static int hwc_set_screen(hwc_composer_device_1 *dev, hwc_display_contents_1_t *
         return 0;
     }
 #endif
+
     hwcContext * context = _contextAnchor;
+    
+#ifndef GPU_G6110
+    if(!context->mHdmiSI.RecordInfo && dpyID == 0 && list)
+    {
+        if(hdmi_get_fbinfo(list,0) != 0)
+            ALOGI("RecordInfo fail,try next");
+        else
+            context->mHdmiSI.RecordInfo = true;
+    }       
+#endif   
+
     if(dpyID == 1)
         context = _contextAnchor1;
 #if hwcUseTime
@@ -6001,10 +6019,10 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
                     usleep(500000);
                 }
 #ifndef GPU_G6110
-                if(hdmi_set_frame(_contextAnchor1,0))
+                if(hdmi_set_frame(context,0))
                 {
                     usleep(50000);
-                    if(hdmi_set_frame(_contextAnchor1,0))
+                    if(hdmi_set_frame(context,0))
                     {
                         ALOGE("set last frame but kernel return fenceFd not -1");
                     }
@@ -6709,7 +6727,10 @@ hwc_device_open(
     context->mHdmiSI.NeedReDst = false;
     context->mHdmiSI.vh_flag = false;
     context->mHdmiSI.flag_hwcup_external = 0;
-  
+#ifndef GPU_G6110
+    context->mHdmiSI.RecordInfo = false;
+#endif
+
     err = hw_get_module(GRALLOC_HARDWARE_MODULE_ID, &module_gr);
     ALOGE_IF(err, "FATAL: can't find the %s module", GRALLOC_HARDWARE_MODULE_ID);
     if (err == 0) {
@@ -7122,6 +7143,7 @@ int hdmi_get_config(int flag){
     }
     context->mCurVideoIndex= 0;
 
+	context->fb_blanked = 1;
     context->mSkipFlag = 0;
     context->mVideoMode = false;
     context->mNV12_VIDEO_VideoMode = false;
@@ -7520,34 +7542,40 @@ int hdmi_reset_dstposition(struct rk_fb_win_cfg_data * fb_info,int flag)
     return 0;
 }
 
-int hdmi_set_frame( hwcContext * context,int flag)
+int hdmi_set_frame(hwcContext* context,int flag)
 {
     int ret = 0;
+#ifndef GPU_G6110
+    int xact = 32;
+    int yact = 32;
     struct rk_fb_win_cfg_data fb_info;
     memset(&fb_info,0,sizeof(fb_info));
     fb_info.ret_fence_fd = -1;
     for(int i=0;i<RK_MAX_BUF_NUM;i++) {
         fb_info.rel_fence_fd[i] = -1;
     }
-    
-    fb_info.win_par[0].area_par[0].data_format = context->fbhandle.format;
+
+    xact = context->mHdmiSI.Linfo.w_act>xact ? xact : context->mHdmiSI.Linfo.w_act;
+    yact = context->mHdmiSI.Linfo.h_act>xact ? yact : context->mHdmiSI.Linfo.h_act;
+
+    fb_info.win_par[0].area_par[0].data_format = context->mHdmiSI.Linfo.format;
     fb_info.win_par[0].win_id = 0;
     fb_info.win_par[0].z_order = 0;
-    fb_info.win_par[0].area_par[0].ion_fd = 0;
+    fb_info.win_par[0].area_par[0].ion_fd = context->mHdmiSI.Linfo.buf_fd;
     fb_info.win_par[0].area_par[0].acq_fence_fd = -1;
     fb_info.win_par[0].area_par[0].x_offset = 0;
-    fb_info.win_par[0].area_par[0].y_offset = 0;
+    fb_info.win_par[0].area_par[0].y_offset = context->mHdmiSI.Linfo.yoffset;
     fb_info.win_par[0].area_par[0].xpos = 0;
     fb_info.win_par[0].area_par[0].ypos = 0;
-    fb_info.win_par[0].area_par[0].xsize = 0;
-    fb_info.win_par[0].area_par[0].ysize = 0;
-    fb_info.win_par[0].area_par[0].xact = 0;
-    fb_info.win_par[0].area_par[0].yact = 0;
-    fb_info.win_par[0].area_par[0].xvir = 0;
-    fb_info.win_par[0].area_par[0].yvir = 0;
+    fb_info.win_par[0].area_par[0].xsize = xact;
+    fb_info.win_par[0].area_par[0].ysize = xact;
+    fb_info.win_par[0].area_par[0].xact = xact;
+    fb_info.win_par[0].area_par[0].yact = xact;
+    fb_info.win_par[0].area_par[0].xvir = context->mHdmiSI.Linfo.w_vir;
+    fb_info.win_par[0].area_par[0].yvir = context->mHdmiSI.Linfo.h_vir;
     fb_info.wait_fs = 0;
 
-    if(ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info) == -1)
+    if(ioctl(_contextAnchor1->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info) == -1)
     {
         ALOGE("%s,%d,RK_FBIOSET_CONFIG_DONE fail",__FUNCTION__,__LINE__);
     }
@@ -7569,7 +7597,39 @@ int hdmi_set_frame( hwcContext * context,int flag)
         ret = 1;
         close(fb_info.ret_fence_fd);
     }
-
+#endif
     return ret;
+}
+
+int hdmi_get_fbinfo(hwc_display_contents_1_t *list,int flag)
+{
+#ifndef GPU_G6110
+    hwcContext *context = _contextAnchor;
+    int numLayers = list->numHwLayers;
+    hwc_layer_1_t *fbLayer = &list->hwLayers[numLayers - 1];
+    if (!fbLayer)
+    {
+        ALOGE("fbLayer=NULL");
+        return -1;
+    }
+
+    struct private_handle_t*  handle = (struct private_handle_t*)fbLayer->handle;
+    if (!handle)
+    {
+		ALOGE("hanndle=NULL at line %d",__LINE__);
+        return -1;
+    }
+
+    unsigned int offset = handle->offset;        
+    context->mHdmiSI.Linfo.format = context->fbhandle.format;
+    context->mHdmiSI.Linfo.buf_fd = handle->share_fd;
+    context->mHdmiSI.Linfo.xoffset = 0;
+    context->mHdmiSI.Linfo.yoffset = offset/context->fbStride;
+    context->mHdmiSI.Linfo.w_act= handle->width;
+    context->mHdmiSI.Linfo.h_act = handle->height;
+    context->mHdmiSI.Linfo.w_vir = handle->stride;
+    context->mHdmiSI.Linfo.h_vir = handle->height;
+#endif
+    return 0;
 }
 

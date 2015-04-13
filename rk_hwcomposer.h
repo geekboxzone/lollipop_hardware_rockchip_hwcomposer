@@ -412,6 +412,10 @@ typedef struct _hdmiStateInfo
      bool anroidSt;
      bool NeedReDst;
      bool CvbsOn;
+#ifndef GPU_G6110
+     hwbkupinfo Linfo;
+     bool RecordInfo;
+#endif
 }hdmiStateInfo;
 
 typedef struct _hwcContext
