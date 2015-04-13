@@ -4394,7 +4394,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
         }
     }
 
-    if(hwc_get_int_property("sys.hwc.disable","0")== 1 || (_contextAnchor->mHdmiSI.last_fenceFd_flag == 1 && dpyID == 1))
+    if(hwc_get_int_property("sys.hwc.disable","0")== 1)
     {
 		LOGGPUCOP("Back to gpu compositon line[%d],fun[%s]",__LINE__,__FUNCTION__);
         goto GpuComP;
@@ -5975,7 +5975,6 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
             {
                 return;
             }
-            context->mHdmiSI.last_fenceFd_flag = 0;
             context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, hdmi_mode);
             context->mHdmiSI.flag_external = 1;
             ALOGD("TRY to connet to hotplug device line=%d",__LINE__);
@@ -5987,7 +5986,6 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
         {
             if(context->mHdmiSI.flag_external == 1)
             {
-                context->mHdmiSI.last_fenceFd_flag = 1;
                 if(_contextAnchor->mHdmiSI.CvbsOn)
                 {
 #if OPTIMIZATION_FOR_DIMLAYER
@@ -6012,7 +6010,6 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
                     }
                 }
 #endif
-                context->mHdmiSI.last_frame_flag = 0;
                 _contextAnchor1->fb_blanked = 1;
                 _contextAnchor->mHdmiSI.NeedReDst = false;
 				context->dpyAttr[HWC_DISPLAY_EXTERNAL].connected = false;
@@ -6052,9 +6049,9 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
             }
         }    
         break;
-        
-    case 2:
+
 #ifdef RK3368_BOX
+    case 2:
         if(_contextAnchor->mHdmiSI.CvbsOn)
         {
     #if OPTIMIZATION_FOR_DIMLAYER
@@ -6087,9 +6084,9 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
             hdmi_set_overscan(0);
     #endif 
             context->mHdmiSI.CvbsOn = true;
-#endif
         }
         break;
+#endif
         
     case 3:
         if(context->mHdmiSI.flag_external == 1)
@@ -6711,8 +6708,6 @@ hwc_device_open(
     context->mHdmiSI.anroidSt = false;
     context->mHdmiSI.NeedReDst = false;
     context->mHdmiSI.vh_flag = false;
-    context->mHdmiSI.last_frame_flag = 1;
-    context->mHdmiSI.last_fenceFd_flag = 1;
     context->mHdmiSI.flag_hwcup_external = 0;
   
     err = hw_get_module(GRALLOC_HARDWARE_MODULE_ID, &module_gr);
