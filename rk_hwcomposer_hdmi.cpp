@@ -22,74 +22,71 @@
 #include <cutils/properties.h>
 #include <hardware_legacy/uevent.h>
 
- int         g_hdmi_mode;
+int         g_hdmi_mode;
+
+void rk_check_hdmi_state()
+{
+    int fd = open("/sys/devices/virtual/switch/hdmi/state", O_RDONLY);
+	if (fd > 0)
+	{
+		char statebuf[100];
+		memset(statebuf, 0, sizeof(statebuf));
+		int err = read(fd, statebuf, sizeof(statebuf));
+		if (err < 0)
+		{
+		    ALOGE("error reading hdmi state: %s", strerror(errno));
+		    return;
+		}
+		close(fd);
+		g_hdmi_mode = atoi(statebuf);
+		if(g_hdmi_mode == 0)
+		    hdmi_noready = true;
+		/* if (g_hdmi_mode==0)
+		{
+			property_set("sys.hdmi.mode", "0");
+		}
+		else
+		{
+			property_set("sys.hdmi.mode", "1");
+		}*/    
+	}  
+	else
+	{
+		ALOGD("err=%s",strerror(errno));
+	}
+}
 
 //0,1,2
  void rk_check_hdmi_uevents(const char *buf)
 {
 	//ALOGD("line %d,buf[%s]",__LINE__,buf);
-    if ( !strcmp(buf, "change@/devices/virtual/switch/hdmi"))
-	{
-		int fd = open("/sys/devices/virtual/switch/hdmi/state", O_RDONLY);
-		if (fd > 0)
-			{
-			char statebuf[100];
-			memset(statebuf, 0, sizeof(statebuf));
-			int err = read(fd, statebuf, sizeof(statebuf));
-			if (err < 0)
-			{
-			    ALOGE("error reading hdmi state: %s", strerror(errno));
-			    return;
-			}
-			close(fd);
-			g_hdmi_mode = atoi(statebuf);
-			if(g_hdmi_mode == 0)
-			    hdmi_noready = true;
-			/* if (g_hdmi_mode==0)
-			{
-				property_set("sys.hdmi.mode", "0");
-			}
-			else
-			{
-				property_set("sys.hdmi.mode", "1");
-			}*/    
-			handle_hotplug_event(g_hdmi_mode,1);
-			ALOGD("HDMI uevent happened!g_hdmi_mode=%d,line=%d",g_hdmi_mode,__LINE__);
-			}  
-		else
-		{
-			ALOGD("err=%s",strerror(errno));
-		}
+    if (!strcmp(buf, "change@/devices/virtual/switch/hdmi"))
+	{   
+        rk_check_hdmi_state();
+        handle_hotplug_event(g_hdmi_mode,1);
+		ALOGI("uevent receive!g_hdmi_mode=%d,line=%d",g_hdmi_mode,__LINE__);
 	}
-    else if( strstr(buf, "change@/devices/virtual/display/HDMI") != NULL )
+    else if(strstr(buf, "change@/devices/virtual/display/HDMI") != NULL)
     {
-		int fd = open("/sys/devices/virtual/switch/hdmi/state", O_RDONLY);
-		if (fd > 0)
+        rk_check_hdmi_state();
+		if(g_hdmi_mode == 1)
 		{
-			char statebuf[100];
-			memset(statebuf, 0, sizeof(statebuf));
-			int err = read(fd, statebuf, sizeof(statebuf));
-			if (err < 0)
-			{
-			    ALOGE("error reading hdmi state: %s", strerror(errno));
-			    return;
-			}
-			close(fd);
-			g_hdmi_mode = atoi(statebuf);
-			if(g_hdmi_mode == 1)
-			{
-				handle_hotplug_event(1,3);
-				ALOGD("HDMI uevent happened!g_hdmi_mode=%d,line=%d",g_hdmi_mode,__LINE__);
-			}
-		}  
-        else
-        {
-            ALOGD("err=%s",strerror(errno));
-        }
+			handle_hotplug_event(1,3);
+			ALOGI("uevent receive!g_hdmi_mode=%d,line=%d",g_hdmi_mode,__LINE__);
+		}
     }
+    else if(strstr(buf, "change@/devices/lcdc") != NULL)
+	{   
+        rk_check_hdmi_state();
+        if(!g_hdmi_mode)
+        {
+            handle_hotplug_event(0,2);
+		    ALOGI("uevent receive!g_hdmi_mode=%d,line=%d",g_hdmi_mode,__LINE__);
+		}    
+	}
 }
 
- void rk_handle_uevents(const char *buff)
+void rk_handle_uevents(const char *buff)
 {
 	// uint64_t timestamp = 0;
     rk_check_hdmi_uevents(buff);

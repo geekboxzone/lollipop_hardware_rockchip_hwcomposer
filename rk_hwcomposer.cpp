@@ -5007,11 +5007,10 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
 #if USE_HWC_FENCE
         for(int k=0;k<RK_MAX_BUF_NUM;k++)
         {
-            if(fb_info.rel_fence_fd[k]>=0)
-               close(fb_info.rel_fence_fd[k]);
-               fbLayer->releaseFenceFd = fb_info.rel_fence_fd[k];
+            if(fb_info.rel_fence_fd[k] >= 0)
+                fbLayer->releaseFenceFd = fb_info.rel_fence_fd[k];
         }
-		if(fb_info.ret_fence_fd >=0 )
+		if(fb_info.ret_fence_fd >= 0)
         	list->retireFenceFd = fb_info.ret_fence_fd;
 #else
         for(int k=0;k<RK_MAX_BUF_NUM;k++)
@@ -5311,7 +5310,11 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
             }    
         }
         // close UI win:external always do it
-        if(context->vui_hide == 1 || context == _contextAnchor1)
+        if(context->vui_hide == 1 
+#ifndef RK3368_BOX
+        || context == _contextAnchor1
+#endif
+        )
         {
             for(i = 1;i<4;i++)
             {
@@ -5596,7 +5599,6 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
 #else
 	for(i=0;i<RK_MAX_BUF_NUM;i++)
 	{
-	   
         if(fb_info.rel_fence_fd[i] >= 0 )
         {
             if(i< (int)(list->numHwLayers -1))
@@ -5948,16 +5950,18 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
     case 1:
         if(hdmi_mode && context->mHdmiSI.flag_external == 0)
         {
+        
 #ifdef RK3368_BOX
             if(context->mHdmiSI.CvbsOn)
             {
-#if OPTIMIZATION_FOR_DIMLAYER
+    #if OPTIMIZATION_FOR_DIMLAYER
     			if(_contextAnchor1->mDimHandle)
     			{
+    			    context->dpyAttr[HWC_DISPLAY_EXTERNAL].connected = false;
     				int err = context->mAllocDev->free(context->mAllocDev, _contextAnchor1->mDimHandle);
     				ALOGW_IF(err, "free mDimHandle (...) failed %d (%s)", err, strerror(-err));
     			}
-#endif
+    #endif
                 context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 0);
                 context->mHdmiSI.CvbsOn = false;
                 usleep(50000);
@@ -5978,11 +5982,26 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
 #ifdef GPU_G6110
             hdmi_set_overscan(0);
 #endif  
-        }else
+        }
+        else
         {
             if(context->mHdmiSI.flag_external == 1)
             {
                 context->mHdmiSI.last_fenceFd_flag = 1;
+                if(_contextAnchor->mHdmiSI.CvbsOn)
+                {
+#if OPTIMIZATION_FOR_DIMLAYER
+                    if(_contextAnchor1->mDimHandle)
+                    {
+                        context->dpyAttr[HWC_DISPLAY_EXTERNAL].connected = false;
+                        int err = context->mAllocDev->free(context->mAllocDev, _contextAnchor1->mDimHandle);
+                        ALOGW_IF(err, "free mDimHandle (...) failed %d (%s)", err, strerror(-err));
+                    }
+#endif
+                    context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 0);
+                    context->mHdmiSI.CvbsOn = false;
+                    usleep(500000);
+                }
 #ifndef GPU_G6110
                 if(hdmi_set_frame(_contextAnchor1,0))
                 {
@@ -6011,7 +6030,7 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
 				}
 #endif
 #ifdef RK3368_BOX
-                usleep(500000);
+                usleep(1200000);
                 if(hdmi_get_config(1) != 1)
                 {
                     context->mHdmiSI.CvbsOn = false;
@@ -6024,16 +6043,52 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
                 }
                 context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 1);
                 ALOGD("TRY to connet to hotplug cvbs device line=%d",__LINE__);
-#if GPU_G6110
+    #if GPU_G6110
                 hdmi_set_overscan(0);
-#endif 
+    #endif 
                 context->mHdmiSI.CvbsOn = true;
+                usleep(500000);
 #endif
             }
         }    
         break;
         
     case 2:
+#ifdef RK3368_BOX
+        if(_contextAnchor->mHdmiSI.CvbsOn)
+        {
+    #if OPTIMIZATION_FOR_DIMLAYER
+            if(_contextAnchor1->mDimHandle)
+            {
+                context->dpyAttr[HWC_DISPLAY_EXTERNAL].connected = false;
+                int err = context->mAllocDev->free(context->mAllocDev, _contextAnchor1->mDimHandle);
+                ALOGW_IF(err, "free mDimHandle (...) failed %d (%s)", err, strerror(-err));
+            }
+    #endif
+            context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 0);
+            context->mHdmiSI.CvbsOn = false;
+            usleep(500000);
+        }
+        if(!_contextAnchor->mHdmiSI.CvbsOn)
+        {
+            if(hdmi_get_config(1) != 1)
+            {
+                context->mHdmiSI.CvbsOn = false;
+                return;
+            }
+            if(hdmi_set_config() != 1)
+            {
+                context->mHdmiSI.CvbsOn = false;
+                return;
+            }
+            context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 1);
+            ALOGD("TRY to connet to hotplug cvbs device line=%d",__LINE__);
+    #if GPU_G6110
+            hdmi_set_overscan(0);
+    #endif 
+            context->mHdmiSI.CvbsOn = true;
+#endif
+        }
         break;
         
     case 3:
@@ -7369,10 +7424,18 @@ int hdmi_set_overscan(int flag)
 {
     char new_value[PROPERTY_VALUE_MAX];
     
-    if(flag == 0) //HDMI connet 
+    switch(flag){
+    case 0:
         property_get("persist.sys.overscan.main", new_value, "false");
-    else if(flag == 1) //HDMI remove
+        break;
+        
+    case 1:
         strcpy(new_value,"overscan 100,100,100,100");
+        break;
+
+    default:
+        break;
+    }
         
     int fd = open("/sys/class/graphics/fb0/scale",O_RDWR);
     if(fd == -1)
@@ -7408,19 +7471,25 @@ int hdmi_reset_dstposition(struct rk_fb_win_cfg_data * fb_info,int flag)
     {
         return -1;
     }
-    if(flag == 0)
-    {
+    
+    switch(flag){
+    case 0:
         w_source = context->dpyAttr[HWC_DISPLAY_EXTERNAL].xres;
         h_source = context->dpyAttr[HWC_DISPLAY_EXTERNAL].yres;
         w_dst    = _contextAnchor1->dpyAttr[HWC_DISPLAY_EXTERNAL].xres;
         h_dst    = _contextAnchor1->dpyAttr[HWC_DISPLAY_EXTERNAL].yres;
-    }else if(flag == 1)
-    {
+        break;
+
+    case 1:
         w_source = context->dpyAttr[HWC_DISPLAY_PRIMARY].xres;
         h_source = context->dpyAttr[HWC_DISPLAY_PRIMARY].yres;
         w_dst    = context->dpyAttr[HWC_DISPLAY_EXTERNAL].xres;
         h_dst    = context->dpyAttr[HWC_DISPLAY_EXTERNAL].yres;
-    }
+        break;
+
+    default:
+        break;
+    }        
     
     float w_scale = (float)w_dst / w_source; 
     float h_scale = (float)h_dst / h_source;
@@ -7446,10 +7515,8 @@ int hdmi_reset_dstposition(struct rk_fb_win_cfg_data * fb_info,int flag)
                     if(!strcmp(pro_value,"true"))
                     {
                         ALOGD("Adjust dst to => [%d,%d,%d,%d]",
-                            fb_info->win_par[i].area_par[j].xpos,
-                            fb_info->win_par[i].area_par[j].ypos,
-                            fb_info->win_par[i].area_par[j].xsize,
-                            fb_info->win_par[i].area_par[j].ysize);
+                            fb_info->win_par[i].area_par[j].xpos,fb_info->win_par[i].area_par[j].ypos,
+                            fb_info->win_par[i].area_par[j].xsize,fb_info->win_par[i].area_par[j].ysize);
                     }
                 }
             }
@@ -7490,23 +7557,24 @@ int hdmi_set_frame( hwcContext * context,int flag)
         ALOGE("%s,%d,RK_FBIOSET_CONFIG_DONE fail",__FUNCTION__,__LINE__);
     }
 
-#if USE_HWC_FENCE
     for(int k=0;k<RK_MAX_BUF_NUM;k++)
     {
-        //ALOGD("%s,%d,fb_info.rel_fence_fd[%d]=%d",__FUNCTION__,__LINE__,k,fb_info.rel_fence_fd[k]);
+        //ALOGD("%s,%d,fb_info.rel_fence_fd[%d]=%d",
+            //__FUNCTION__,__LINE__,k,fb_info.rel_fence_fd[k]);
         if(fb_info.rel_fence_fd[k] >=0 )
         {
             ret = 1;
             close(fb_info.rel_fence_fd[k]);
         }    
     }
-    //ALOGD("%s,%d,fb_info.ret_fence_fd=%d",__FUNCTION__,__LINE__,fb_info.ret_fence_fd);
+    //ALOGD("%s,%d,fb_info.ret_fence_fd=%d",
+        //__FUNCTION__,__LINE__,fb_info.ret_fence_fd);
     if(fb_info.ret_fence_fd >= 0)
     {
         ret = 1;
         close(fb_info.ret_fence_fd);
     }
-#endif
+
     return ret;
 }
 
