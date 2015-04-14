@@ -5968,7 +5968,6 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
     case 1:
         if(hdmi_mode && context->mHdmiSI.flag_external == 0)
         {
-        
 #ifdef RK3368_BOX
             if(context->mHdmiSI.CvbsOn)
             {
@@ -6004,20 +6003,6 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
         {
             if(context->mHdmiSI.flag_external == 1)
             {
-                if(_contextAnchor->mHdmiSI.CvbsOn)
-                {
-#if OPTIMIZATION_FOR_DIMLAYER
-                    if(_contextAnchor1->mDimHandle)
-                    {
-                        context->dpyAttr[HWC_DISPLAY_EXTERNAL].connected = false;
-                        int err = context->mAllocDev->free(context->mAllocDev, _contextAnchor1->mDimHandle);
-                        ALOGW_IF(err, "free mDimHandle (...) failed %d (%s)", err, strerror(-err));
-                    }
-#endif
-                    context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 0);
-                    context->mHdmiSI.CvbsOn = false;
-                    usleep(500000);
-                }
 #ifndef GPU_G6110
                 if(hdmi_set_frame(context,0))
                 {
@@ -6044,33 +6029,13 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
 					ALOGW_IF(err, "free mDimHandle (...) failed %d (%s)", err, strerror(-err));
 				}
 #endif
-#ifdef RK3368_BOX
-                usleep(1200000);
-                if(hdmi_get_config(1) != 1)
-                {
-                    context->mHdmiSI.CvbsOn = false;
-                    return;
-                }
-                if(hdmi_set_config() != 1)
-                {
-                    context->mHdmiSI.CvbsOn = false;
-                    return;
-                }
-                context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 1);
-                ALOGD("TRY to connet to hotplug cvbs device line=%d",__LINE__);
-    #if GPU_G6110
-                hdmi_set_overscan(0);
-    #endif 
-                context->mHdmiSI.CvbsOn = true;
-                usleep(500000);
-#endif
             }
         }    
         break;
 
 #ifdef RK3368_BOX
     case 2:
-        if(_contextAnchor->mHdmiSI.CvbsOn)
+        if(!hdmi_mode || context->mHdmiSI.CvbsOn)
         {
     #if OPTIMIZATION_FOR_DIMLAYER
             if(_contextAnchor1->mDimHandle)
@@ -6084,7 +6049,7 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
             context->mHdmiSI.CvbsOn = false;
             usleep(500000);
         }
-        if(!_contextAnchor->mHdmiSI.CvbsOn)
+        if(hdmi_mode)
         {
             if(hdmi_get_config(1) != 1)
             {
