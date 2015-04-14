@@ -4220,6 +4220,10 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
         {
             video_cnt ++;
         }
+        if(handle && GPU_FORMAT == HAL_PIXEL_FORMAT_YV12)
+        {
+            goto GpuComP;
+        }
     }
     context->mVideoMode=false;
     context->mVideoRotate=false;
