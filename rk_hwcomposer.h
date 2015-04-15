@@ -413,8 +413,9 @@ typedef struct _hdmiStateInfo
      bool NeedReDst;
      bool CvbsOn;
 #ifndef GPU_G6110
-     hwbkupinfo Linfo;
-     bool RecordInfo;
+     int FrameFd;
+     int FrameBase;
+     buffer_handle_t FrameHandle;
 #endif
 }hdmiStateInfo;
 
