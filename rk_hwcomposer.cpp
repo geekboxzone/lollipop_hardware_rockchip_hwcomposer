@@ -1255,14 +1255,7 @@ int try_wins_dispatch_hor(hwcContext * Context)
     for(i=0;i<pzone_mag->zone_cnt;i++)
     {
         if((pzone_mag->zone_info[i].transform != 0)&&
-            (pzone_mag->zone_info[i].format != HAL_PIXEL_FORMAT_YCrCb_NV12)
-#if 1
-            && (Context->mtrsformcnt!=1 || (Context->mtrsformcnt==1 && pzone_mag->zone_cnt>2))
-#else //ENABLE_TRANSFORM_BY_RGA
-            && ((Context->mtrsformcnt!=1)
-            || !strstr(pzone_mag->zone_info[i].LayerName,"Starting@# "))
-#endif
-            )
+            (pzone_mag->zone_info[i].format != HAL_PIXEL_FORMAT_YCrCb_NV12))
             return -1;
     }
 #endif
@@ -5960,6 +5953,7 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
 #ifdef RK3368_BOX
             if(context->mHdmiSI.CvbsOn)
             {
+				usleep(1200000);
     #if OPTIMIZATION_FOR_DIMLAYER
     			if(_contextAnchor1->mDimHandle)
     			{
