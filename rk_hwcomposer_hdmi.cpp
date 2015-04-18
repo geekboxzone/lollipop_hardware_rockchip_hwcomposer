@@ -52,7 +52,7 @@ void rk_check_hdmi_state()
 		}
 		close(fd);
 		g_hdmi_mode = atoi(statebuf);
-		if(g_hdmi_mode == 0)
+		//if(g_hdmi_mode == 0)
 		    hdmi_noready = true;
 		/* if (g_hdmi_mode==0)
 		{
@@ -94,9 +94,14 @@ void rk_check_hdmi_state()
         int flag=0;
         rk_check_hdmi_state();
         rk_parse_uevent_buf(buf,&type,&flag,len);
-        if(type == 1)
+        if(type == 1 && flag == 1 && g_hdmi_mode == 0)
+        {
+            usleep(800000);
+            rk_check_hdmi_state();
+        }
+        if(type == 1 && g_hdmi_mode == 0)
             handle_hotplug_event(flag,2);
-        ALOGI("uevent receive!type=%d,flag=%d,line=%d",type,flag,__LINE__);
+        ALOGI("uevent receive!hdmistate=%d,type=%d,flag=%d,line=%d",g_hdmi_mode,type,flag,__LINE__);
 
 	}
 }

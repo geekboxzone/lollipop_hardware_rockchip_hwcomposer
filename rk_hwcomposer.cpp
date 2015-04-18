@@ -4893,7 +4893,7 @@ static int hwc_fbPost(hwc_composer_device_1_t * dev, size_t numDisplays, hwc_dis
 static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
 {
 #ifdef GPU_G6110
-    if(((!hdmi_noready && getHdmiMode() == 1) || _contextAnchor->mHdmiSI.CvbsOn) && context == _contextAnchor)
+    if((!hdmi_noready && (getHdmiMode() == 1 || _contextAnchor->mHdmiSI.CvbsOn)) && context == _contextAnchor)
     {
         return 0;
     }
@@ -5631,6 +5631,14 @@ static int hwc_set_screen(hwc_composer_device_1 *dev, hwc_display_contents_1_t *
 #ifdef GPU_G6110
     if(hdmi_noready && dpyID == 1)
     {
+#ifdef RK3368_BOX
+        if((!hdmi_noready && (getHdmiMode() == 1 || _contextAnchor->mHdmiSI.CvbsOn)))
+        {
+            hdmi_set_frame(_contextAnchor,0);
+        }
+#endif
+        if(list)
+            hwc_sync_release(list);
         return 0;
     }
 #endif
@@ -5953,17 +5961,19 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
 #ifdef RK3368_BOX
             if(context->mHdmiSI.CvbsOn)
             {
-				usleep(1200000);
+                usleep(500000);
     #if OPTIMIZATION_FOR_DIMLAYER
-    			if(_contextAnchor1->mDimHandle)
+    			if(_contextAnchor1 && _contextAnchor1->mDimHandle)
     			{
-    			    context->dpyAttr[HWC_DISPLAY_EXTERNAL].connected = false;
-    				int err = context->mAllocDev->free(context->mAllocDev, _contextAnchor1->mDimHandle);
-    				ALOGW_IF(err, "free mDimHandle (...) failed %d (%s)", err, strerror(-err));
+                    int err = context->mAllocDev->free(context->mAllocDev, _contextAnchor1->mDimHandle);
+                    _contextAnchor1->mDimHandle = 0;
+                    ALOGW_IF(err, "free mDimHandle (...) failed %d (%s)", err, strerror(-err));
     			}
     #endif
+			    context->dpyAttr[HWC_DISPLAY_EXTERNAL].connected = false;
                 context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 0);
                 context->mHdmiSI.CvbsOn = false;
+                hdmi_set_frame(context,0);
                 usleep(50000);
             }
 #endif
@@ -5980,7 +5990,7 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
             ALOGD("TRY to connet to hotplug device line=%d",__LINE__);
 #ifdef GPU_G6110
             hdmi_set_overscan(0);
-#endif  
+#endif
         }
         else
         {
@@ -6006,9 +6016,10 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
                 context->mHdmiSI.flag_external = 0;
 				context->mHdmiSI.flag_blank = 0;
 #if OPTIMIZATION_FOR_DIMLAYER
-				if(_contextAnchor1->mDimHandle)
+				if(_contextAnchor1 &&_contextAnchor1->mDimHandle)
 				{
 					int err = context->mAllocDev->free(context->mAllocDev, _contextAnchor1->mDimHandle);
+					_contextAnchor1->mDimHandle = 0;
 					ALOGW_IF(err, "free mDimHandle (...) failed %d (%s)", err, strerror(-err));
 				}
 #endif
@@ -6020,15 +6031,18 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
     case 2:
         if(!hdmi_mode || context->mHdmiSI.CvbsOn)
         {
+            usleep(50000);
     #if OPTIMIZATION_FOR_DIMLAYER
-            if(_contextAnchor1->mDimHandle)
+            if(_contextAnchor1 && _contextAnchor1->mDimHandle)
             {
-                context->dpyAttr[HWC_DISPLAY_EXTERNAL].connected = false;
                 int err = context->mAllocDev->free(context->mAllocDev, _contextAnchor1->mDimHandle);
+                _contextAnchor1->mDimHandle = 0;
                 ALOGW_IF(err, "free mDimHandle (...) failed %d (%s)", err, strerror(-err));
             }
     #endif
+            context->dpyAttr[HWC_DISPLAY_EXTERNAL].connected = false;
             context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 0);
+            hdmi_set_frame(context,0);
             context->mHdmiSI.CvbsOn = false;
             usleep(500000);
         }
@@ -6060,12 +6074,13 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
 			context->dpyAttr[HWC_DISPLAY_EXTERNAL].connected = false;
             context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 0);
 #if OPTIMIZATION_FOR_DIMLAYER
-			if(_contextAnchor1->mDimHandle)
-			{
-				int err = context->mAllocDev->free(context->mAllocDev, _contextAnchor1->mDimHandle);
-				ALOGW_IF(err, "free mDimHandle (...) failed %d (%s)", err, strerror(-err));
-			}
-#endif
+            if(_contextAnchor1 && _contextAnchor1->mDimHandle)
+            {
+                int err = context->mAllocDev->free(context->mAllocDev, _contextAnchor1->mDimHandle);
+                _contextAnchor1->mDimHandle = 0;
+                ALOGW_IF(err, "free mDimHandle (...) failed %d (%s)", err, strerror(-err));
+            }
+#endif      
             hdmi_get_config(0);
             hdmi_set_config();
 #if GPU_G6110
@@ -7160,9 +7175,8 @@ int hdmi_get_config(int flag){
     memset((void*)context->mDimBase,0x0,context->fbhandle.width*context->fbhandle.height*2);
 #endif
     _contextAnchor1 = context;
-#ifndef GPU_G6110
     hdmi_set_frame(_contextAnchor,0);
-#endif
+
     return 1;
 
 OnError:
