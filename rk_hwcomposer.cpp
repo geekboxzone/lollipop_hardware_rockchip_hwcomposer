@@ -856,8 +856,11 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
         if((dstRects[m].right - dstRects[m].left) < 16 || (dstRects[m].bottom - dstRects[m].top) < 16)
         {
             if(Context == _contextAnchor)
-	    	    ALOGD("lcdc dont support too small area cnt =%d,name=%s,zone[%d,%d,%d,%d]",
-	    	        Region->numRects,layer->LayerName,dstRects[m].left,dstRects[m].top,dstRects[m].right,dstRects[m].bottom);
+            {
+                ALOGV("lcdc dont support too small area cnt =%d,name=%s,zone[%d,%d,%d,%d]",
+                    Region->numRects,layer->LayerName,dstRects[m].left,dstRects[m].top,dstRects[m].right,dstRects[m].bottom);
+                return -1;
+            }
             if(!_contextAnchor->mHdmiSI.vh_flag && Context != _contextAnchor)
 	            return -1;
         }
