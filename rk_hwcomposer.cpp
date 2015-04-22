@@ -4120,7 +4120,7 @@ int hwc_prepare_virtual(hwc_composer_device_1_t * dev, hwc_display_contents_1_t 
 static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1_t *list, int dpyID) 
 {
 #ifdef GPU_G6110
-    if(((!hdmi_noready && getHdmiMode() == 1) || _contextAnchor->mHdmiSI.CvbsOn) && dpyID == 0 ) 
+    if((!hdmi_noready && (getHdmiMode() == 1 || _contextAnchor->mHdmiSI.CvbsOn)) && dpyID == 0 ) 
     {
         for (unsigned int i = 0; i < (list->numHwLayers - 1); i++)
         {
@@ -4137,7 +4137,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
 
 	size_t i;
     size_t j;
-    
+
     hwcContext * context = _contextAnchor;
     if(dpyID == 1)
         context = _contextAnchor1;
@@ -4714,15 +4714,18 @@ hwc_prepare(
                 struct private_handle_t* SrcHnd = (struct private_handle_t *) layer->handle;
                 if (layer == NULL)
                 	;
-                else if(strstr(layer->LayerName,"BootAnimation") != NULL && getHdmiMode() == 1)
+                else if(strstr(layer->LayerName,"BootAnimation") != NULL && (getHdmiMode() == 1 
+                    || _contextAnchor->mHdmiSI.CvbsOn))
                 {
                     layer->sourceCrop.left = 0;
                     layer->sourceCrop.top = 0;
                     layer->sourceCrop.right = SrcHnd->stride;
                     layer->sourceCrop.bottom = SrcHnd->height;
                     _contextAnchor->mHdmiSI.hdmi_anm = 1;
+                    //ALOGD("_contextAnchor->mHdmiSI.hdmi_anm = 1,BootAnimation");
                 }
-                else if(strstr(layer->LayerName,"Android is starting") != NULL && getHdmiMode() == 1)
+                else if(strstr(layer->LayerName,"Android is starting") != NULL && (getHdmiMode() == 1
+                    || _contextAnchor->mHdmiSI.CvbsOn))
                 {
                     _contextAnchor->mHdmiSI.hdmi_anm = 1;
                     _contextAnchor->mHdmiSI.anroidSt = true;
@@ -7469,7 +7472,8 @@ int hdmi_reset_dstposition(struct rk_fb_win_cfg_data * fb_info,int flag)
     {
         return -1;
     }
-    
+
+    //ALOGD("%s,%d",__FUNCTION__,__LINE__);
     switch(flag){
     case 0:
         w_source = context->dpyAttr[HWC_DISPLAY_EXTERNAL].xres;
@@ -7526,7 +7530,6 @@ int hdmi_reset_dstposition(struct rk_fb_win_cfg_data * fb_info,int flag)
 int hdmi_set_frame(hwcContext* context,int flag)
 {
     int ret = 0;
-#ifndef GPU_G6110
     struct rk_fb_win_cfg_data fb_info;
     memset(&fb_info,0,sizeof(fb_info));
     fb_info.ret_fence_fd = -1;
@@ -7573,7 +7576,6 @@ int hdmi_set_frame(hwcContext* context,int flag)
         ret = 1;
         close(fb_info.ret_fence_fd);
     }
-#endif
     return ret;
 }
 
