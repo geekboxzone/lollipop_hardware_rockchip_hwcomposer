@@ -39,9 +39,8 @@
 #define TOP_LAYER_NAME              "StatusBar"
 #define WALLPAPER                   "ImageWallpaper"
 #define VIDEO_PLAY_ACTIVITY_LAYER_NAME "android.rk.RockVideoPlayer/android.rk.RockVideoPlayer.VideoP"
-#define RK_QUEDDR_FREQ              0x8000 
-
-#define HAL_PIXEL_FORMAT_YCrCb_NV12_OLD  0x20 
+#define RK_QUEDDR_FREQ              0x8000
+#define HAL_PIXEL_FORMAT_YCrCb_NV12_OLD  0x20
 
 //#define ENABLE_HDMI_APP_LANDSCAP_TO_PORTRAIT
 static int SkipFrameCount = 0;
@@ -4092,6 +4091,59 @@ BackToGPU:
 
 //extern "C" void *blend(uint8_t *dst, uint8_t *src, int dst_w, int src_w, int src_h);
 
+int dump_config_info(struct rk_fb_win_cfg_data fb_info ,hwcContext * context, int flag)
+{
+    char poutbuf[20];
+    char eoutbuf[20];
+    char pro_value[PROPERTY_VALUE_MAX];
+    property_get("sys.dump",pro_value,0);
+    if(!!strcmp(pro_value,"true"))
+        return 0;
+
+    switch(flag){
+    case 0:
+        strcpy(poutbuf,"Primary set:");
+        strcpy(eoutbuf,"External set:");
+        break;
+
+    case 1:
+        strcpy(poutbuf,"MIX Primary set:");
+        strcpy(eoutbuf,"MIX External set:");
+        break;
+        
+    case 2:
+        strcpy(poutbuf,"Primary post:");
+        strcpy(eoutbuf,"External post:");
+        break;
+    }
+    for(int i = 0;i<4;i++)
+    {
+        for(int j=0;j<4;j++)
+        {
+            if(fb_info.win_par[i].area_par[j].ion_fd || fb_info.win_par[i].area_par[j].phy_addr)
+                ALOGD("%s win[%d],area[%d],z_win[%d,%d],[%d,%d,%d,%d]=>[%d,%d,%d,%d],w_h_f[%d,%d,%d],fd=%d,addr=%x,fbFd=%d",
+                    context==_contextAnchor ? poutbuf : eoutbuf,
+                    i,j,
+                    fb_info.win_par[i].z_order,
+                    fb_info.win_par[i].win_id,
+                    fb_info.win_par[i].area_par[j].x_offset,
+                    fb_info.win_par[i].area_par[j].y_offset,
+                    fb_info.win_par[i].area_par[j].xact,
+                    fb_info.win_par[i].area_par[j].yact,
+                    fb_info.win_par[i].area_par[j].xpos,
+                    fb_info.win_par[i].area_par[j].ypos,
+                    fb_info.win_par[i].area_par[j].xsize,
+                    fb_info.win_par[i].area_par[j].ysize,
+                    fb_info.win_par[i].area_par[j].xvir,
+                    fb_info.win_par[i].area_par[j].yvir,
+                    fb_info.win_par[i].area_par[j].data_format,
+                    fb_info.win_par[i].area_par[j].ion_fd,
+                    fb_info.win_par[i].area_par[j].phy_addr,
+                    context->fbFd);
+        }
+    }
+    return 0;
+}
 
 int hwc_prepare_virtual(hwc_composer_device_1_t * dev, hwc_display_contents_1_t  *contents)
 {
@@ -4989,7 +5041,7 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
 #endif
 	    fb_info.wait_fs=0;
 #endif
-
+        dump_config_info(fb_info,context,2);
 #ifdef GPU_G6110
         if(_contextAnchor->mHdmiSI.anroidSt && context == _contextAnchor)
         {
@@ -5030,37 +5082,7 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
         }
         list->retireFenceFd=-1;
 #endif
-        char pro_value[PROPERTY_VALUE_MAX];
-        property_get("sys.dump",pro_value,0);
-        if(!strcmp(pro_value,"true"))
-        {
-            for(int i = 0;i<4;i++)
-            {
-                for(int j=0;j<4;j++)
-                {
-                    if(fb_info.win_par[i].area_par[j].ion_fd || fb_info.win_par[i].area_par[j].phy_addr)
-                        ALOGD("%s win[%d],area[%d],z_win[%d,%d],[%d,%d,%d,%d]=>[%d,%d,%d,%d],w_h_f[%d,%d,%d],fd=%d,addr=%x,fbFd=%d",
-                            context==_contextAnchor?"Primary post:":"External post:",
-                            i,j,
-                            fb_info.win_par[i].z_order,
-                            fb_info.win_par[i].win_id,
-                            fb_info.win_par[i].area_par[j].x_offset,
-                            fb_info.win_par[i].area_par[j].y_offset,
-                            fb_info.win_par[i].area_par[j].xact,
-                            fb_info.win_par[i].area_par[j].yact,
-                            fb_info.win_par[i].area_par[j].xpos,
-                            fb_info.win_par[i].area_par[j].ypos,
-                            fb_info.win_par[i].area_par[j].xsize,
-                            fb_info.win_par[i].area_par[j].ysize,
-                            fb_info.win_par[i].area_par[j].xvir,
-                            fb_info.win_par[i].area_par[j].yvir,
-                            fb_info.win_par[i].area_par[j].data_format,
-                            fb_info.win_par[i].area_par[j].ion_fd,
-                            fb_info.win_par[i].area_par[j].phy_addr,
-                            context->fbFd);
-                }
-            }
-        }
+
         #endif
     }
     return 0;
@@ -5454,72 +5476,12 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
 #endif
         fb_info.wait_fs=0;
 #endif
-        char pro_value[PROPERTY_VALUE_MAX];
-        property_get("sys.dump",pro_value,0);
-        if(!strcmp(pro_value,"true"))
-        {
-            for(int i = 0;i<4;i++)
-            {
-                for(int j=0;j<4;j++)
-                {
-                    if(fb_info.win_par[i].area_par[j].ion_fd || fb_info.win_par[i].area_par[j].phy_addr)
-                        ALOGD("Mix %s win[%d],area[%d],z_win[%d,%d],[%d,%d,%d,%d]=>[%d,%d,%d,%d],w_h_f[%d,%d,%d],fd=%d,addr=%x,fbFd=%d",
-                            context==_contextAnchor?"Primary set:":"External set:",
-                            i,j,
-                            fb_info.win_par[i].z_order,
-                            fb_info.win_par[i].win_id,
-                            fb_info.win_par[i].area_par[j].x_offset,
-                            fb_info.win_par[i].area_par[j].y_offset,
-                            fb_info.win_par[i].area_par[j].xact,
-                            fb_info.win_par[i].area_par[j].yact,
-                            fb_info.win_par[i].area_par[j].xpos,
-                            fb_info.win_par[i].area_par[j].ypos,
-                            fb_info.win_par[i].area_par[j].xsize,
-                            fb_info.win_par[i].area_par[j].ysize,
-                            fb_info.win_par[i].area_par[j].xvir,
-                            fb_info.win_par[i].area_par[j].yvir,
-                            fb_info.win_par[i].area_par[j].data_format,
-                            fb_info.win_par[i].area_par[j].ion_fd,
-                            fb_info.win_par[i].area_par[j].phy_addr,
-                            context->fbFd);
-                }
-            }
-        }
+        dump_config_info(fb_info,context,1);
+
     }
     else
-    {
-        char pro_value[PROPERTY_VALUE_MAX];
-        property_get("sys.dump",pro_value,0);
-        if(!strcmp(pro_value,"true"))
-        {
-            for(int i = 0;i<4;i++)
-            {
-                for(int j=0;j<4;j++)
-                {
-                    if(fb_info.win_par[i].area_par[j].ion_fd || fb_info.win_par[i].area_par[j].phy_addr)
-                        ALOGD("%s win[%d],area[%d],z_win[%d,%d],[%d,%d,%d,%d]=>[%d,%d,%d,%d],w_h_f[%d,%d,%d],fd=%d,addr=%x,fbFd=%d",
-                            context==_contextAnchor?"Primary set:":"External set:",
-                            i,j,
-                            fb_info.win_par[i].z_order,
-                            fb_info.win_par[i].win_id,
-                            fb_info.win_par[i].area_par[j].x_offset,
-                            fb_info.win_par[i].area_par[j].y_offset,
-                            fb_info.win_par[i].area_par[j].xact,
-                            fb_info.win_par[i].area_par[j].yact,
-                            fb_info.win_par[i].area_par[j].xpos,
-                            fb_info.win_par[i].area_par[j].ypos,
-                            fb_info.win_par[i].area_par[j].xsize,
-                            fb_info.win_par[i].area_par[j].ysize,
-                            fb_info.win_par[i].area_par[j].xvir,
-                            fb_info.win_par[i].area_par[j].yvir,
-                            fb_info.win_par[i].area_par[j].data_format,
-                            fb_info.win_par[i].area_par[j].ion_fd,
-                            fb_info.win_par[i].area_par[j].phy_addr,
-                            context->fbFd);
-                }
-            }    
-        }
-    }
+        dump_config_info(fb_info,context,0);
+
     if(!context->fb_blanked)
     {
 #ifndef GPU_G6110  //This will lead nenamark fps go down in rk3368.
