@@ -47,7 +47,7 @@ static int SkipFrameCount = 0;
 
 static hwcContext * _contextAnchor = NULL;
 static hwcContext * _contextAnchor1 = NULL;
-#ifdef ENABLE_HDMI_APP_LANDSCAP_TO_PORTRAIT            
+#ifdef ENABLE_HDMI_APP_LANDSCAP_TO_PORTRAIT
 static int bootanimFinish = 0;
 #endif
 
@@ -6719,7 +6719,6 @@ hwc_device_open(
     memset((void*)context->mDimBase,0x0,context->fbhandle.width*context->fbhandle.height*2);
 #endif
 
-#ifndef GPU_G6110
     err = context->mAllocDev->alloc(context->mAllocDev, 32,32,HAL_PIXEL_FORMAT_RGB_565, \
                                     GRALLOC_USAGE_HW_COMPOSER|GRALLOC_USAGE_HW_RENDER, \
                                     (buffer_handle_t*)(&(context->mHdmiSI.FrameHandle)),&stride_gr);
@@ -6734,7 +6733,6 @@ hwc_device_open(
         goto OnError;
     }
     memset((void*)context->mHdmiSI.FrameBase,0x00,32*32*2);
-#endif
 
     /* Increment reference count. */
     context->reference++;
