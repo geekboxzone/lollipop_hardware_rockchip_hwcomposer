@@ -52,7 +52,7 @@
 #define OPTIMIZATION_FOR_TRANSFORM_UI   1
 #define OPTIMIZATION_FOR_DIMLAYER       1           //1: optimise for dim layer
 #define HWC_EXTERNAL                    1           //1:hwc control two lcdc for display
-#define USE_QUEUE_DDRFREQ               0
+#define USE_QUEUE_DDRFREQ               1
 
 #ifdef GPU_G6110
 #define G6110_SUPPORT_FBDC              0
@@ -82,7 +82,7 @@
 #define GPU_DST_FORMAT  DstHandle->format
 
 
-#define GHWC_VERSION  "2.030"
+#define GHWC_VERSION  "2.031"
 //HWC version Tag
 //Get commit info:  git log --format="Author: %an%nTime:%cd%nCommit:%h%n%n%s%n%n"
 //Get version: busybox strings /system/lib/hw/hwcomposer.rk30board.so | busybox grep HWC_VERSION
