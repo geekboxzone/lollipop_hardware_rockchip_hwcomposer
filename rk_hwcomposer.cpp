@@ -1158,9 +1158,10 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
         if(Context->zone_manager.zone_info[j].format == HAL_PIXEL_FORMAT_YCrCb_NV12
             || haveStartwin)
             bpp = 2;
+#ifdef GPU_G6110
         else if(Context->zone_manager.zone_info[j].format == HAL_PIXEL_FORMAT_BGRX_8888)
             bpp = 4;
-
+#endif
        // ALOGD("haveStartwin=%d,bpp=%d",haveStartwin,bpp);    
         Context->zone_manager.zone_info[j].size = srcw*srch*bpp;
         if(Context->zone_manager.zone_info[j].hfactor > 1.0 || Context->mIsMediaView)
