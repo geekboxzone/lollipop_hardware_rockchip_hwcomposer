@@ -2452,7 +2452,7 @@ int try_wins_dispatch_mix_vh (hwcContext * Context,hwc_display_contents_1_t * li
         mix_index = 0;
         return -1;
     }
-    if(list->numHwLayers - 1 < 3)
+    if(list->numHwLayers - 1 < 2)
     {
     	return -1;
     }
@@ -4231,7 +4231,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
     {
         return 0;
     }
-    
+
 #ifdef GPU_G6110
     if(_contextAnchor->mHdmiSI.anroidSt)
         goto GpuComP;
@@ -4261,14 +4261,15 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
         {
             LOGGPUCOP("Back to gpu compositon line[%d],fun[%s]",__LINE__,__FUNCTION__);
             goto GpuComP;
-        }else if(handle != NULL &&(GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12 || GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_10
-                || GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO) && list->numHwLayers-1 > 2)
+        }else if(handle != NULL &&(GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12 
+            || GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_10
+                || GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO))
         {
             _contextAnchor->mHdmiSI.vh_flag = true;
         }else
         {
             _contextAnchor->mHdmiSI.vh_flag = false;
-        }
+        }   
     }
 #endif
     
@@ -4776,6 +4777,24 @@ hwc_prepare(
         if(displays[i] != NULL)
         {
             unsigned int numlayer = displays[i]->numHwLayers;
+            if(i == 1){
+                int needStereo = 0;
+                for (unsigned int j = 0; j <(numlayer - 1); j++) {
+                    if(displays[i]->hwLayers[j].alreadyStereo) {
+                        needStereo = displays[i]->hwLayers[j].alreadyStereo;
+                        break;
+                    }
+                }
+                if(needStereo) {
+                    for (unsigned int j = 0; j <(numlayer - 1); j++) {
+                        displays[i]->hwLayers[j].displayStereo = needStereo;
+                    }
+                }else{
+                    for (unsigned int j = 0; j <(numlayer - 1); j++) {
+                        displays[i]->hwLayers[j].displayStereo = needStereo;
+                    }
+                }
+            }
             for(unsigned int j=0;j<numlayer - 1;j++)
             {
                 hwc_layer_1_t* layer = &displays[i]->hwLayers[j];
@@ -4799,6 +4818,9 @@ hwc_prepare(
                     _contextAnchor->mHdmiSI.anroidSt = true;
                     //ALOGD("_contextAnchor->mHdmiSI.hdmi_anm = 1,Android is starting");
                 }
+                if(i == 1 && layer && SrcHnd && SrcHnd->format == HAL_PIXEL_FORMAT_YCrCb_NV12 
+                    && layer->alreadyStereo && layer->displayStereo)
+                    layer->displayStereo = 0;
             }
         }
     }
