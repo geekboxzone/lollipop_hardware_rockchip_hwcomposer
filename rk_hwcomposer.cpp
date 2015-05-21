@@ -4811,7 +4811,7 @@ hwc_prepare(
                     _contextAnchor->mHdmiSI.hdmi_anm = 1;
                     //ALOGD("_contextAnchor->mHdmiSI.hdmi_anm = 1,BootAnimation");
                 }
-                else if(strstr(layer->LayerName,"Android is starting") != NULL && (getHdmiMode() == 1
+                else if(strstr(layer->LayerName,"Android ") == layer->LayerName && (getHdmiMode() == 1
                     || _contextAnchor->mHdmiSI.CvbsOn))
                 {
                     _contextAnchor->mHdmiSI.hdmi_anm = 1;
