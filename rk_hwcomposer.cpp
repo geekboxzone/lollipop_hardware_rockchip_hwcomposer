@@ -4266,21 +4266,6 @@ int hwc_prepare_virtual(hwc_composer_device_1_t * dev, hwc_display_contents_1_t 
 
 static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1_t *list, int dpyID) 
 {
-#if (defined(GPU_G6110) || defined(RK3288_BOX))
-    if((!hdmi_noready && (getHdmiMode() == 1 || _contextAnchor->mHdmiSI.CvbsOn)) && dpyID == 0 ) 
-    {
-        for (unsigned int i = 0; i < (list->numHwLayers - 1); i++)
-        {
-            hwc_layer_1_t * layer = &list->hwLayers[i];
-            layer->compositionType = HWC_NODRAW;
-        }
-        return 0;
-    }
-    if(hdmi_noready && dpyID == 1)    
-    {
-        return 0;
-    }
-#endif
 
 	size_t i;
     size_t j;
@@ -4310,6 +4295,23 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
     {
         return 0;
     }
+    
+#if (defined(GPU_G6110) || defined(RK3288_BOX))
+    if((!hdmi_noready  && dpyID == 0 
+        && (getHdmiMode() == 1 || _contextAnchor->mHdmiSI.CvbsOn))) 
+    {
+        for (unsigned int i = 0; i < (list->numHwLayers - 1); i++)
+        {
+            hwc_layer_1_t * layer = &list->hwLayers[i];
+            layer->compositionType = HWC_NODRAW;
+        }
+        return 0;
+    }
+    if(hdmi_noready && dpyID == 1)
+    {
+        return 0;
+    }
+#endif
 
 #if (defined(GPU_G6110) || defined(RK3288_BOX))
     if(_contextAnchor->mHdmiSI.anroidSt)
@@ -4995,16 +4997,21 @@ static int hwc_fbPost(hwc_composer_device_1_t * dev, size_t numDisplays, hwc_dis
 
 static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
 {
+
+    if (list == NULL)
+    {
+        return -1;
+    }
+
 #if (defined(GPU_G6110) || defined(RK3288_BOX))
-    if((!hdmi_noready && (getHdmiMode() == 1 || _contextAnchor->mHdmiSI.CvbsOn)) && context == _contextAnchor)
+    if((!hdmi_noready && (getHdmiMode() == 1 
+        || _contextAnchor->mHdmiSI.CvbsOn)) 
+            && context == _contextAnchor)
     {
         return 0;
     }
 #endif
-    if (list == NULL)
-    {
-        return -1;
-    }    
+    
     if (context->fbFd>0 && !context->fb_blanked)
     {      
         struct fb_var_screeninfo info;
