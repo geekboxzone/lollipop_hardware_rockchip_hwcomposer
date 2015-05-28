@@ -697,7 +697,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
         hwc_rect_t  rect_merge;
         bool haveStartwin = false;
         bool trsfrmbyrga = false;
-#ifdef RK3368_BOX
+#if (defined(RK3368_BOX) || defined(RK3288_BOX))
         int d_w = 0;  //external weight & height
         int d_h = 0;
         int s_w = 0;
@@ -808,7 +808,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
             dstRects[0].top    = DstRect->top;
             dstRects[0].right  = DstRect->right;
             dstRects[0].bottom = DstRect->bottom;
-#ifdef RK3368_BOX
+#if (defined(RK3368_BOX) || defined(RK3288_BOX))
             if(Context == _contextAnchor1 && NeedScale)
             {
                 s_w = SrcRect->right - SrcRect->left;
@@ -1176,7 +1176,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
         }        
         else
             Context->zone_manager.zone_info[j].is_large = 0; 
-#ifdef RK3368_BOX
+#if (defined(RK3368_BOX) || defined(RK3288_BOX))
         if((SrcHnd->format == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO ||
             SrcHnd->format == HAL_PIXEL_FORMAT_YCrCb_NV12) &&(Context == _contextAnchor1 && NeedScale))
         {
@@ -3043,7 +3043,7 @@ check_layer(
 #endif
           )
 #endif
-#ifndef GPU_G6110
+#if !(defined(GPU_G6110) || defined(RK3288_BOX))
         || skip_count<10 
 #endif
         || (handle->type == 1 && !_contextAnchor->iommuEn)
@@ -4106,6 +4106,28 @@ BackToGPU:
 #endif
 
 //extern "C" void *blend(uint8_t *dst, uint8_t *src, int dst_w, int src_w, int src_h);
+int dump_prepare_info(hwc_display_contents_1_t** displays, int flag)
+{
+    char pro_value[PROPERTY_VALUE_MAX];
+    property_get("sys.dump",pro_value,0);
+    if(!strcmp(pro_value,"true"))
+    {
+        for(int i=0;i<2;i++)
+        {
+            if(displays[i] != NULL)
+            {
+                for(unsigned int j=0;j<displays[i]->numHwLayers -1;j++)
+                {
+                    hwc_layer_1_t* layer = &displays[i]->hwLayers[j];
+                    if (layer != NULL)
+                        ALOGD("dID=%d,layername=%s,alreadyStereo=%d,displayStereo=%d",
+                            i,layer->LayerName,layer->alreadyStereo,layer->displayStereo);
+                }
+            }
+        }
+    }
+    return 0;
+}
 
 int dump_config_info(struct rk_fb_win_cfg_data fb_info ,hwcContext * context, int flag)
 {
@@ -4161,6 +4183,63 @@ int dump_config_info(struct rk_fb_win_cfg_data fb_info ,hwcContext * context, in
     return 0;
 }
 
+int hwc_pre_prepare(hwc_display_contents_1_t** displays, int flag)
+{
+#if (defined(GPU_G6110) || defined(RK3288_BOX))
+    for(int i=0;i<2;i++)
+    {
+        if(displays[i] != NULL)
+        {
+            unsigned int numlayer = displays[i]->numHwLayers;
+            if(i == 1){
+                int needStereo = 0;
+                for (unsigned int j = 0; j <(numlayer - 1); j++) {
+                    if(displays[i]->hwLayers[j].alreadyStereo) {
+                        needStereo = displays[i]->hwLayers[j].alreadyStereo;
+                        break;
+                    }
+                }
+                if(needStereo) {
+                    for (unsigned int j = 0; j <(numlayer - 1); j++) {
+                        displays[i]->hwLayers[j].displayStereo = needStereo;
+                    }
+                }else{
+                    for (unsigned int j = 0; j <(numlayer - 1); j++) {
+                        displays[i]->hwLayers[j].displayStereo = needStereo;
+                    }
+                }
+            }
+            for(unsigned int j=0;j<numlayer - 1;j++)
+            {
+                hwc_layer_1_t* layer = &displays[i]->hwLayers[j];
+                struct private_handle_t* SrcHnd = (struct private_handle_t *) layer->handle;
+                if (layer == NULL)
+                    ;
+                else if(strstr(layer->LayerName,"BootAnimation") != NULL && (getHdmiMode() == 1 
+                    || _contextAnchor->mHdmiSI.CvbsOn))
+                {
+                    layer->sourceCrop.left = 0;
+                    layer->sourceCrop.top = 0;
+                    layer->sourceCrop.right = SrcHnd->stride;
+                    layer->sourceCrop.bottom = SrcHnd->height;
+                    _contextAnchor->mHdmiSI.hdmi_anm = 1;
+                }
+                else if(strstr(layer->LayerName,"Android ") == layer->LayerName && (getHdmiMode() == 1
+                    || _contextAnchor->mHdmiSI.CvbsOn))
+                {
+                    _contextAnchor->mHdmiSI.hdmi_anm = 1;
+                    _contextAnchor->mHdmiSI.anroidSt = true;
+                }
+                if(i == 1 && layer && SrcHnd && SrcHnd->format == HAL_PIXEL_FORMAT_YCrCb_NV12
+                    && layer->alreadyStereo && layer->displayStereo)
+                    layer->displayStereo = 0;
+            }
+        }
+    }
+#endif
+    return 0;
+}
+
 int hwc_prepare_virtual(hwc_composer_device_1_t * dev, hwc_display_contents_1_t  *contents)
 {
 	if (contents==NULL)
@@ -4187,7 +4266,7 @@ int hwc_prepare_virtual(hwc_composer_device_1_t * dev, hwc_display_contents_1_t 
 
 static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1_t *list, int dpyID) 
 {
-#ifdef GPU_G6110
+#if (defined(GPU_G6110) || defined(RK3288_BOX))
     if((!hdmi_noready && (getHdmiMode() == 1 || _contextAnchor->mHdmiSI.CvbsOn)) && dpyID == 0 ) 
     {
         for (unsigned int i = 0; i < (list->numHwLayers - 1); i++)
@@ -4232,7 +4311,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
         return 0;
     }
 
-#ifdef GPU_G6110
+#if (defined(GPU_G6110) || defined(RK3288_BOX))
     if(_contextAnchor->mHdmiSI.anroidSt)
         goto GpuComP;
 #endif
@@ -4250,7 +4329,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
         context->video_info[i].bMatch=false;
     }
 #endif
-#ifdef GPU_G6110
+#if (defined(GPU_G6110) || defined(RK3288_BOX))
     if(context == _contextAnchor1 && list != NULL)
     {
         struct private_handle_t * handle = (struct private_handle_t *) list->hwLayers[0].handle;
@@ -4616,7 +4695,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
             goto GpuComP;
         }
         #else
-#ifdef GPU_G6110
+#if (defined(GPU_G6110) || defined(RK3288_BOX))
         if(_contextAnchor->mHdmiSI.vh_flag)
         {
             ret = try_wins_dispatch_mix_vh(context,list);
@@ -4654,7 +4733,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
     }   
     else
     {
-#ifdef GPU_G6110    
+#if (defined(GPU_G6110) || defined(RK3288_BOX))    
         if(_contextAnchor->mHdmiSI.vh_flag)
         {
            ret = try_wins_dispatch_mix_vh(context,list);
@@ -4748,83 +4827,6 @@ hwc_prepare(
     int ret = 0;
     size_t i;
     hwc_display_contents_1_t* list = displays[0];  // ignore displays beyond the first  
-    /*check layers of every list*/
-    {
-        char pro_value[PROPERTY_VALUE_MAX];
-        property_get("sys.dump",pro_value,0);
-        if(!strcmp(pro_value,"true"))
-        {
-        	for(int i=0;i<2;i++)
-        	{
-        		if(displays[i] != NULL)
-        		{
-        			for(unsigned int j=0;j<displays[i]->numHwLayers -1;j++)
-        			{
-                		hwc_layer_1_t* layer = &displays[i]->hwLayers[j];
-                		if (layer == NULL)
-                			;
-                		else
-                		    ALOGD("dID=%d,layername=%s",i,layer->LayerName);
-        			}
-        		}
-        	}
-	    }
-	}
-
-#ifdef GPU_G6110
-    for(int i=0;i<2;i++)
-    {
-        if(displays[i] != NULL)
-        {
-            unsigned int numlayer = displays[i]->numHwLayers;
-            if(i == 1){
-                int needStereo = 0;
-                for (unsigned int j = 0; j <(numlayer - 1); j++) {
-                    if(displays[i]->hwLayers[j].alreadyStereo) {
-                        needStereo = displays[i]->hwLayers[j].alreadyStereo;
-                        break;
-                    }
-                }
-                if(needStereo) {
-                    for (unsigned int j = 0; j <(numlayer - 1); j++) {
-                        displays[i]->hwLayers[j].displayStereo = needStereo;
-                    }
-                }else{
-                    for (unsigned int j = 0; j <(numlayer - 1); j++) {
-                        displays[i]->hwLayers[j].displayStereo = needStereo;
-                    }
-                }
-            }
-            for(unsigned int j=0;j<numlayer - 1;j++)
-            {
-                hwc_layer_1_t* layer = &displays[i]->hwLayers[j];
-                struct private_handle_t* SrcHnd = (struct private_handle_t *) layer->handle;
-                if (layer == NULL)
-                	;
-                else if(strstr(layer->LayerName,"BootAnimation") != NULL && (getHdmiMode() == 1 
-                    || _contextAnchor->mHdmiSI.CvbsOn))
-                {
-                    layer->sourceCrop.left = 0;
-                    layer->sourceCrop.top = 0;
-                    layer->sourceCrop.right = SrcHnd->stride;
-                    layer->sourceCrop.bottom = SrcHnd->height;
-                    _contextAnchor->mHdmiSI.hdmi_anm = 1;
-                    //ALOGD("_contextAnchor->mHdmiSI.hdmi_anm = 1,BootAnimation");
-                }
-                else if(strstr(layer->LayerName,"Android ") == layer->LayerName && (getHdmiMode() == 1
-                    || _contextAnchor->mHdmiSI.CvbsOn))
-                {
-                    _contextAnchor->mHdmiSI.hdmi_anm = 1;
-                    _contextAnchor->mHdmiSI.anroidSt = true;
-                    //ALOGD("_contextAnchor->mHdmiSI.hdmi_anm = 1,Android is starting");
-                }
-                if(i == 1 && layer && SrcHnd && SrcHnd->format == HAL_PIXEL_FORMAT_YCrCb_NV12 
-                    && layer->alreadyStereo && layer->displayStereo)
-                    layer->displayStereo = 0;
-            }
-        }
-    }
-#endif
 
     /* Check device handle. */
     if (context == NULL
@@ -4835,19 +4837,23 @@ hwc_prepare(
         return HWC_EGL_ERROR;
     }
 
+    hwc_pre_prepare(displays,0);
+    dump_prepare_info(displays,0);
+
 #if hwcDumpSurface
     _DumpSurface(list);
 #endif
-#if HWC_EXTERNAL
-	if(_contextAnchor->mHdmiSI.flag_hwcup_external < 5 && getHdmiMode() == 1 &&
-	    _contextAnchor->mHdmiSI.flag_external == 0 && _contextAnchor->mHdmiSI.flag_blank == 0)
+
+	if(context->mHdmiSI.flag_hwcup_external < 5 && getHdmiMode() == 1 &&
+	    context->mHdmiSI.flag_external == 0 && context->mHdmiSI.flag_blank == 0)
 	{
-		_contextAnchor->mHdmiSI.flag_hwcup_external ++;
+		context->mHdmiSI.flag_hwcup_external ++;
 	}
-#endif
+
     context->zone_manager.composter_mode = HWC_FRAMEBUFFER;
     if(_contextAnchor1 != NULL)
         _contextAnchor1->zone_manager.composter_mode = HWC_FRAMEBUFFER;
+        
     /* Roll back to FRAMEBUFFER if any layer can not be handled. */
     if(hwc_get_int_property("sys.hwc.compose_policy","0") <= 0 )
     {
@@ -4855,8 +4861,9 @@ hwc_prepare(
         {
             list->hwLayers[i].compositionType = HWC_FRAMEBUFFER;
         }
-#ifdef GPU_G6110
-        if(!hdmi_noready && getHdmiMode() == 1) //rk3368 box: hdmi is ready ,primary need nodraw
+        
+#if (defined(GPU_G6110) || defined(RK3288_BOX))
+        if(!hdmi_noready && getHdmiMode() == 1)
         {
             for (unsigned int i = 0; i < (list->numHwLayers - 1); i++)
             {
@@ -4988,7 +4995,7 @@ static int hwc_fbPost(hwc_composer_device_1_t * dev, size_t numDisplays, hwc_dis
 
 static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
 {
-#ifdef GPU_G6110
+#if (defined(GPU_G6110) || defined(RK3288_BOX))
     if((!hdmi_noready && (getHdmiMode() == 1 || _contextAnchor->mHdmiSI.CvbsOn)) && context == _contextAnchor)
     {
         return 0;
@@ -5080,7 +5087,7 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
 	    fb_info.wait_fs=0;
 #endif
         dump_config_info(fb_info,context,2);
-#ifdef GPU_G6110
+#if (defined(GPU_G6110) || defined(RK3288_BOX))
         if(_contextAnchor->mHdmiSI.anroidSt && context == _contextAnchor)
         {
             _contextAnchor->mHdmiSI.anroidSt = false;
@@ -5375,7 +5382,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
         }
         // close UI win:external always do it
         if(context->vui_hide == 1 
-#ifndef RK3368_BOX
+#if (defined(RK3368_BOX) || defined(RK3288_BOX))
         || context == _contextAnchor1
 #endif
         )
@@ -5533,11 +5540,11 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
         }
 #endif
         ALOGV("lcdc config done");
-#ifdef GPU_G6110
+#if (defined(GPU_G6110) || defined(RK3288_BOX))
         if(hdmi_noready || context == _contextAnchor1)
 #endif
         {
-#ifdef GPU_G6110 
+#if (defined(GPU_G6110) || defined(RK3288_BOX)) 
             if(_contextAnchor->mHdmiSI.hdmi_anm == 1)
             {
                 _contextAnchor->mHdmiSI.hdmi_anm = 0;
@@ -5634,10 +5641,10 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
 
 static int hwc_set_screen(hwc_composer_device_1 *dev, hwc_display_contents_1_t *list,int dpyID) 
 {
-#ifdef GPU_G6110
+#if (defined(GPU_G6110) || defined(RK3288_BOX))
     if(hdmi_noready && dpyID == 1)
     {
-#ifdef RK3368_BOX
+#if (defined(RK3368_BOX) || defined(RK3288_BOX))
         if((!hdmi_noready && (getHdmiMode() == 1 || _contextAnchor->mHdmiSI.CvbsOn)))
         {
             hdmi_set_frame(_contextAnchor,0);
@@ -5712,7 +5719,7 @@ static int hwc_set_screen(hwc_composer_device_1 *dev, hwc_display_contents_1_t *
     {
         hwc_set_lcdc(context,list,2);
     }
-#ifndef GPU_G6110
+#if !(defined(GPU_G6110) || defined(RK3288_BOX))
     if(dpyID == 0)
 #endif
     {
@@ -5841,7 +5848,7 @@ hwc_set(
 {
 
     int ret = 0;
-#ifdef GPU_G6110
+#if (defined(GPU_G6110) || defined(RK3288_BOX))
     if(getHdmiMode() == 1 || _contextAnchor->mHdmiSI.CvbsOn)
         hdmi_set_overscan(0);
 #endif
@@ -5964,10 +5971,10 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
     case 1:
         if(hdmi_mode && context->mHdmiSI.flag_external == 0)
         {
-#ifdef RK3368_BOX
+#if (defined(RK3368_BOX) || defined(RK3288_BOX))
             if(context->mHdmiSI.CvbsOn)
             {
-                usleep(500000);
+                //usleep(500000);
     #if OPTIMIZATION_FOR_DIMLAYER
     			if(_contextAnchor1 && _contextAnchor1->mDimHandle)
     			{
@@ -5980,7 +5987,7 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
                 context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 0);
                 context->mHdmiSI.CvbsOn = false;
                 hdmi_set_frame(context,0);
-                usleep(50000);
+                //usleep(50000);
             }
 #endif
             if(hdmi_get_config(0) != 1)
@@ -5994,7 +6001,7 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
             context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, hdmi_mode);
             context->mHdmiSI.flag_external = 1;
             ALOGD("TRY to connet to hotplug device line=%d",__LINE__);
-#ifdef GPU_G6110
+#if (defined(GPU_G6110) || defined(RK3288_BOX))
             hdmi_set_overscan(0);
 #endif
         }
@@ -6002,10 +6009,10 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
         {
             if(context->mHdmiSI.flag_external == 1)
             {
-#ifndef GPU_G6110
+#if !(defined(GPU_G6110) || defined(RK3288_BOX))
                 if(hdmi_set_frame(context,0))
                 {
-                    usleep(50000);
+                    //usleep(50000);
                     if(hdmi_set_frame(context,0))
                     {
                         ALOGE("set last frame but kernel return fenceFd not -1");
@@ -6016,7 +6023,7 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
                 _contextAnchor->mHdmiSI.NeedReDst = false;
 				context->dpyAttr[HWC_DISPLAY_EXTERNAL].connected = false;
                 context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, hdmi_mode);
-#if GPU_G6110
+#if (defined(GPU_G6110) || defined(RK3288_BOX))
                 hdmi_set_overscan(1);
 #endif        
                 context->mHdmiSI.flag_external = 0;
@@ -6033,7 +6040,7 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
         }    
         break;
 
-#ifdef RK3368_BOX
+#if (defined(RK3368_BOX) || defined(RK3288_BOX))
     case 2:
         if(!hdmi_mode || context->mHdmiSI.CvbsOn)
         {
@@ -6066,7 +6073,7 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
             }
             context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 1);
             ALOGD("TRY to connet to hotplug cvbs device line=%d",__LINE__);
-    #if GPU_G6110
+    #if (defined(GPU_G6110) || defined(RK3288_BOX))
             hdmi_set_overscan(0);
     #endif 
             context->mHdmiSI.CvbsOn = true;
@@ -6089,12 +6096,12 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
 #endif      
             hdmi_get_config(0);
             hdmi_set_config();
-#if GPU_G6110
+#if (defined(GPU_G6110) || defined(RK3288_BOX))
             hdmi_set_overscan(1);
 #endif 
-            usleep(50000);
+            //usleep(50000);
             context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 1);
-#if GPU_G6110
+#if (defined(GPU_G6110) || defined(RK3288_BOX))
             hdmi_set_overscan(0);
 #endif 
         }
@@ -7016,7 +7023,7 @@ int hdmi_get_config(int flag){
 	info.grayscale = 0;
 	info.grayscale |= info.xres<< 8;
 	info.grayscale |= info.yres<<20;
-#ifdef GPU_G6110
+#if (defined(GPU_G6110) || defined(RK3288_BOX))
     if(_contextAnchor->fbFd > 0){
         fd  =  _contextAnchor->fbFd;
     }else{
@@ -7034,14 +7041,14 @@ int hdmi_get_config(int flag){
 	    ALOGE("hdmi_get_config:open /dev/graphics/fb4 fail");
         return -errno;
 	}
-#ifndef GPU_G6110
+#if !(defined(GPU_G6110) || defined(RK3288_BOX))
 	if (ioctl(fd, FBIOPUT_VSCREENINFO, &info) == -1)
 	{
 	    ALOGE("hdmi_get_config:FBIOPUT_VSCREENINFO error,hdmifd=%d",fd);
         return -errno;
 	}
 #endif
-#ifdef RK3368_BOX
+#if (defined(RK3368_BOX) || defined(RK3288_BOX))
     if(flag == 1)
     {
         char buf[100];
@@ -7293,7 +7300,7 @@ int hdmi_set_config(){
         _contextAnchor->dpyAttr[HWC_DISPLAY_EXTERNAL].ydpi = _contextAnchor1->dpyAttr[HWC_DISPLAY_EXTERNAL].ydpi;
         _contextAnchor->dpyAttr[HWC_DISPLAY_EXTERNAL].vsync_period = _contextAnchor1->dpyAttr[HWC_DISPLAY_EXTERNAL].vsync_period;
         _contextAnchor->dpyAttr[HWC_DISPLAY_EXTERNAL].connected = true;
-#ifdef GPU_G6110
+#if (defined(GPU_G6110) || defined(RK3288_BOX))
         if(_contextAnchor->dpyAttr[HWC_DISPLAY_EXTERNAL].yres > 1080)  //box source can not be bigger than 1080p
         {
             _contextAnchor->dpyAttr[HWC_DISPLAY_EXTERNAL].xres = 1920;
@@ -7391,7 +7398,7 @@ void *hdmi_try_hotplug(void *arg)
 			break;
         }
     }while(_contextAnchor->mHdmiSI.flag_hwcup_external < 3 && getHdmiMode()==1);
-#ifdef RK3368_BOX
+#if (defined(RK3368_BOX) || defined(RK3288_BOX))
     if(getHdmiMode() == 0)
     {
         _contextAnchor->mHdmiSI.CvbsOn = true;
@@ -7408,7 +7415,7 @@ void *hdmi_try_hotplug(void *arg)
         }
         _contextAnchor->procs->hotplug(_contextAnchor->procs, HWC_DISPLAY_EXTERNAL, 1);
         ALOGD("TRY to connet to hotplug cvbs device line=%d",__LINE__);
-#if GPU_G6110
+#if (defined(GPU_G6110) || defined(RK3288_BOX))
         hdmi_set_overscan(0);
 #endif 
         _contextAnchor->mHdmiSI.CvbsOn = true;
