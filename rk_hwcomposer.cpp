@@ -4186,6 +4186,9 @@ int dump_config_info(struct rk_fb_win_cfg_data fb_info ,hwcContext * context, in
 int hwc_pre_prepare(hwc_display_contents_1_t** displays, int flag)
 {
 #if (defined(GPU_G6110) || defined(RK3288_BOX))
+    hwcContext * context = _contextAnchor;
+    context->mHdmiSI.hdmi_anm = 0;
+    context->mHdmiSI.anroidSt = false;
     for(int i=0;i<2;i++)
     {
         if(displays[i] != NULL)
@@ -4216,19 +4219,19 @@ int hwc_pre_prepare(hwc_display_contents_1_t** displays, int flag)
                 if (layer == NULL)
                     ;
                 else if(strstr(layer->LayerName,"BootAnimation") != NULL && (getHdmiMode() == 1 
-                    || _contextAnchor->mHdmiSI.CvbsOn))
+                    || context->mHdmiSI.CvbsOn))
                 {
                     layer->sourceCrop.left = 0;
                     layer->sourceCrop.top = 0;
                     layer->sourceCrop.right = SrcHnd->stride;
                     layer->sourceCrop.bottom = SrcHnd->height;
-                    _contextAnchor->mHdmiSI.hdmi_anm = 1;
+                    context->mHdmiSI.hdmi_anm = 1;
                 }
                 else if(strstr(layer->LayerName,"Android ") == layer->LayerName && (getHdmiMode() == 1
-                    || _contextAnchor->mHdmiSI.CvbsOn))
+                    || context->mHdmiSI.CvbsOn))
                 {
-                    _contextAnchor->mHdmiSI.hdmi_anm = 1;
-                    _contextAnchor->mHdmiSI.anroidSt = true;
+                    context->mHdmiSI.hdmi_anm = 1;
+                    context->mHdmiSI.anroidSt = true;
                 }
                 if(i == 1 && layer && SrcHnd && SrcHnd->format == HAL_PIXEL_FORMAT_YCrCb_NV12
                     && layer->alreadyStereo && layer->displayStereo)
