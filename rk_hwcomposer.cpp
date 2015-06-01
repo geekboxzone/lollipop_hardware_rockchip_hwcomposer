@@ -5945,7 +5945,8 @@ static void handle_vsync_event(hwcContext * context )
 
   //  errno = 0;
     uint64_t timestamp = strtoull(buf, NULL, 0) ;/*+ (uint64_t)(1e9 / context->fb_fps)  ;*/
-
+    context->procs->vsync(context->procs, 0, timestamp);
+/*
     uint64_t mNextFakeVSync = timestamp + (uint64_t)(1e9 / context->fb_fps);
 
 
@@ -5967,6 +5968,7 @@ static void handle_vsync_event(hwcContext * context )
     {
         ALOGE(" clock_nanosleep ERR!!!");
     }
+*/
 }
 
 void handle_hotplug_event(int hdmi_mode ,int flag )
