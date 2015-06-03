@@ -4189,6 +4189,8 @@ int hwc_pre_prepare(hwc_display_contents_1_t** displays, int flag)
     hwcContext * context = _contextAnchor;
     context->mHdmiSI.hdmi_anm = 0;
     context->mHdmiSI.anroidSt = false;
+    context->mHdmiSI.IsVideo3D = false;
+    context->mHdmiSI.Is3D = false;
     for(int i=0;i<2;i++)
     {
         if(displays[i] != NULL)
@@ -4203,6 +4205,7 @@ int hwc_pre_prepare(hwc_display_contents_1_t** displays, int flag)
                     }
                 }
                 if(needStereo) {
+                    context->mHdmiSI.Is3D = true;
                     for (unsigned int j = 0; j <(numlayer - 1); j++) {
                         displays[i]->hwLayers[j].displayStereo = needStereo;
                     }
@@ -4235,7 +4238,10 @@ int hwc_pre_prepare(hwc_display_contents_1_t** displays, int flag)
                 }
                 if(i == 1 && layer && SrcHnd && SrcHnd->format == HAL_PIXEL_FORMAT_YCrCb_NV12
                     && layer->alreadyStereo && layer->displayStereo)
+                {
                     layer->displayStereo = 0;
+                    context->mHdmiSI.IsVideo3D = true;
+                }
             }
         }
     }
@@ -4347,7 +4353,8 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
             goto GpuComP;
         }else if(handle != NULL &&(GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12 
             || GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_10
-                || GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO))
+                || GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
+                    && ((list->numHwLayers-1) > 2 && !_contextAnchor->mHdmiSI.IsVideo3D))
         {
             _contextAnchor->mHdmiSI.vh_flag = true;
         }else
