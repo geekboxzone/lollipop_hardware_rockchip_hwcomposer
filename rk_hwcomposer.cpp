@@ -5399,7 +5399,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
         }
         // close UI win:external always do it
         if(context->vui_hide == 1 
-#if (defined(RK3368_BOX) || defined(RK3288_BOX))
+#if !(defined(RK3368_BOX) || defined(RK3288_BOX))
         || context == _contextAnchor1
 #endif
         )
@@ -5993,7 +5993,7 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
 #if (defined(RK3368_BOX) || defined(RK3288_BOX))
             if(context->mHdmiSI.CvbsOn)
             {
-                //usleep(500000);
+                usleep(500000);
     #if OPTIMIZATION_FOR_DIMLAYER
     			if(_contextAnchor1 && _contextAnchor1->mDimHandle)
     			{
@@ -6006,7 +6006,7 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
                 context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 0);
                 context->mHdmiSI.CvbsOn = false;
                 hdmi_set_frame(context,0);
-                //usleep(50000);
+                usleep(50000);
             }
 #endif
             if(hdmi_get_config(0) != 1)
@@ -6031,7 +6031,7 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
 #if !(defined(GPU_G6110) || defined(RK3288_BOX))
                 if(hdmi_set_frame(context,0))
                 {
-                    //usleep(50000);
+                    usleep(50000);
                     if(hdmi_set_frame(context,0))
                     {
                         ALOGE("set last frame but kernel return fenceFd not -1");
@@ -6118,7 +6118,7 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
 #if (defined(GPU_G6110) || defined(RK3288_BOX))
             hdmi_set_overscan(1);
 #endif 
-            //usleep(50000);
+            usleep(50000);
             context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 1);
 #if (defined(GPU_G6110) || defined(RK3288_BOX))
             hdmi_set_overscan(0);
