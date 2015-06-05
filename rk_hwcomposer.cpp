@@ -4120,8 +4120,12 @@ int dump_prepare_info(hwc_display_contents_1_t** displays, int flag)
                 {
                     hwc_layer_1_t* layer = &displays[i]->hwLayers[j];
                     if (layer != NULL)
+#ifdef SUPPORT_STEREO
                         ALOGD("dID=%d,layername=%s,alreadyStereo=%d,displayStereo=%d",
                             i,layer->LayerName,layer->alreadyStereo,layer->displayStereo);
+#else
+                        ALOGD("dID=%d,layername=%s",i,layer->LayerName);
+#endif
                 }
             }
         }
@@ -4191,6 +4195,7 @@ int hwc_pre_prepare(hwc_display_contents_1_t** displays, int flag)
     context->mHdmiSI.anroidSt = false;
     context->mHdmiSI.IsVideo3D = false;
     context->mHdmiSI.Is3D = false;
+#ifdef SUPPORT_STEREO
     for(int i=0;i<2;i++)
     {
         if(displays[i] != NULL)
@@ -4245,6 +4250,7 @@ int hwc_pre_prepare(hwc_display_contents_1_t** displays, int flag)
             }
         }
     }
+#endif
 #endif
     return 0;
 }

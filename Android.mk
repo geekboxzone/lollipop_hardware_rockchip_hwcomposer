@@ -45,6 +45,7 @@ ifneq (1,$(strip $(shell expr $(PLATFORM_VERSION) \>= 5.0)))
 else
        LOCAL_C_INCLUDES += hardware/rockchip/libgralloc \
        hardware/rockchip/librkvpu
+       LOCAL_CFLAGS += -DSUPPORT_STEREO
 endif
 
 LOCAL_LDFLAGS := \
