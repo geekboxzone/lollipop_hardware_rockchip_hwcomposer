@@ -4863,7 +4863,7 @@ hwc_prepare(
 #endif
 
 	if(context->mHdmiSI.flag_hwcup_external < 5 && getHdmiMode() == 1 &&
-	    context->mHdmiSI.flag_external == 0 && context->mHdmiSI.flag_blank == 0)
+	    context->mHdmiSI.HdmiOn == 0 && context->mHdmiSI.flag_blank == 0)
 	{
 		context->mHdmiSI.flag_hwcup_external ++;
 	}
@@ -5987,6 +5987,60 @@ static void handle_vsync_event(hwcContext * context )
 void handle_hotplug_event(int hdmi_mode ,int flag )
 {
     hwcContext * context = _contextAnchor;
+#ifdef RK3288_BOX
+    if (!context->procs)
+        return;
+
+    if(context->mHdmiSI.CvbsOn || context->mHdmiSI.HdmiOn)
+    {
+        int count = 0;
+        while(_contextAnchor1->fb_blanked)
+        {
+            count++;
+            usleep(10000);
+            if(50==count){
+                ALOGW("wait for unblank");
+                break;
+            }
+        }
+#if OPTIMIZATION_FOR_DIMLAYER
+		if(_contextAnchor1 && _contextAnchor1->mDimHandle)
+		{
+		    buffer_handle_t mhandle = _contextAnchor1->mDimHandle;
+            int err = context->mAllocDev->free(context->mAllocDev, mhandle);
+            ALOGW_IF(err,"free mDimHandle failed %d (%s)", err, strerror(-err));
+
+		}
+        _contextAnchor1->mDimHandle = 0;
+#endif
+        if(context->mHdmiSI.CvbsOn)
+            context->mHdmiSI.CvbsOn = false;
+        else
+            context->mHdmiSI.HdmiOn = false;
+        _contextAnchor1->fb_blanked = 1;
+        hdmi_set_frame(context,0);
+        context->dpyAttr[HWC_DISPLAY_EXTERNAL].connected = false;
+        context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 0);
+        ALOGI("connet to hotplug device [%d,%d,%d]",__LINE__,hdmi_mode,flag);
+    }
+    if(hdmi_mode)
+    {
+        hdmi_get_config(1);
+        hdmi_set_config();
+        if(6 == flag)
+            context->mHdmiSI.HdmiOn = true;
+        else if(1 == flag)
+            context->mHdmiSI.CvbsOn = true;
+        hdmi_set_frame(context,0);
+        context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 1);
+        ALOGI("connet to hotplug device [%d,%d,%d]",__LINE__,hdmi_mode,flag);
+#if (defined(GPU_G6110) || defined(RK3288_BOX))
+        hdmi_set_overscan(0);
+#endif
+    }
+
+    return;
+#else
 #if HWC_EXTERNAL
     if (!context->procs)
         return;
@@ -5994,7 +6048,7 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
     switch(flag){
     case 0:
     case 1:
-        if(hdmi_mode && context->mHdmiSI.flag_external == 0)
+        if(hdmi_mode && !context->mHdmiSI.HdmiOn)
         {
 #if (defined(RK3368_BOX) || defined(RK3288_BOX))
             if(context->mHdmiSI.CvbsOn)
@@ -6024,7 +6078,7 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
                 return;
             }
             context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, hdmi_mode);
-            context->mHdmiSI.flag_external = 1;
+            context->mHdmiSI.HdmiOn = true;
             ALOGD("TRY to connet to hotplug device line=%d",__LINE__);
 #if (defined(GPU_G6110) || defined(RK3288_BOX))
             hdmi_set_overscan(0);
@@ -6032,7 +6086,7 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
         }
         else
         {
-            if(context->mHdmiSI.flag_external == 1)
+            if(context->mHdmiSI.HdmiOn)
             {
 #if !(defined(GPU_G6110) || defined(RK3288_BOX))
                 if(hdmi_set_frame(context,0))
@@ -6051,7 +6105,7 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
 #if (defined(GPU_G6110) || defined(RK3288_BOX))
                 hdmi_set_overscan(1);
 #endif        
-                context->mHdmiSI.flag_external = 0;
+                context->mHdmiSI.HdmiOn = false;
 				context->mHdmiSI.flag_blank = 0;
 #if OPTIMIZATION_FOR_DIMLAYER
 				if(_contextAnchor1 &&_contextAnchor1->mDimHandle)
@@ -6107,7 +6161,7 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
 #endif
         
     case 3:
-        if(context->mHdmiSI.flag_external == 1)
+        if(context->mHdmiSI.HdmiOn)
         {
 			context->dpyAttr[HWC_DISPLAY_EXTERNAL].connected = false;
             context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 0);
@@ -6136,7 +6190,8 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
         ALOGI("handle hotplug:do nothing");
         break;
     }
-#endif    
+#endif
+#endif
 }
 
 
@@ -6723,7 +6778,7 @@ hwc_device_open(
 
     context->mHdmiSI.hdmi_anm = 0;
     context->mHdmiSI.flag_blank = 0;
-    context->mHdmiSI.flag_external = 0;
+    context->mHdmiSI.HdmiOn = false;
     context->mHdmiSI.anroidSt = false;
     context->mHdmiSI.NeedReDst = false;
     context->mHdmiSI.vh_flag = false;
@@ -7412,13 +7467,17 @@ void *hdmi_try_hotplug(void *arg)
     	    //ALOGW("Try to hdmi_try_hotplug spent time = %ld us",
     	    //    (((tend.tv_sec - tstart.tv_sec)*1000000)+(tend.tv_usec - tstart.tv_usec)));	
         }                        
-        ALOGV("getHdmiMode()=%d,flag_external=%d,flag_blank=%d,flag_hwcup_external=%d",getHdmiMode(),
-            _contextAnchor->mHdmiSI.flag_external,_contextAnchor->mHdmiSI.flag_blank,
+        ALOGV("getHdmiMode()=%d,HdmiOn=%d,flag_blank=%d,flag_hwcup_external=%d",getHdmiMode(),
+            _contextAnchor->mHdmiSI.HdmiOn,_contextAnchor->mHdmiSI.flag_blank,
                 _contextAnchor->mHdmiSI.flag_hwcup_external);
-        if(getHdmiMode() == 1 && _contextAnchor->mHdmiSI.flag_external == 0 && 
+        if(getHdmiMode() == 1 && !_contextAnchor->mHdmiSI.HdmiOn &&
             _contextAnchor->mHdmiSI.flag_blank == 0 && _contextAnchor->mHdmiSI.flag_hwcup_external == 2)
         {
+#ifdef RK3288_BOX
+            handle_hotplug_event(getHdmiMode(), 6);
+#else
             handle_hotplug_event(getHdmiMode(), 0);
+#endif
 			ALOGI("hdmi_try_hotplug at line = %d",__LINE__);
 			break;
         }

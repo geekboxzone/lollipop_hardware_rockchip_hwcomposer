@@ -82,14 +82,14 @@
 #define GPU_DST_FORMAT  DstHandle->format
 
 
-#define GHWC_VERSION  "2.034"
+#define GHWC_VERSION  "2.035"
 //HWC version Tag
 //Get commit info:  git log --format="Author: %an%nTime:%cd%nCommit:%h%n%n%s%n%n"
 //Get version: busybox strings /system/lib/hw/hwcomposer.rk30board.so | busybox grep HWC_VERSION
 //HWC_VERSION Author:zxl Time:Tue Aug 12 17:27:36 2014 +0800 Version:1.17 Branch&Previous-Commit:rk/rk312x/mid/4.4_r1/develop-9533348.
 #define HWC_VERSION "HWC_VERSION  \
 Author: wzq \
-Version:2.034 \
+Version:2.035 \
 "
 
 #ifdef GPU_G6110
@@ -405,7 +405,7 @@ typedef struct _hdmiStateInfo
 {
      int hdmi_anm;
      int flag_blank;
-     int flag_external;
+     bool HdmiOn;
      int flag_hwcup_external;
      bool mix_vh;
      bool vh_flag;

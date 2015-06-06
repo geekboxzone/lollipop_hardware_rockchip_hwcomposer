@@ -73,6 +73,7 @@ void rk_check_hdmi_state()
  void rk_check_hdmi_uevents(const char *buf,int len)
 {
 	//ALOGD("line %d,buf[%s]",__LINE__,buf);
+#ifndef RK3288_BOX
     if (!strcmp(buf, "change@/devices/virtual/switch/hdmi"))
 	{   
         rk_check_hdmi_state();
@@ -104,6 +105,32 @@ void rk_check_hdmi_state()
         ALOGI("uevent receive!hdmistate=%d,type=%d,flag=%d,line=%d",g_hdmi_mode,type,flag,__LINE__);
 
 	}
+#else
+    if (!strcmp(buf, "change@/devices/virtual/switch/hdmi"))
+	{
+        rk_check_hdmi_state();
+        handle_hotplug_event(g_hdmi_mode,6);
+		ALOGI("uevent receive!g_hdmi_mode=%d,line=%d",g_hdmi_mode,__LINE__);
+	}
+    else if(strstr(buf, "change@/devices/virtual/display/HDMI") != NULL)
+    {
+        rk_check_hdmi_state();
+		if(g_hdmi_mode == 1)
+		{
+			handle_hotplug_event(1,6);
+			ALOGI("uevent receive!g_hdmi_mode=%d,line=%d",g_hdmi_mode,__LINE__);
+		}
+    }
+    else if(strstr(buf, "change@/devices/lcdc") != NULL)
+	{
+        int type=0;
+        int flag=0;
+        rk_check_hdmi_state();
+        rk_parse_uevent_buf(buf,&type,&flag,len);
+        handle_hotplug_event(flag,type);
+        ALOGI("uevent receive!hdmistate=%d,type=%d,flag=%d,line=%d",g_hdmi_mode,type,flag,__LINE__);
+	}
+#endif
 }
 
 void rk_handle_uevents(const char *buff,int len)
