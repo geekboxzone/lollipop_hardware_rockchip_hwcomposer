@@ -4360,7 +4360,8 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
         }else if(handle != NULL &&(GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12 
             || GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_10
                 || GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
-                    && ((list->numHwLayers-1) > 2 && !_contextAnchor->mHdmiSI.IsVideo3D))
+                    && (_contextAnchor->mHdmiSI.IsVideo3D
+                        ||((list->numHwLayers-1) > 2 && !_contextAnchor->mHdmiSI.IsVideo3D)))
         {
             _contextAnchor->mHdmiSI.vh_flag = true;
         }else
