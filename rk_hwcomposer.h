@@ -82,14 +82,14 @@
 #define GPU_DST_FORMAT  DstHandle->format
 
 
-#define GHWC_VERSION  "2.035"
+#define GHWC_VERSION  "2.036"
 //HWC version Tag
 //Get commit info:  git log --format="Author: %an%nTime:%cd%nCommit:%h%n%n%s%n%n"
 //Get version: busybox strings /system/lib/hw/hwcomposer.rk30board.so | busybox grep HWC_VERSION
 //HWC_VERSION Author:zxl Time:Tue Aug 12 17:27:36 2014 +0800 Version:1.17 Branch&Previous-Commit:rk/rk312x/mid/4.4_r1/develop-9533348.
 #define HWC_VERSION "HWC_VERSION  \
 Author: wzq \
-Version:2.035 \
+Version:2.036 \
 "
 
 #ifdef GPU_G6110
@@ -248,6 +248,10 @@ typedef struct _ZoneInfo
 	bool        is_stretch;
 	int         is_large;
 	int         size;
+	bool        scale_err;
+	bool        zone_err;
+	bool        toosmall;
+	float       vfactor;
 	float       hfactor;
 	int         format;
 	int         zone_index;
@@ -408,6 +412,7 @@ typedef struct _hdmiStateInfo
      bool HdmiOn;
      int flag_hwcup_external;
      bool mix_vh;
+	 bool mix_up;
      bool vh_flag;
      bool anroidSt;
      bool NeedReDst;
@@ -418,6 +423,16 @@ typedef struct _hdmiStateInfo
      bool Is3D;
      buffer_handle_t FrameHandle;
 }hdmiStateInfo;
+
+typedef enum _cmpType
+{
+    HWC_VOP = 0,
+    HWC_RGA,   
+    HWC_VOP_RGA,
+    HWC_RGA_TRSM_VOP,
+    HWC_RGA_TRSM_GPU_VOP,
+    HWC_POLICY_NUM
+}cmpType;
 
 typedef struct _hwcContext
 {
@@ -484,6 +499,9 @@ typedef struct _hwcContext
      /*dual display */
      hdmiStateInfo mHdmiSI;
 
+     /*policy */
+     int (*fun_policy[HWC_POLICY_NUM])(void * ,hwc_display_contents_1_t*);
+     
      /* The index of video buffer will be used */
      int      mCurVideoIndex;
      int      fd_video_bk[MaxVideoBackBuffers];
