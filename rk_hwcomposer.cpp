@@ -33,7 +33,7 @@
 #include <linux/rockchip_ion.h>
 
 #define MAX_DO_SPECIAL_COUNT        8
-#define RK_FBIOSET_ROTATE            0x5003 
+#define RK_FBIOSET_ROTATE           0x5003 
 #define FPS_NAME                    "com.aatt.fpsm"
 #define BOTTOM_LAYER_NAME           "NavigationBar"
 #define TOP_LAYER_NAME              "StatusBar"
@@ -42,31 +42,27 @@
 #define RK_QUEDDR_FREQ              0x8000
 #define HAL_PIXEL_FORMAT_YCrCb_NV12_OLD  0x20
 
-//#define ENABLE_HDMI_APP_LANDSCAP_TO_PORTRAIT
-static int SkipFrameCount = 0;
-
+//primary and hotplug device context
 static hwcContext * _contextAnchor = NULL;
 static hwcContext * _contextAnchor1 = NULL;
+
+//#define ENABLE_HDMI_APP_LANDSCAP_TO_PORTRAIT
+#undef LOGV
+#define LOGV(...)
+static int mLogL = 0;
+bool hdmi_noready = true;
+static mix_info gmixinfo[2];
+static int SkipFrameCount = 0;
+//#if  (ENABLE_TRANSFORM_BY_RGA | ENABLE_LCDC_IN_NV12_TRANSFORM | USE_SPECIAL_COMPOSER)
+static hwbkupmanage bkupmanage;
+//#endif
 #ifdef ENABLE_HDMI_APP_LANDSCAP_TO_PORTRAIT
 static int bootanimFinish = 0;
 #endif
 
-//#if  (ENABLE_TRANSFORM_BY_RGA | ENABLE_LCDC_IN_NV12_TRANSFORM | USE_SPECIAL_COMPOSER)
-static hwbkupmanage bkupmanage;
-//#endif
-
 static PFNEGLRENDERBUFFERMODIFYEDANDROIDPROC _eglRenderBufferModifiedANDROID;
-static mix_info gmixinfo[2];
-bool hdmi_noready = true;
-
 int gwin_tab[MaxZones] = {win0,win1,win2_0,win2_1,win2_2,win2_3,win3_0,win3_1,win3_2,win3_3};
-#undef LOGV
-#define LOGV(...)
-#if 0
-#define LOGGPUCOP ALOGD
-#else
-#define LOGGPUCOP LOGV(...)
-#endif
+
 
 static int
 hwc_blank(
@@ -1015,7 +1011,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                     ALOGV("Zone[%d]->layer[%d],"
                         "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
                         "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],acq_fence_fd=%d,"
-                        "layname=%s,fd=%d",                        
+                        "layname=%s,fd=%d",
                         Context->zone_manager.zone_info[j].zone_index,
                         Context->zone_manager.zone_info[j].layer_index,
                         Context->zone_manager.zone_info[j].src_rect.left,
@@ -1135,10 +1131,10 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
     // query ddr is enough ,if dont enough back to gpu composer
     ALOGV("tsize=%dMB,Context->ddrFd=%d,RK_QUEDDR_FREQ",tsize,Context->ddrFd);
     for(i=0;i<j;i++){
-        ALOGV("Zone[%d]->layer[%d],"
+        ALOGD_IF(mLogL>0,"Zone[%d]->layer[%d],"
             "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
             "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],acq_fence_fd=%d,"
-            "layname=%s",                        
+            "layname=%s",
             Context->zone_manager.zone_info[i].zone_index,
             Context->zone_manager.zone_info[i].layer_index,
             Context->zone_manager.zone_info[i].src_rect.left,
@@ -1285,8 +1281,7 @@ int try_wins_dispatch_hor(void * ctx,hwc_display_contents_1_t * list)
     }
     if(sort >4)  // lcdc dont support 5 wins
     {
-        if(is_out_log())
-            ALOGD("try_wins_dispatch_hor lcdc dont support 5 wins sort=%d",sort);
+        ALOGD_IF(mLogL>3,"try_wins_dispatch_hor lcdc dont support 5 wins sort=%d",sort);
         return -1;
     }    
 	//pzone_mag->zone_info[i].sort: win type
@@ -1504,7 +1499,7 @@ int try_wins_dispatch_hor(void * ctx,hwc_display_contents_1_t * list)
         }    
         if(ioctl(Context->ddrFd, RK_QUEDDR_FREQ, &bpvinfo))
         {
-            if(is_out_log())
+            if(mLogL > 3)
             {
                 for(i= 0;i<4;i++)
                 {
@@ -1518,8 +1513,7 @@ int try_wins_dispatch_hor(void * ctx,hwc_display_contents_1_t * list)
 #endif    
     if((large_cnt + bw ) > 5 )
     {
-        if(is_out_log())
-            ALOGD("data too large ,lcdc not support");
+        ALOGD_IF(mLogL>3,"data too large ,lcdc not support");
         return -1;
     }
     memcpy(&Context->zone_manager,&zone_m,sizeof(ZoneManager));
@@ -1718,9 +1712,7 @@ int try_wins_dispatch_mix_up(void * ctx,hwc_display_contents_1_t * list)
     }
     if(sort >3)  // lcdc dont support 5 wins
     {
-        if(is_out_log())
-            ALOGD("lcdc dont support 5 wins");
-		LOGGPUCOP("Back to gpu line[%d],fun[%s]",__LINE__,__FUNCTION__);
+        ALOGD_IF(mLogL>3,"lcdc dont support 5 wins sort=%d",sort);
         return -1;
     }    
     for(i=0;i<pzone_mag->zone_cnt;i++)
@@ -1919,7 +1911,7 @@ int try_wins_dispatch_mix_up(void * ctx,hwc_display_contents_1_t * list)
         }    
         if(ioctl(Context->ddrFd, RK_QUEDDR_FREQ, &bpvinfo))
         {
-            if(is_out_log())
+            if(mLogL>3)
             {
                 for(i= 0;i<4;i++)
                 {
@@ -2027,8 +2019,8 @@ int try_wins_dispatch_mix_down(void * ctx,hwc_display_contents_1_t * list)
             hwc_layer_1_t * layer = &list->hwLayers[pzone_mag->zone_info[i].layer_index];
             if(pzone_mag->zone_info[i].format == HAL_PIXEL_FORMAT_YCrCb_NV12)
             {
-                if(is_out_log())
-                    ALOGD("Donot support video ");
+
+                ALOGD_IF(mLogL>3,"Donot support video ");
                 return -1;
             }    
             if((
@@ -2139,8 +2131,7 @@ int try_wins_dispatch_mix_down(void * ctx,hwc_display_contents_1_t * list)
     }
     if(sort >3)  // lcdc dont support 5 wins
     {
-        if(is_out_log())
-        ALOGD("lcdc dont support 5 wins sort=%d",sort);
+        ALOGD_IF(mLogL>3,"lcdc dont support 5 wins sort=%d",sort);
         return -1;
     }    
     for(i=0;i<pzone_mag->zone_cnt;i++)
@@ -2338,7 +2329,7 @@ int try_wins_dispatch_mix_down(void * ctx,hwc_display_contents_1_t * list)
         }    
         if(ioctl(Context->ddrFd, RK_QUEDDR_FREQ, &bpvinfo))
         {
-            if(is_out_log())
+            if(mLogL>3)
             {
                 for(i= 0;i<4;i++)
                 {
@@ -2352,8 +2343,7 @@ int try_wins_dispatch_mix_down(void * ctx,hwc_display_contents_1_t * list)
 #endif   
     if((large_cnt + bw) >= 5)    
     {       
-        if(is_out_log())
-            ALOGD("lagre win > 2,and Scale-down 1.5 multiple,lcdc no support");
+        ALOGD_IF(mLogL>3,"lagre win > 2,and Scale-down 1.5 multiple,lcdc no support");
         return -1;
     }
     memcpy(&Context->zone_manager,&zone_m,sizeof(ZoneManager));
@@ -2415,7 +2405,7 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
     }
     if(pzone_mag->zone_cnt < 5)
     {
-		LOGGPUCOP("Back to gpu line[%d],fun[%s]",__LINE__,__FUNCTION__);
+		ALOGD_IF(mLogL>4,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
     	return -1;
     }
     //Find out which layer start transform.
@@ -2442,7 +2432,7 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
     //If not exist transform layers,then return.
     if(!bTransform)
 	{
-		LOGGPUCOP("Back to gpu line[%d],fun[%s]",__LINE__,__FUNCTION__);
+		ALOGD_IF(mLogL>4,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
 		return -1;
 	}
 
@@ -2454,9 +2444,7 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
             hwc_layer_1_t * layer = &list->hwLayers[pzone_mag->zone_info[i].layer_index];
             if(pzone_mag->zone_info[i].format == HAL_PIXEL_FORMAT_YCrCb_NV12)
             {
-                if(is_out_log())
-                    ALOGD("Donot support video ");
-				LOGGPUCOP("Back to gpu line[%d],fun[%s]",__LINE__,__FUNCTION__);
+                ALOGD_IF(mLogL>3,"Donot support video[%d][%s]",__LINE__,__FUNCTION__);
                 return -1;
             }
             //Judge the current layer whether backup in gmixinfo[mix_index] or not.
@@ -2563,8 +2551,7 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
     }
     if(sort >3)  // lcdc dont support 5 wins
     {
-        if(is_out_log())
-        ALOGD("lcdc dont support 5 wins");
+        ALOGD_IF(mLogL>3,"lcdc dont support 5 wins");
         return -1;
     }    
     for(i=0;i<pzone_mag->zone_cnt;i++)
@@ -2762,7 +2749,7 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
         }    
         if(ioctl(Context->ddrFd, RK_QUEDDR_FREQ, &bpvinfo))
         {
-            if(is_out_log())
+            if(mLogL>3)
             {
                 for(i= 0;i<4;i++)
                 {
@@ -2776,8 +2763,7 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
 #endif   
     if((large_cnt + bw) >= 5)    
     {       
-        if(is_out_log())    
-            ALOGD("lagre win > 2,and Scale-down 1.5 multiple,lcdc no support");
+        ALOGD_IF(mLogL>3,"lagre win > 2,and Scale-down 1.5 multiple,lcdc no support");
         return -1;
     }
 
@@ -2978,9 +2964,7 @@ int try_wins_dispatch_mix_vh (void * ctx,hwc_display_contents_1_t * list)
     }
     if(sort >3)  // lcdc dont support 5 wins
     {
-        if(is_out_log())
-            ALOGD("lcdc dont support 5 wins");
-		LOGGPUCOP("Back to gpu line[%d],fun[%s]",__LINE__,__FUNCTION__);
+        ALOGD_IF(mLogL>3,"lcdc dont support 5 wins [%d]",__LINE__);
         return -1;
     }    
     for(i=0;i<pzone_mag->zone_cnt;i++)
@@ -3179,7 +3163,7 @@ int try_wins_dispatch_mix_vh (void * ctx,hwc_display_contents_1_t * list)
         }    
         if(ioctl(Context->ddrFd, RK_QUEDDR_FREQ, &bpvinfo))
         {
-            if(is_out_log())
+            if(mLogL>3)
             {
                 for(i= 0;i<4;i++)
                 {
@@ -3456,7 +3440,7 @@ check_layer(
     )
     {
         /* We are forbidden to handle this layer. */
-        if(is_out_log() )
+        if(mLogL>3)
         {
             LOGD("%s(%d):Will not handle layer %s: SKIP_LAYER,Layer->transform=%d,Layer->flags=%d",
                 __FUNCTION__, __LINE__, Layer->LayerName,Layer->transform,Layer->flags);
@@ -3470,7 +3454,7 @@ check_layer(
         {
         	skip_count++;
         }
-		LOGGPUCOP("Back to gpu line[%d],fun[%s]",__LINE__,__FUNCTION__);
+		ALOGD_IF(mLogL>4,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
         return HWC_FRAMEBUFFER;
     }
     // Force 4K transform video go into GPU
@@ -4512,25 +4496,23 @@ BackToGPU:
 //extern "C" void *blend(uint8_t *dst, uint8_t *src, int dst_w, int src_w, int src_h);
 int dump_prepare_info(hwc_display_contents_1_t** displays, int flag)
 {
-    char pro_value[PROPERTY_VALUE_MAX];
-    property_get("sys.dump",pro_value,0);
-    if(!strcmp(pro_value,"true"))
+    if(mLogL<1)
+        return 0;
+
+    for(int i=0;i<2;i++)
     {
-        for(int i=0;i<2;i++)
+        if(displays[i] != NULL)
         {
-            if(displays[i] != NULL)
+            for(unsigned int j=0;j<displays[i]->numHwLayers -1;j++)
             {
-                for(unsigned int j=0;j<displays[i]->numHwLayers -1;j++)
-                {
-                    hwc_layer_1_t* layer = &displays[i]->hwLayers[j];
-                    if (layer != NULL)
+                hwc_layer_1_t* layer = &displays[i]->hwLayers[j];
+                if (layer != NULL)
 #ifdef SUPPORT_STEREO
-                        ALOGD("dID=%d,layername=%s,alreadyStereo=%d,displayStereo=%d",
-                            i,layer->LayerName,layer->alreadyStereo,layer->displayStereo);
+                    ALOGD("dID=%d,layername=%s,alreadyStereo=%d,displayStereo=%d",
+                        i,layer->LayerName,layer->alreadyStereo,layer->displayStereo);
 #else
-                        ALOGD("dID=%d,layername=%s",i,layer->LayerName);
+                    ALOGD("dID=%d,layername=%s",i,layer->LayerName);
 #endif
-                }
             }
         }
     }
@@ -4541,9 +4523,7 @@ int dump_config_info(struct rk_fb_win_cfg_data fb_info ,hwcContext * context, in
 {
     char poutbuf[20];
     char eoutbuf[20];
-    char pro_value[PROPERTY_VALUE_MAX];
-    property_get("sys.dump",pro_value,0);
-    if(!!strcmp(pro_value,"true"))
+    if(mLogL<1)
         return 0;
 
     switch(flag){
@@ -4593,6 +4573,7 @@ int dump_config_info(struct rk_fb_win_cfg_data fb_info ,hwcContext * context, in
 
 int hwc_pre_prepare(hwc_display_contents_1_t** displays, int flag)
 {
+    mLogL = is_out_log();
 #if (defined(GPU_G6110) || defined(RK3288_BOX))
     hwcContext * context = _contextAnchor;
     context->mHdmiSI.hdmi_anm = 0;
@@ -4932,7 +4913,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
     if(video_cnt >1) // more videos goto gpu cmp
     {
         ALOGW("more2 video=%d goto GpuComP",video_cnt);
-		LOGGPUCOP("Back to gpu line[%d],fun[%s]",__LINE__,__FUNCTION__);
+		ALOGD_IF(mLogL>4,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
         goto GpuComP;
     }          
     //Get gts staus,save in context->mGtsStatus
@@ -4959,13 +4940,13 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
 
     if(hwc_get_int_property("sys.hwc.disable","0")== 1)
     {
-		LOGGPUCOP("Back to gpu line[%d],fun[%s]",__LINE__,__FUNCTION__);
+		ALOGD_IF(mLogL>4,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
         goto GpuComP;
 	}
     /* Roll back to FRAMEBUFFER if any layer can not be handled. */
     if (i != (list->numHwLayers - 1) || (list->numHwLayers==1) /*|| context->mtrsformcnt > 1*/)
     {
-		LOGGPUCOP("Back to gpu line[%d],fun[%s]",__LINE__,__FUNCTION__);
+		ALOGD_IF(mLogL>4,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
         goto GpuComP;
     }
 
@@ -4975,7 +4956,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
         if(context->mVideoMode &&  !context->mNV12_VIDEO_VideoMode && context->mtrsformcnt>0)
         {
             ALOGV("Go into GLES,in nv12 transform case");
-			LOGGPUCOP("Back to gpu line[%d],fun[%s]",__LINE__,__FUNCTION__);
+			ALOGD_IF(mLogL>4,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
             goto GpuComP;
         }
     }
@@ -5029,7 +5010,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
                     }
                     else {
                         ALOGE("video alloc faild video(w=%d,h=%d,format=0x%x)",handle->video_width,handle->video_height,context->fbhandle.format);
-						LOGGPUCOP("Back to gpu line[%d],fun[%s]",__LINE__,__FUNCTION__);
+						ALOGD_IF(mLogL>4,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
 						goto GpuComP;
                     }
                 }
@@ -5074,7 +5055,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
             if(context->fd_video_bk[i] < 0 )
             {
                 ALOGV("@video fd[%d]=%d",i,context->fd_video_bk[i]);
-				LOGGPUCOP("Back to gpu line[%d],fun[%s]",__LINE__,__FUNCTION__);
+				ALOGD_IF(mLogL>4,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
                 goto GpuComP;
             }
         }
@@ -5091,7 +5072,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
     ret = collect_all_zones(context,list);
     if(ret !=0 )
     {
-		LOGGPUCOP("Back to gpu line[%d],fun[%s]",__LINE__,__FUNCTION__);
+		ALOGD_IF(mLogL>4,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
         goto GpuComP;
     }
    
@@ -5099,7 +5080,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
     ret = hwc_try_policy(context,list,dpyID);
     if(ret !=0 )
     {
-		LOGGPUCOP("Back to gpu line[%d],fun[%s]",__LINE__,__FUNCTION__);
+		ALOGD_IF(mLogL>4,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
         goto GpuComP;
     }
     
@@ -5113,7 +5094,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
 
     if(check_zone(context) && dpyID == 0)
     {
-        LOGGPUCOP("Back to gpu line[%d],fun[%s]",__LINE__,__FUNCTION__);
+        ALOGD_IF(mLogL>4,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
         goto GpuComP;
     }
     
@@ -5213,7 +5194,7 @@ hwc_prepare(
             }
         }
 #endif
-        LOGGPUCOP("Back to gpu line[%d],fun[%s]",__LINE__,__FUNCTION__);
+        ALOGD_IF(mLogL>4,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
         return 0;
     }
 
