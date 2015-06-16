@@ -670,6 +670,59 @@ int is_zone_combine(ZoneInfo * zf,ZoneInfo * zf2)
         return 1;
 }
 
+int is_yuv(int format)
+{
+    int ret = 0;
+    switch(format){
+        case HAL_PIXEL_FORMAT_YCbCr_420_888:
+        case HAL_PIXEL_FORMAT_YCbCr_422_SP:
+        case HAL_PIXEL_FORMAT_YCrCb_420_SP:
+        case HAL_PIXEL_FORMAT_YCbCr_422_I:
+        case HAL_PIXEL_FORMAT_YCrCb_NV12:
+        case HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO:
+        case HAL_PIXEL_FORMAT_YCrCb_NV12_10:
+        case HAL_PIXEL_FORMAT_YCbCr_422_SP_10:
+        case HAL_PIXEL_FORMAT_YCrCb_420_SP_10:
+            ret = 1;
+            break;
+
+        default:
+            break;
+    }
+    return ret;
+}
+
+int is_special_wins(hwcContext * Context)
+{
+    return 0;
+    ZoneManager* pzone_mag = &(Context->zone_manager);
+    if(pzone_mag->zone_cnt == 6
+        &&strstr(pzone_mag->zone_info[0].LayerName,"com.android.systemui.ImageWallpaper")
+        &&strstr(pzone_mag->zone_info[3].LayerName,"Starting ")
+        )
+    {
+        return 1;
+    }
+    return 0;
+}
+
+static int ZoneDispatchedCheck(hwcContext* ctx,ZoneManager* pzone_mag,int flag)
+{
+    int ret = 0;
+    hwcContext* context = _contextAnchor;
+    bool Is4K = context->mHdmiSI.NeedReDst;
+    for(int i=0;i<pzone_mag->zone_cnt;i++){
+        int disptched = pzone_mag->zone_info[i].dispatched;
+        /*win2 win3 not support YUV*/
+        if(disptched > win1 && is_yuv(pzone_mag->zone_info[i].format))
+            return -1;
+        /*scal not support whoes source bigger than 2560 to dst 4k*/
+        if(pzone_mag->zone_info[i].width > 2160 && Is4K)
+            return -1;
+    }
+    return ret;
+}
+
 int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
 {
     size_t i,j;
@@ -1210,6 +1263,9 @@ int try_wins_dispatch_hor(void * ctx,hwc_display_contents_1_t * list)
     if(contextAh->mHdmiSI.Is3D)
         return -1;
 
+    if(Context->mAlphaError)
+        return -1;
+
     for(int k=0;k<pzone_mag->zone_cnt;k++)
     {
         if(pzone_mag->zone_info[k].scale_err || pzone_mag->zone_info[k].toosmall
@@ -1281,7 +1337,7 @@ int try_wins_dispatch_hor(void * ctx,hwc_display_contents_1_t * list)
     }
     if(sort >4)  // lcdc dont support 5 wins
     {
-        ALOGD_IF(mLogL>3,"try_wins_dispatch_hor lcdc dont support 5 wins sort=%d",sort);
+        ALOGD_IF(mLogL>3,"try %s lcdc<5wins sort=%d,%d",sort,__func__,__LINE__);
         return -1;
     }    
 	//pzone_mag->zone_info[i].sort: win type
@@ -1344,9 +1400,9 @@ int try_wins_dispatch_hor(void * ctx,hwc_display_contents_1_t * list)
             win_disphed_flag[j+2] = 1; // win2 ,win3 is dispatch flag
             ALOGV("more twice zones srot_tal[%d][1]=%d",i,srot_tal[i][1]);
             j++;
-            if(j > 2)  // lcdc only has win2 and win3 supprot more zones
+            if(j > 1)  // lcdc only has win2 and win3 supprot more zones
             {
-                ALOGD("lcdc only has win2 and win3 supprot more zones");
+                ALOGD_IF(mLogL>4,"lcdc only has win2 and win3 supprot more zones");
                 return -1;  
             }
         }
@@ -1361,9 +1417,9 @@ int try_wins_dispatch_hor(void * ctx,hwc_display_contents_1_t * list)
             win_disphed_flag[j] = 1; // win2 ,win3 is dispatch flag
             ALOGV("stretch zones srot_tal[%d][1]=%d",i,srot_tal[i][1]);
             j++;
-            if(j > 2)  // lcdc only has win2 and win3 supprot more zones
+            if(j > 1)  // lcdc only has win2 and win3 supprot more zones
             {
-                //ALOGD("lcdc only has win0 and win1 supprot stretch");
+                ALOGD_IF(mLogL>4,"lcdc only has win0 and win1 supprot stretch");
                 return -1;  
             }
         }
@@ -1408,12 +1464,24 @@ int try_wins_dispatch_hor(void * ctx,hwc_display_contents_1_t * list)
                 ALOGE("try_wins_dispatch_hor sort err!");
                 return -1;
         }
-        ALOGV("zone[%d].dispatched[%d]=%s,sort=%d", \
+        ALOGD_IF(mLogL>5,"zone[%d].dispatched[%d]=%s,sort=%d", \
         i,pzone_mag->zone_info[i].dispatched,
         compositionTypeName[pzone_mag->zone_info[i].dispatched -1],
         pzone_mag->zone_info[i].sort);
 
     }
+
+    for(i=0;i<pzone_mag->zone_cnt;i++){
+        int disptched = pzone_mag->zone_info[i].dispatched;
+        int sct_width = pzone_mag->zone_info[i].width;
+        /*win2 win3 not support YUV*/
+        if(disptched > win1 && is_yuv(pzone_mag->zone_info[i].format))
+            return -1;
+        /*scal not support whoes source bigger than 2560 to dst 4k*/
+        if(disptched <= win1 && sct_width > 2160 && contextAh->mHdmiSI.NeedReDst)
+            return -1;
+    }
+
 #if USE_QUEUE_DDRFREQ
     if(Context->ddrFd > 0)
     {
@@ -1421,7 +1489,7 @@ int try_wins_dispatch_hor(void * ctx,hwc_display_contents_1_t * list)
         {
             int area_no = 0;
             int win_id = 0;
-            ALOGV("Zone[%d]->layer[%d],dispatched=%d,"
+            ALOGD_IF(mLogL>5,"Zone[%d]->layer[%d],dispatched=%d,"
             "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
             "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],"
             "layer_fd[%d],addr=%x,acq_fence_fd=%d"
@@ -1494,7 +1562,7 @@ int try_wins_dispatch_hor(void * ctx,hwc_display_contents_1_t * list)
         bpvinfo.bp_vop_size = Context->zone_manager.bp_size;    
         for(i= 0;i<4;i++)
         {
-            ALOGV("RK_QUEDDR_FREQ info win[%d] bo_size=%dMB,bp_vop_size=%dMB,state=%d,num=%d",
+            ALOGD_IF(mLogL>5,"RK_QUEDDR_FREQ info win[%d] bo_size=%dMB,bp_vop_size=%dMB,state=%d,num=%d",
                 i,bpvinfo.bp_size,bpvinfo.bp_vop_size,bpvinfo.vopinfo[i].state,bpvinfo.vopinfo[i].zone_num);
         }    
         if(ioctl(Context->ddrFd, RK_QUEDDR_FREQ, &bpvinfo))
@@ -1522,19 +1590,7 @@ int try_wins_dispatch_hor(void * ctx,hwc_display_contents_1_t * list)
 }
 
 
-int is_special_wins(hwcContext * Context)
-{
-    return 0;
-    ZoneManager* pzone_mag = &(Context->zone_manager);
-    if(pzone_mag->zone_cnt == 6 
-        &&strstr(pzone_mag->zone_info[0].LayerName,"com.android.systemui.ImageWallpaper")
-        &&strstr(pzone_mag->zone_info[3].LayerName,"Starting ")
-        )
-    {
-        return 1;  
-    }
-    return 0;
-}
+
 
 int try_wins_dispatch_mix_up(void * ctx,hwc_display_contents_1_t * list)
 {
@@ -1591,6 +1647,9 @@ int try_wins_dispatch_mix_up(void * ctx,hwc_display_contents_1_t * list)
     	return -1;
     }
 
+    if(Context->mAlphaError)
+        return -1;
+
     if(contextAh->mHdmiSI.NeedReDst)
         return -1;
 
@@ -1621,7 +1680,7 @@ int try_wins_dispatch_mix_up(void * ctx,hwc_display_contents_1_t * list)
             }
             else
             {
-                layer->compositionType = HWC_NODRAW;
+                layer->compositionType = HWC_FRAMEBUFFER;
             }
             if(gpu_draw && pzone_mag->zone_info[i].layer_index > 1)
             {
@@ -1645,7 +1704,7 @@ int try_wins_dispatch_mix_up(void * ctx,hwc_display_contents_1_t * list)
     pzone_mag->zone_cnt -= cntfb;
     for(i=0;i< pzone_mag->zone_cnt;i++)
     {
-        ALOGV("Zone[%d]->layer[%d],"
+        ALOGD_IF(mLogL>5,"Zone[%d]->layer[%d],"
             "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
             "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],acq_fence_fd=%d,"
             "layname=%s",                        
@@ -1777,9 +1836,9 @@ int try_wins_dispatch_mix_up(void * ctx,hwc_display_contents_1_t * list)
             win_disphed_flag[j] = 1; // win0 ,win1 is dispatch flag
             ALOGV("stretch zones srot_tal[%d][1]=%d",i,srot_tal[i][1]);
             j++;
-            if(j > 2)  // lcdc only has win0 and win1 supprot stretch
+            if(j > 1)  // lcdc only has win0 and win1 supprot stretch
             {
-                ALOGD("lcdc only has win0 and win1 supprot stretch");
+                ALOGD_IF(mLogL>5,"lcdc only has win0 and win1 supprot stretch");
                 return -1;  
             }
         }
@@ -1836,6 +1895,15 @@ int try_wins_dispatch_mix_up(void * ctx,hwc_display_contents_1_t * list)
         compositionTypeName[pzone_mag->zone_info[i].dispatched -1],
         pzone_mag->zone_info[i].sort);
     }
+    
+    for(i=0;i<pzone_mag->zone_cnt;i++){
+        int disptched = pzone_mag->zone_info[i].dispatched;
+        int sct_width = pzone_mag->zone_info[i].width;
+        /*scal not support whoes source bigger than 2560 to dst 4k*/
+        if(disptched <= win1 && sct_width > 2160 && contextAh->mHdmiSI.NeedReDst)
+            return -1;
+    }
+        
 #if USE_QUEUE_DDRFREQ
     if(Context->ddrFd > 0)
     {
@@ -1843,7 +1911,7 @@ int try_wins_dispatch_mix_up(void * ctx,hwc_display_contents_1_t * list)
         {
             int area_no = 0;
             int win_id = 0;
-            ALOGV("Zone[%d]->layer[%d],dispatched=%d,"
+            ALOGD_IF(mLogL>5,"Zone[%d]->layer[%d],dispatched=%d,"
             "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
             "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],"
             "layer_fd[%d],addr=%x,acq_fence_fd=%d"
@@ -1906,7 +1974,7 @@ int try_wins_dispatch_mix_up(void * ctx,hwc_display_contents_1_t * list)
         bpvinfo.bp_vop_size = tsize ;  
         for(i= 0;i<4;i++)
         {
-            ALOGV("RK_QUEDDR_FREQ mixinfo win[%d] bo_size=%dMB,bp_vop_size=%dMB,state=%d,num=%d",
+            ALOGD_IF(mLogL>5,"RK_QUEDDR_FREQ mixinfo win[%d] bo_size=%dMB,bp_vop_size=%dMB,state=%d,num=%d",
                 i,bpvinfo.bp_size,bpvinfo.bp_vop_size,bpvinfo.vopinfo[i].state,bpvinfo.vopinfo[i].zone_num);
         }    
         if(ioctl(Context->ddrFd, RK_QUEDDR_FREQ, &bpvinfo))
@@ -2064,7 +2132,7 @@ int try_wins_dispatch_mix_down(void * ctx,hwc_display_contents_1_t * list)
     pzone_mag->zone_cnt -= cntfb;
     for(i=0;i< pzone_mag->zone_cnt;i++)
     {
-        ALOGV("Zone[%d]->layer[%d],"
+        ALOGD_IF(mLogL>5,"Zone[%d]->layer[%d],"
             "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
             "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],acq_fence_fd=%d,"
             "layname=%s",                        
@@ -2196,7 +2264,7 @@ int try_wins_dispatch_mix_down(void * ctx,hwc_display_contents_1_t * list)
             win_disphed_flag[j] = 1; // win0 ,win1 is dispatch flag
             ALOGV("stretch zones srot_tal[%d][1]=%d",i,srot_tal[i][1]);
             j++;
-            if(j > 2)  // lcdc only has win0 and win1 supprot stretch
+            if(j > 1)  // lcdc only has win0 and win1 supprot stretch
             {
                 //ALOGD("lcdc only has win0 and win1 supprot stretch");
                 return -1;  
@@ -2254,6 +2322,14 @@ int try_wins_dispatch_mix_down(void * ctx,hwc_display_contents_1_t * list)
         compositionTypeName[pzone_mag->zone_info[i].dispatched -1],
         pzone_mag->zone_info[i].sort);
     }
+
+    for(i=0;i<pzone_mag->zone_cnt;i++){
+        int disptched = pzone_mag->zone_info[i].dispatched;
+        /*win2 win3 not support YUV*/
+        if(disptched > win1 && is_yuv(pzone_mag->zone_info[i].format))
+            return -1;
+    }
+    
 #if USE_QUEUE_DDRFREQ
     if(Context->ddrFd > 0)
     {
@@ -2261,7 +2337,7 @@ int try_wins_dispatch_mix_down(void * ctx,hwc_display_contents_1_t * list)
         {
             int area_no = 0;
             int win_id = 0;
-            ALOGV("Zone[%d]->layer[%d],dispatched=%d,"
+            ALOGD_IF(mLogL>5,"Zone[%d]->layer[%d],dispatched=%d,"
             "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
             "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],"
             "layer_fd[%d],addr=%x,acq_fence_fd=%d"
@@ -2324,7 +2400,7 @@ int try_wins_dispatch_mix_down(void * ctx,hwc_display_contents_1_t * list)
         bpvinfo.bp_vop_size = tsize ;  
         for(i= 0;i<4;i++)
         {
-            ALOGV("RK_QUEDDR_FREQ mixinfo win[%d] bo_size=%dMB,bp_vop_size=%dMB,state=%d,num=%d",
+            ALOGD_IF(mLogL>5,"RK_QUEDDR_FREQ mixinfo win[%d] bo_size=%dMB,bp_vop_size=%dMB,state=%d,num=%d",
                 i,bpvinfo.bp_size,bpvinfo.bp_vop_size,bpvinfo.vopinfo[i].state,bpvinfo.vopinfo[i].zone_num);
         }    
         if(ioctl(Context->ddrFd, RK_QUEDDR_FREQ, &bpvinfo))
@@ -2419,6 +2495,9 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
         }
     }
 
+    if(Context->mAlphaError)
+        return -1;
+
     if(contextAh->mHdmiSI.Is3D)
         return -1;
 
@@ -2458,7 +2537,7 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
             }
             else
             {
-                layer->compositionType = HWC_NODRAW;
+                layer->compositionType = HWC_FRAMEBUFFER;
             }
             if(gpu_draw && pzone_mag->zone_info[i].layer_index > iFirstTransformLayer)
             {
@@ -2484,7 +2563,7 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
     pzone_mag->zone_cnt -= cntfb;
     for(i=0;i< pzone_mag->zone_cnt;i++)
     {
-        ALOGV("Zone[%d]->layer[%d],"
+        ALOGD_IF(mLogL>5,"Zone[%d]->layer[%d],"
             "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
             "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],acq_fence_fd=%d,"
             "layname=%s",                        
@@ -2616,7 +2695,7 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
             win_disphed_flag[j] = 1; // win0 ,win1 is dispatch flag
             ALOGV("stretch zones srot_tal[%d][1]=%d",i,srot_tal[i][1]);
             j++;
-            if(j > 2)  // lcdc only has win0 and win1 supprot stretch
+            if(j > 1)  // lcdc only has win0 and win1 supprot stretch
             {
                 //ALOGD("lcdc only has win0 and win1 supprot stretch");
                 return -1;  
@@ -2674,6 +2753,18 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
         compositionTypeName[pzone_mag->zone_info[i].dispatched -1],
         pzone_mag->zone_info[i].sort);
     }
+
+    for(i=0;i<pzone_mag->zone_cnt;i++){
+        int disptched = pzone_mag->zone_info[i].dispatched;
+        int sct_width = pzone_mag->zone_info[i].width;
+        /*win2 win3 not support YUV*/
+        if(disptched > win1 && is_yuv(pzone_mag->zone_info[i].format))
+            return -1;
+        /*scal not support whoes source bigger than 2560 to dst 4k*/
+        if(disptched <= win1 && sct_width > 2160 && contextAh->mHdmiSI.NeedReDst)
+            return -1;
+    }
+
 #if USE_QUEUE_DDRFREQ
     if(Context->ddrFd > 0)
     {
@@ -2681,7 +2772,7 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
         {
             int area_no = 0;
             int win_id = 0;
-            ALOGV("Zone[%d]->layer[%d],dispatched=%d,"
+            ALOGD_IF(mLogL>5,"Zone[%d]->layer[%d],dispatched=%d,"
             "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
             "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],"
             "layer_fd[%d],addr=%x,acq_fence_fd=%d"
@@ -2744,7 +2835,7 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
         bpvinfo.bp_vop_size = tsize ;  
         for(i= 0;i<4;i++)
         {
-            ALOGV("RK_QUEDDR_FREQ mixinfo win[%d] bo_size=%dMB,bp_vop_size=%dMB,state=%d,num=%d",
+            ALOGD_IF(mLogL>5,"RK_QUEDDR_FREQ mixinfo win[%d] bo_size=%dMB,bp_vop_size=%dMB,state=%d,num=%d",
                 i,bpvinfo.bp_size,bpvinfo.bp_vop_size,bpvinfo.vopinfo[i].state,bpvinfo.vopinfo[i].zone_num);
         }    
         if(ioctl(Context->ddrFd, RK_QUEDDR_FREQ, &bpvinfo))
@@ -2833,6 +2924,9 @@ int try_wins_dispatch_mix_vh (void * ctx,hwc_display_contents_1_t * list)
     	return -1;
     }
 
+    if(Context->mAlphaError)
+        return -1;
+
     if(contextAh->mHdmiSI.Is3D && !contextAh->mHdmiSI.IsVideo3D)
         return -1;
 
@@ -2873,7 +2967,7 @@ int try_wins_dispatch_mix_vh (void * ctx,hwc_display_contents_1_t * list)
             }
             else
             {
-                layer->compositionType = HWC_NODRAW;
+                layer->compositionType = HWC_FRAMEBUFFER;
             }
             if(gpu_draw && pzone_mag->zone_info[i].layer_index > 0)
             {
@@ -2897,7 +2991,7 @@ int try_wins_dispatch_mix_vh (void * ctx,hwc_display_contents_1_t * list)
     pzone_mag->zone_cnt -= cntfb;
     for(i=0;i< pzone_mag->zone_cnt;i++)
     {
-        ALOGV("Zone[%d]->layer[%d],"
+        ALOGD_IF(mLogL>5,"Zone[%d]->layer[%d],"
             "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
             "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],acq_fence_fd=%d,"
             "layname=%s",                        
@@ -3088,6 +3182,14 @@ int try_wins_dispatch_mix_vh (void * ctx,hwc_display_contents_1_t * list)
         compositionTypeName[pzone_mag->zone_info[i].dispatched -1],
         pzone_mag->zone_info[i].sort);
     }
+
+    for(i=0;i<pzone_mag->zone_cnt;i++){
+        int disptched = pzone_mag->zone_info[i].dispatched;
+        int sct_width = pzone_mag->zone_info[i].width;
+        if(disptched <= win1 && sct_width > 2160 && contextAh->mHdmiSI.NeedReDst)
+            return -1;
+    }
+
 #if USE_QUEUE_DDRFREQ
     if(Context->ddrFd > 0)
     {
@@ -3095,7 +3197,7 @@ int try_wins_dispatch_mix_vh (void * ctx,hwc_display_contents_1_t * list)
         {
             int area_no = 0;
             int win_id = 0;
-            ALOGV("Zone[%d]->layer[%d],dispatched=%d,"
+            ALOGD_IF(mLogL>5,"Zone[%d]->layer[%d],dispatched=%d,"
             "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
             "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],"
             "layer_fd[%d],addr=%x,acq_fence_fd=%d"
@@ -3158,7 +3260,7 @@ int try_wins_dispatch_mix_vh (void * ctx,hwc_display_contents_1_t * list)
         bpvinfo.bp_vop_size = tsize ;  
         for(i= 0;i<4;i++)
         {
-            ALOGV("RK_QUEDDR_FREQ mixinfo win[%d] bo_size=%dMB,bp_vop_size=%dMB,state=%d,num=%d",
+            ALOGD_IF(mLogL>5,"RK_QUEDDR_FREQ mixinfo win[%d] bo_size=%dMB,bp_vop_size=%dMB,state=%d,num=%d",
                 i,bpvinfo.bp_size,bpvinfo.bp_vop_size,bpvinfo.vopinfo[i].state,bpvinfo.vopinfo[i].zone_num);
         }    
         if(ioctl(Context->ddrFd, RK_QUEDDR_FREQ, &bpvinfo))
@@ -3377,9 +3479,16 @@ check_layer(
     struct private_handle_t * handle =
         (struct private_handle_t *) Layer->handle;
     //(void) Context;
-    
+
     (void) Count;
     (void) Index;
+
+    if(0 == Index && (Layer->blending >> 16) < 250
+        && ((Layer->blending & 0xffff) == HWC_BLENDING_PREMULT)){
+        Context->mAlphaError = true;
+    }else{
+        Context->mAlphaError = false;
+    }
 
 #if OPTIMIZATION_FOR_DIMLAYER
     if(!strcmp(Layer->LayerName,"DimLayer"))
@@ -7445,6 +7554,9 @@ int hotplug_get_config(int flag){
     	info.xres = width;
     	info.yres = height;
     }
+#endif
+#if USE_QUEUE_DDRFREQ
+    context->ddrFd = _contextAnchor->fbFd;
 #endif
     int refreshRate = 0;
 	if ( info.pixclock > 0 )
