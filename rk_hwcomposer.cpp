@@ -1400,7 +1400,7 @@ int try_wins_dispatch_hor(void * ctx,hwc_display_contents_1_t * list)
             win_disphed_flag[j+2] = 1; // win2 ,win3 is dispatch flag
             ALOGV("more twice zones srot_tal[%d][1]=%d",i,srot_tal[i][1]);
             j++;
-            if(j > 1)  // lcdc only has win2 and win3 supprot more zones
+            if(j > 2)  // lcdc only has win2 and win3 supprot more zones
             {
                 ALOGD_IF(mLogL>4,"lcdc only has win2 and win3 supprot more zones");
                 return -1;  
@@ -1417,7 +1417,7 @@ int try_wins_dispatch_hor(void * ctx,hwc_display_contents_1_t * list)
             win_disphed_flag[j] = 1; // win2 ,win3 is dispatch flag
             ALOGV("stretch zones srot_tal[%d][1]=%d",i,srot_tal[i][1]);
             j++;
-            if(j > 1)  // lcdc only has win2 and win3 supprot more zones
+            if(j > 2)  // lcdc only has win2 and win3 supprot more zones
             {
                 ALOGD_IF(mLogL>4,"lcdc only has win0 and win1 supprot stretch");
                 return -1;  
@@ -1836,7 +1836,7 @@ int try_wins_dispatch_mix_up(void * ctx,hwc_display_contents_1_t * list)
             win_disphed_flag[j] = 1; // win0 ,win1 is dispatch flag
             ALOGV("stretch zones srot_tal[%d][1]=%d",i,srot_tal[i][1]);
             j++;
-            if(j > 1)  // lcdc only has win0 and win1 supprot stretch
+            if(j > 2)  // lcdc only has win0 and win1 supprot stretch
             {
                 ALOGD_IF(mLogL>5,"lcdc only has win0 and win1 supprot stretch");
                 return -1;  
@@ -2264,7 +2264,7 @@ int try_wins_dispatch_mix_down(void * ctx,hwc_display_contents_1_t * list)
             win_disphed_flag[j] = 1; // win0 ,win1 is dispatch flag
             ALOGV("stretch zones srot_tal[%d][1]=%d",i,srot_tal[i][1]);
             j++;
-            if(j > 1)  // lcdc only has win0 and win1 supprot stretch
+            if(j > 2)  // lcdc only has win0 and win1 supprot stretch
             {
                 //ALOGD("lcdc only has win0 and win1 supprot stretch");
                 return -1;  
@@ -2537,7 +2537,7 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
             }
             else
             {
-                layer->compositionType = HWC_FRAMEBUFFER;
+                layer->compositionType = HWC_NODRAW;
             }
             if(gpu_draw && pzone_mag->zone_info[i].layer_index > iFirstTransformLayer)
             {
@@ -2695,7 +2695,7 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
             win_disphed_flag[j] = 1; // win0 ,win1 is dispatch flag
             ALOGV("stretch zones srot_tal[%d][1]=%d",i,srot_tal[i][1]);
             j++;
-            if(j > 1)  // lcdc only has win0 and win1 supprot stretch
+            if(j > 2)  // lcdc only has win0 and win1 supprot stretch
             {
                 //ALOGD("lcdc only has win0 and win1 supprot stretch");
                 return -1;  
@@ -3281,7 +3281,7 @@ int try_wins_dispatch_mix_vh (void * ctx,hwc_display_contents_1_t * list)
     memcpy(&Context->zone_manager,&zone_m,sizeof(ZoneManager));
     Context->mHdmiSI.mix_vh = true;
     Context->zone_manager.composter_mode = HWC_MIX_V2;
-    return 0;    
+    return 0;
 }
 
 
@@ -4603,6 +4603,47 @@ BackToGPU:
 #endif
 
 //extern "C" void *blend(uint8_t *dst, uint8_t *src, int dst_w, int src_w, int src_h);
+int hwc_control_3dmode(int num,int flag)
+{
+    hwcContext * context = _contextAnchor1;
+    if(context->fd_3d < 0 || !_contextAnchor1)
+        return -1;
+
+    int ret = 0;
+    int fd = context->fd_3d;
+    switch(flag){
+    case 0:
+        char buf[200];
+        memset(buf,0,sizeof(buf));
+        read(fd, buf, sizeof(buf));
+        int mode,hdmi3dmode;
+        //ALOGI("line %d,buf[%s]",__LINE__,str);
+        sscanf(buf,"3dmodes=%d cur3dmode=%d",&mode,&hdmi3dmode);
+        //ALOGI("hdmi3dmode=%d,mode=%d",hdmi3dmode,mode);
+
+        if(8==hdmi3dmode)
+            ret = 1;
+        else if(6==hdmi3dmode)
+            ret = 2;
+        else 
+            ret = 0;
+        break;
+        
+    case 1:
+        if(1==num)
+            ret = write(fd,"8",2);
+        else if(2==num)
+            ret = write(fd,"6",2);
+        else
+            ret = write(fd,"-1",2);
+        break;
+        
+    default:
+        break;
+    }
+    return ret;
+}
+
 int dump_prepare_info(hwc_display_contents_1_t** displays, int flag)
 {
     if(mLogL<1)
@@ -4713,6 +4754,8 @@ int hwc_pre_prepare(hwc_display_contents_1_t** displays, int flag)
                         displays[i]->hwLayers[j].displayStereo = needStereo;
                     }
                 }
+                if(needStereo != hwc_control_3dmode(2,0))
+                    hwc_control_3dmode(needStereo,1);
             }
             for(unsigned int j=0;j<numlayer - 1;j++)
             {
@@ -5193,7 +5236,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
         goto GpuComP;
     }
     
-    if(context->zone_manager.composter_mode != HWC_MIX || 1)
+    if(context->zone_manager.composter_mode != HWC_MIX)
     {
         for(i = 0;i<GPUDRAWCNT;i++)
         {
@@ -5988,39 +6031,44 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
 #if USE_HWC_FENCE
         for(unsigned int i=0;i<RK_MAX_BUF_NUM;i++)
     	{
-            ALOGV("rel_fence_fd[%d] = %d", i, fb_info.rel_fence_fd[i]);
+            //ALOGD("rel_fence_fd[%d] = %d", i, fb_info.rel_fence_fd[i]);
             if(fb_info.rel_fence_fd[i] >= 0)
             {
-                if(i< (list->numHwLayers -1))
+                if(i< list->numHwLayers)
                 {
                     if(fb_info.win_par[0].area_par[0].data_format == HAL_PIXEL_FORMAT_YCrCb_NV12_OLD
-                        &&list->hwLayers[0].transform != 0)  
+                        &&list->hwLayers[0].transform != 0 && 0 == i)
                     {
                         list->hwLayers[i].releaseFenceFd = -1;
                         close(fb_info.rel_fence_fd[i]);
                     }
                     else
                     {
-                        if(mix_flag == 1)  // mix
+                        if(mix_flag == 1 && !context->mHdmiSI.mix_up)
                         {
-                            if(list->hwLayers[i+1].releaseFenceFd > 0)
-                                close(list->hwLayers[i+1].releaseFenceFd);
-                            list->hwLayers[i+1].releaseFenceFd = fb_info.rel_fence_fd[i];
+                            list->hwLayers[i+2].releaseFenceFd = fb_info.rel_fence_fd[i];
+                        }
+                        else if(mix_flag)
+                        {
+                            if(i<1)
+                                list->hwLayers[list->numHwLayers -1].releaseFenceFd = fb_info.rel_fence_fd[i];
+                            else
+                                list->hwLayers[i-1].releaseFenceFd = fb_info.rel_fence_fd[i];
                         }
                         else
                         {
-                            if(list->hwLayers[i].releaseFenceFd>0)
-                            {
-                                close(list->hwLayers[i].releaseFenceFd);
-                            }
                             list->hwLayers[i].releaseFenceFd = fb_info.rel_fence_fd[i];
                         }
-                    }        
+                        
+                    }
                 }    
                 else
                     close(fb_info.rel_fence_fd[i]);
              }
     	}
+    	//for(unsigned int i=0;i< (list->numHwLayers);i++)
+            //ALOGD("list->hwLayers[%d].releaseFenceFd=%d",i,list->hwLayers[i].releaseFenceFd);
+
         if(list->retireFenceFd > 0)
         {
             close(list->retireFenceFd);
@@ -7530,6 +7578,11 @@ int hotplug_get_config(int flag){
         return -errno;
 	}
 #endif
+
+    context->fd_3d = open("/sys/class/display/HDMI/3dmode", O_RDONLY, 0);
+    if(context->fd_3d < 0)
+        ALOGE("open /sys/class/display/HDMI/3dmode fail");
+
 #if (defined(RK3368_BOX) || defined(RK3288_BOX))
     if(flag == 1)
     {

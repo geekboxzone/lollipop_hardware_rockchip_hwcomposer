@@ -502,6 +502,9 @@ typedef struct _hwcContext
 
      /*policy */
      int (*fun_policy[HWC_POLICY_NUM])(void * ,hwc_display_contents_1_t*);
+
+     /*hdmi 3d detech*/
+     int fd_3d;
      
      /* The index of video buffer will be used */
      int      mCurVideoIndex;
