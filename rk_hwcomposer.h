@@ -53,6 +53,7 @@
 #define OPTIMIZATION_FOR_DIMLAYER       1           //1: optimise for dim layer
 #define HWC_EXTERNAL                    1           //1:hwc control two lcdc for display
 #define USE_QUEUE_DDRFREQ               1
+#define SPRITEOPTIMATION                0
 
 #ifdef GPU_G6110
 #define G6110_SUPPORT_FBDC              0
@@ -74,6 +75,7 @@
 #define MaxVideoBackBuffers         (3)
 #define MAX_VIDEO_SOURCE            (5)
 #define GPUDRAWCNT                  (10)
+#define MaxSpriteBNUM               (3)
 
 //Other macro
 #define GPU_WIDTH       handle->width
@@ -82,14 +84,14 @@
 #define GPU_DST_FORMAT  DstHandle->format
 
 
-#define GHWC_VERSION  "2.037"
+#define GHWC_VERSION  "2.038"
 //HWC version Tag
 //Get commit info:  git log --format="Author: %an%nTime:%cd%nCommit:%h%n%n%s%n%n"
 //Get version: busybox strings /system/lib/hw/hwcomposer.rk30board.so | busybox grep HWC_VERSION
 //HWC_VERSION Author:zxl Time:Tue Aug 12 17:27:36 2014 +0800 Version:1.17 Branch&Previous-Commit:rk/rk312x/mid/4.4_r1/develop-9533348.
 #define HWC_VERSION "HWC_VERSION  \
 Author: wzq \
-Version:2.037 \
+Version:2.038 \
 "
 
 #ifdef GPU_G6110
@@ -434,6 +436,22 @@ typedef enum _cmpType
     HWC_POLICY_NUM
 }cmpType;
 
+#if SPRITEOPTIMATION
+typedef struct _bufferInfo
+{
+     int      mCurIndex;
+     int      fd_bk[MaxSpriteBNUM];
+#if defined(__arm64__) || defined(__aarch64__)
+     long     fd[MaxSpriteBNUM];
+     long     hd_base[MaxSpriteBNUM];
+#else
+     int      fd[MaxSpriteBNUM];
+     int      hd_base[MaxSpriteBNUM];
+#endif
+     buffer_handle_t handle[MaxSpriteBNUM];
+}bufferInfo;
+#endif
+
 typedef struct _hwcContext
 {
     hwc_composer_device_1_t device;
@@ -506,6 +524,11 @@ typedef struct _hwcContext
      /*hdmi 3d detech*/
      int fd_3d;
      
+#if SPRITEOPTIMATION
+     /*sprite*/
+     bufferInfo mSrBI;
+#endif
+ 
      /* The index of video buffer will be used */
      int      mCurVideoIndex;
      int      fd_video_bk[MaxVideoBackBuffers];

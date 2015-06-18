@@ -139,6 +139,11 @@ hotplug_set_frame(
     hwcContext * context,
     int flag);
 
+int
+sprite_replace(
+    hwcContext * Context,
+    hwc_display_contents_1_t * list);
+
 int hwChangeFormatandroidL(IN int fmt)
 {
 	switch (fmt) 
@@ -1337,7 +1342,7 @@ int try_wins_dispatch_hor(void * ctx,hwc_display_contents_1_t * list)
     }
     if(sort >4)  // lcdc dont support 5 wins
     {
-        ALOGD_IF(mLogL>3,"try %s lcdc<5wins sort=%d,%d",sort,__func__,__LINE__);
+        ALOGD_IF(mLogL>3,"try %s lcdc<5wins sort=%d,%d",__FUNCTION__,sort,__LINE__);
         return -1;
     }    
 	//pzone_mag->zone_info[i].sort: win type
@@ -1474,11 +1479,13 @@ int try_wins_dispatch_hor(void * ctx,hwc_display_contents_1_t * list)
     for(i=0;i<pzone_mag->zone_cnt;i++){
         int disptched = pzone_mag->zone_info[i].dispatched;
         int sct_width = pzone_mag->zone_info[i].width;
+        int sct_height = pzone_mag->zone_info[i].height;
         /*win2 win3 not support YUV*/
         if(disptched > win1 && is_yuv(pzone_mag->zone_info[i].format))
             return -1;
         /*scal not support whoes source bigger than 2560 to dst 4k*/
-        if(disptched <= win1 && sct_width > 2160 && contextAh->mHdmiSI.NeedReDst)
+        if(disptched <= win1 &&(sct_width > 2160 || sct_height > 2160) &&
+            !is_yuv(pzone_mag->zone_info[i].format) && contextAh->mHdmiSI.NeedReDst)
             return -1;
     }
 
@@ -1899,8 +1906,10 @@ int try_wins_dispatch_mix_up(void * ctx,hwc_display_contents_1_t * list)
     for(i=0;i<pzone_mag->zone_cnt;i++){
         int disptched = pzone_mag->zone_info[i].dispatched;
         int sct_width = pzone_mag->zone_info[i].width;
+        int sct_height = pzone_mag->zone_info[i].height;
         /*scal not support whoes source bigger than 2560 to dst 4k*/
-        if(disptched <= win1 && sct_width > 2160 && contextAh->mHdmiSI.NeedReDst)
+        if(disptched <= win1 &&(sct_width > 2160 || sct_height > 2160) &&
+            !is_yuv(pzone_mag->zone_info[i].format) && contextAh->mHdmiSI.NeedReDst)
             return -1;
     }
         
@@ -2757,11 +2766,13 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
     for(i=0;i<pzone_mag->zone_cnt;i++){
         int disptched = pzone_mag->zone_info[i].dispatched;
         int sct_width = pzone_mag->zone_info[i].width;
+        int sct_height = pzone_mag->zone_info[i].height;
         /*win2 win3 not support YUV*/
         if(disptched > win1 && is_yuv(pzone_mag->zone_info[i].format))
             return -1;
         /*scal not support whoes source bigger than 2560 to dst 4k*/
-        if(disptched <= win1 && sct_width > 2160 && contextAh->mHdmiSI.NeedReDst)
+        if(disptched <= win1 &&(sct_width > 2160 || sct_height > 2160) &&
+            !is_yuv(pzone_mag->zone_info[i].format) && contextAh->mHdmiSI.NeedReDst)
             return -1;
     }
 
@@ -3186,7 +3197,10 @@ int try_wins_dispatch_mix_vh (void * ctx,hwc_display_contents_1_t * list)
     for(i=0;i<pzone_mag->zone_cnt;i++){
         int disptched = pzone_mag->zone_info[i].dispatched;
         int sct_width = pzone_mag->zone_info[i].width;
-        if(disptched <= win1 && sct_width > 2160 && contextAh->mHdmiSI.NeedReDst)
+        int sct_height = pzone_mag->zone_info[i].height;
+        /*scal not support whoes source bigger than 2560 to dst 4k*/
+        if(disptched <= win1 &&(sct_width > 2160 || sct_height > 2160) &&
+            !is_yuv(pzone_mag->zone_info[i].format) && contextAh->mHdmiSI.NeedReDst)
             return -1;
     }
 
@@ -4610,14 +4624,19 @@ int hwc_control_3dmode(int num,int flag)
         return -1;
 
     int ret = 0;
+    ssize_t err;
+    char buf[200];
     int fd = context->fd_3d;
     switch(flag){
     case 0:
-        char buf[200];
         memset(buf,0,sizeof(buf));
-        read(fd, buf, sizeof(buf));
+        lseek(fd,0,SEEK_SET);
+        err = read(fd, buf, sizeof(buf));
+        if(err <= 0)
+            ALOGW("read hdmi 3dmode err=%d",err);
+
         int mode,hdmi3dmode;
-        //ALOGI("line %d,buf[%s]",__LINE__,str);
+        //ALOGI("line %d,buf[%s]",__LINE__,buf);
         sscanf(buf,"3dmodes=%d cur3dmode=%d",&mode,&hdmi3dmode);
         //ALOGI("hdmi3dmode=%d,mode=%d",hdmi3dmode,mode);
 
@@ -4630,12 +4649,15 @@ int hwc_control_3dmode(int num,int flag)
         break;
         
     case 1:
+        lseek(fd,0,SEEK_SET);
         if(1==num)
             ret = write(fd,"8",2);
         else if(2==num)
             ret = write(fd,"6",2);
         else
-            ret = write(fd,"-1",2);
+            ret = write(fd,"-1",3);
+        if(ret < 0)
+            ALOGW("change 3dmode to %d err is %s",num,strerror(errno));
         break;
         
     default:
@@ -5182,9 +5204,9 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
         err = 0;
         for(i=0;i<MaxVideoBackBuffers;i++)
         {
+            ALOGD("free video fd=%d,base=%p,%p",context->fd_video_bk[i], context->base_video_bk[i],context->pbvideo_bk[i]);
             if(context->pbvideo_bk[i] != NULL)
                 err = context->mAllocDev->free(context->mAllocDev, context->pbvideo_bk[i]);
-            ALOGV("free video fd=%d,base=%p",context->fd_video_bk[i], context->base_video_bk[i]);
             if(!err)
             {
                 context->fd_video_bk[i] = -1;
@@ -5222,6 +5244,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
 #endif
 
     ret = collect_all_zones(context,list);
+    sprite_replace(context,list);
     if(ret !=0 )
     {
 		ALOGD_IF(mLogL>4,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
@@ -6066,7 +6089,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
                     close(fb_info.rel_fence_fd[i]);
              }
     	}
-    	//for(unsigned int i=0;i< (list->numHwLayers);i++)
+        //for(unsigned int i=0;i< (list->numHwLayers);i++)
             //ALOGD("list->hwLayers[%d].releaseFenceFd=%d",i,list->hwLayers[i].releaseFenceFd);
 
         if(list->retireFenceFd > 0)
@@ -6443,7 +6466,7 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
         {
             count++;
             usleep(10000);
-            if(50==count){
+            if(300==count){
                 ALOGW("wait for unblank");
                 break;
             }
@@ -7248,8 +7271,8 @@ hwc_device_open(
             if(!err){
                 struct private_handle_t*phandle_gr = (struct private_handle_t*)bkupmanage.bkupinfo[i].phd_bk;
                 bkupmanage.bkupinfo[i].membk_fd = phandle_gr->share_fd;
-                ALOGD("@hwc alloc[%d] [%dx%d,f=%d],fd=%d ",i,phandle_gr->width,phandle_gr->height,phandle_gr->format,phandle_gr->share_fd);                                
-    
+                ALOGD("@hwc alloc[%d] [%dx%d,f=%d],fd=%d ",i,phandle_gr->width,
+                    phandle_gr->height,phandle_gr->format,phandle_gr->share_fd);
             }
             else{
                 ALOGE("hwc alloc[%d] faild",i);
@@ -7279,7 +7302,8 @@ hwc_device_open(
 #else
         context->mDimBase = (int)(GPU_BASE);
 #endif
-        ALOGD("Dim buffer alloc fd [%dx%d,f=%d],fd=%d ",context->fbhandle.width,context->fbhandle.height,HAL_PIXEL_FORMAT_RGB_565,handle->share_fd);
+        ALOGD("Dim buffer alloc fd [%dx%d,f=%d],fd=%d ",context->fbhandle.width,
+            context->fbhandle.height,HAL_PIXEL_FORMAT_RGB_565,handle->share_fd);
     }
     else{
             ALOGE("Dim buffer alloc faild");
@@ -7295,7 +7319,11 @@ hwc_device_open(
     if(!err){
         struct private_handle_t* handle = (struct private_handle_t*)context->mHdmiSI.FrameHandle;
         context->mHdmiSI.FrameFd = handle->share_fd;
+#if defined(__arm64__) || defined(__aarch64__)
+        context->mHdmiSI.FrameBase = (long)(GPU_BASE);
+#else
         context->mHdmiSI.FrameBase = (int)(GPU_BASE);
+#endif
         ALOGD("Frame buffer alloc fd [32x32,f=%d],fd=%d ",HAL_PIXEL_FORMAT_RGB_565,handle->share_fd);
     }
     else{
@@ -7303,6 +7331,30 @@ hwc_device_open(
         goto OnError;
     }
     memset((void*)context->mHdmiSI.FrameBase,0x00,32*32*2);
+
+#if SPRITEOPTIMATION
+    /*sprite*/
+    for(i=0;i<3;i++)
+    {
+        err = context->mAllocDev->alloc(context->mAllocDev, 64,64,HAL_PIXEL_FORMAT_RGBA_8888,\
+                    GRALLOC_USAGE_HW_COMPOSER|GRALLOC_USAGE_HW_RENDER,\
+                    (buffer_handle_t*)(&context->mSrBI.handle[i]),&stride_gr);
+        if(!err){
+            struct private_handle_t*handle = (struct private_handle_t*)context->mSrBI.handle[i];
+            context->mSrBI.fd[i] = handle->share_fd;
+#if defined(__arm64__) || defined(__aarch64__)
+            context->mSrBI.hd_base[i] = (long)(GPU_BASE);
+#else
+            context->mSrBI.hd_base[i] = (int)(GPU_BASE);
+#endif
+            ALOGD("@hwc alloc[%d] [%dx%d,f=%d],fd=%d ",
+                i,handle->width,handle->height,handle->format,handle->share_fd);
+        }else{
+            ALOGE("hwc alloc[%d] faild",i);
+            goto OnError;
+        }
+    }
+#endif
 
     /* Increment reference count. */
     context->reference++;
@@ -7579,7 +7631,7 @@ int hotplug_get_config(int flag){
 	}
 #endif
 
-    context->fd_3d = open("/sys/class/display/HDMI/3dmode", O_RDONLY, 0);
+    context->fd_3d = open("/sys/class/display/HDMI/3dmode", O_RDWR, 0);
     if(context->fd_3d < 0)
         ALOGE("open /sys/class/display/HDMI/3dmode fail");
 
@@ -7722,6 +7774,30 @@ int hotplug_get_config(int flag){
     }
 
     memset((void*)context->mDimBase,0x0,context->fbhandle.width*context->fbhandle.height*2);
+#endif
+#if SPRITEOPTIMATION
+    /*sprite*/
+    for(int i=0;i<MaxSpriteBNUM;i++)
+    {
+        err = context->mAllocDev->alloc(context->mAllocDev, 64,64,HAL_PIXEL_FORMAT_RGBA_8888,\
+                    GRALLOC_USAGE_HW_COMPOSER|GRALLOC_USAGE_HW_RENDER,\
+                    (buffer_handle_t*)(&context->mSrBI.handle[i]),&stride_gr);
+        if(!err){
+            struct private_handle_t*handle = (struct private_handle_t*)context->mSrBI.handle[i];
+            context->mSrBI.fd[i] = handle->share_fd;
+#if defined(__arm64__) || defined(__aarch64__)
+            context->mSrBI.hd_base[i] = (long)(GPU_BASE);
+#else
+            context->mSrBI.hd_base[i] = (int)(GPU_BASE);
+#endif
+            ALOGD("@hwc alloc[%d] [%dx%d,f=%d],fd=%d ",
+                i,handle->width,handle->height,handle->format,handle->share_fd);
+        }else{
+            ALOGE("hwc alloc[%d] faild",i);
+            goto OnError;
+        }
+    }
+    context->mSrBI.mCurIndex = 0;
 #endif
     context->fun_policy[HWC_VOP] = try_wins_dispatch_hor;
     context->fun_policy[HWC_RGA] = try_wins_dispatch_mix_v2;
@@ -8134,3 +8210,159 @@ int hotplug_set_frame(hwcContext* context,int flag)
     return ret;
 }
 
+int sprite_replace(hwcContext * Context,hwc_display_contents_1_t * list)
+{
+#if SPRITEOPTIMATION
+    //struct timeval ts,te;
+    //gettimeofday(&ts,NULL);
+    ZoneManager* pzone_mag = &Context->zone_manager;
+    int i = pzone_mag->zone_cnt-1;//Must be Sprite if has
+
+    if(pzone_mag->zone_info[i].zone_err || _contextAnchor->mHdmiSI.NeedReDst)
+        return -1;
+
+    if(!strcmp(pzone_mag->zone_info[i].LayerName,"Sprite")
+        && !pzone_mag->zone_info[i].transform &&
+        (pzone_mag->zone_info[i].toosmall || pzone_mag->zone_info[i].is_stretch)){
+        pzone_mag->zone_info[i].toosmall = false;
+        pzone_mag->zone_info[i].is_stretch = false;
+    }else{
+        return 0;
+    }
+
+	ZoneInfo mZoneInfo;
+    int width=0,height=0;
+	int xpos,ypos;
+	int x_offset,y_offset;
+    RECT clip;
+    int Rotation = 0;
+    unsigned char RotateMode = 1;
+    struct rga_req  Rga_Request;
+    int SrcVirW,SrcVirH,SrcActW,SrcActH;
+    int DstVirW,DstVirH,DstActW,DstActH;
+    int xoffset;
+    int yoffset;
+    int fd_dst = Context->mSrBI.fd[Context->mSrBI.mCurIndex];
+    int Dstfmt = hwChangeRgaFormat(HAL_PIXEL_FORMAT_RGBA_8888);
+    int rga_fd = _contextAnchor->engine_fd;
+
+    if (!rga_fd)
+        return -1;
+       
+    hwcContext * context = _contextAnchor;
+    if(Context==_contextAnchor){
+        width  = Context->dpyAttr[0].xres;
+        height = Context->dpyAttr[0].yres;
+    }else if(Context==_contextAnchor1){
+		width  = Context->dpyAttr[1].xres;
+        height = Context->dpyAttr[1].yres;
+	}
+    memcpy(&mZoneInfo,&pzone_mag->zone_info[i],sizeof(ZoneInfo));
+
+    DstVirW = 64;
+    DstVirH = 64;
+    DstActW = mZoneInfo.disp_rect.right  - mZoneInfo.disp_rect.left;
+    DstActH = mZoneInfo.disp_rect.bottom - mZoneInfo.disp_rect.top;
+	
+    struct private_handle_t *handle = mZoneInfo.handle;
+    if (!handle)
+        return -1;
+        
+    if(mZoneInfo.disp_rect.left <= width - mZoneInfo.disp_rect.right)
+        xpos = mZoneInfo.disp_rect.left;
+    else
+		xpos = mZoneInfo.disp_rect.right - 64;
+	if(mZoneInfo.disp_rect.top <= height - mZoneInfo.disp_rect.bottom)
+        ypos = mZoneInfo.disp_rect.top;
+    else
+		ypos = mZoneInfo.disp_rect.bottom - 64;
+
+	xoffset = mZoneInfo.disp_rect.left - xpos;
+	yoffset = mZoneInfo.disp_rect.top  - ypos;
+    
+    x_offset = mZoneInfo.src_rect.left;
+    y_offset = mZoneInfo.src_rect.top;
+    
+    SrcVirW = handle->stride;
+    SrcVirH = handle->height;
+    SrcActW = mZoneInfo.src_rect.right - mZoneInfo.src_rect.left;
+    SrcActH = mZoneInfo.src_rect.bottom - mZoneInfo.src_rect.top;
+    
+    mZoneInfo.disp_rect.left   = xpos;
+    mZoneInfo.disp_rect.right  = xpos + 64;
+    mZoneInfo.disp_rect.top    = ypos;
+    mZoneInfo.disp_rect.bottom = ypos + 64;
+    mZoneInfo.src_rect.left    = 0;
+    mZoneInfo.src_rect.right   = 64;
+    mZoneInfo.src_rect.top     = 0;
+    mZoneInfo.src_rect.bottom  = 64;
+    
+	mZoneInfo.layer_fd = Context->mSrBI.fd[Context->mSrBI.mCurIndex];
+    memset((void*)(Context->mSrBI.hd_base[Context->mSrBI.mCurIndex]),0x00,16384);
+    
+    memcpy(&pzone_mag->zone_info[i],&mZoneInfo,sizeof(ZoneInfo));
+    ALOGD_IF(mLogL>2,"Sprite Zone[%d]->layer[%d],"
+        "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
+        "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],acq_fence_fd=%d,"
+        "layname=%s",
+        Context->zone_manager.zone_info[i].zone_index,
+        Context->zone_manager.zone_info[i].layer_index,
+        Context->zone_manager.zone_info[i].src_rect.left,
+        Context->zone_manager.zone_info[i].src_rect.top,
+        Context->zone_manager.zone_info[i].src_rect.right,
+        Context->zone_manager.zone_info[i].src_rect.bottom,
+        Context->zone_manager.zone_info[i].disp_rect.left,
+        Context->zone_manager.zone_info[i].disp_rect.top,
+        Context->zone_manager.zone_info[i].disp_rect.right,
+        Context->zone_manager.zone_info[i].disp_rect.bottom,
+        Context->zone_manager.zone_info[i].width,
+        Context->zone_manager.zone_info[i].height,
+        Context->zone_manager.zone_info[i].stride,
+        Context->zone_manager.zone_info[i].format,
+        Context->zone_manager.zone_info[i].transform,
+        Context->zone_manager.zone_info[i].realtransform,
+        Context->zone_manager.zone_info[i].blend,
+        Context->zone_manager.zone_info[i].acq_fence_fd,
+        Context->zone_manager.zone_info[i].LayerName);
+
+    memset(&Rga_Request, 0x0, sizeof(Rga_Request));
+
+    clip.xmin = 0;
+    clip.xmax = 63;
+    clip.ymin = 0;
+    clip.ymax = 63;
+
+    ALOGD_IF(mLogL>2,"src addr=[%x],w-h[%d,%d],act[%d,%d],off[%d,%d][f=%d]",
+        handle->share_fd, SrcVirW, SrcVirH,SrcActW,SrcActH,x_offset,y_offset,hwChangeRgaFormat(handle->format));
+    ALOGD_IF(mLogL>2,"dst fd=[%x],w-h[%d,%d],act[%d,%d],off[%d,%d][f=%d],rot=%d,rot_mod=%d",
+        fd_dst, DstVirW, DstVirH,DstActW,DstActH,xoffset,yoffset,Dstfmt,Rotation,RotateMode);
+
+    RGA_set_src_vir_info(&Rga_Request, handle->share_fd, 0, 0,SrcVirW, SrcVirH, hwChangeRgaFormat(handle->format), 0);    
+    RGA_set_dst_vir_info(&Rga_Request, fd_dst, 0, 0,DstVirW,DstVirH,&clip, Dstfmt, 0);
+    RGA_set_bitblt_mode(&Rga_Request, 0, RotateMode,Rotation,0,0,0);
+    RGA_set_src_act_info(&Rga_Request,SrcActW,SrcActH, x_offset,y_offset);
+    RGA_set_dst_act_info(&Rga_Request,DstActW,DstActH, xoffset,yoffset);
+
+    if( handle->type == 1 )
+    {
+#if defined(__arm64__) || defined(__aarch64__)
+        RGA_set_dst_vir_info(&Rga_Request, fd_dst,(unsigned long)(GPU_BASE), 0,DstVirW,DstVirH,&clip, Dstfmt, 0);
+#else
+        RGA_set_dst_vir_info(&Rga_Request, fd_dst,(unsigned int)(GPU_BASE), 0,DstVirW,DstVirH,&clip, Dstfmt, 0);
+#endif
+        RGA_set_mmu_info(&Rga_Request, 1, 0, 0, 0, 0, 2);
+        Rga_Request.mmu_info.mmu_flag |= (1<<31) | (1<<10) | (1<<8);
+    }
+
+    if(ioctl(rga_fd, RGA_BLIT_SYNC, &Rga_Request) != 0) {
+        LOGE(" %s(%d) RGA_BLIT fail",__FUNCTION__, __LINE__);
+    }
+    
+    Context->mSrBI.mCurIndex = (Context->mSrBI.mCurIndex + 1)%MaxSpriteBNUM;
+    //gettimeofday(&te,NULL);
+    //ALOGD("SPRITE USE TIME T = %ld",(te.tv_sec-ts.tv_sec)*1000000+te.tv_usec-ts.tv_usec);
+    return 0;
+#else
+    return 0;
+#endif
+}
