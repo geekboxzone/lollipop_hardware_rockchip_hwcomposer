@@ -711,6 +711,15 @@ int is_special_wins(hwcContext * Context)
     return 0;
 }
 
+bool is_same_rect(hwc_rect_t rect1,hwc_rect_t rect2)
+{
+    if(rect1.left == rect2.left && rect1.top == rect2.top
+        && rect1.right == rect2.right && rect1.bottom == rect2.bottom)
+        return true;
+    else
+        return false;
+}
+
 static int ZoneDispatchedCheck(hwcContext* ctx,ZoneManager* pzone_mag,int flag)
 {
     int ret = 0;
@@ -1678,16 +1687,18 @@ int try_wins_dispatch_mix_up(void * ctx,hwc_display_contents_1_t * list)
             hwc_layer_1_t * layer = &list->hwLayers[pzone_mag->zone_info[i].layer_index];
             //Judge the current layer whether backup in gmixinfo[mix_index] or not.
             if(gmixinfo[mix_index].gpu_draw_fd[pzone_mag->zone_info[i].layer_index] != pzone_mag->zone_info[i].layer_fd
-                || gmixinfo[mix_index].alpha[pzone_mag->zone_info[i].layer_index] != pzone_mag->zone_info[i].zone_alpha)
+                || gmixinfo[mix_index].alpha[pzone_mag->zone_info[i].layer_index] != pzone_mag->zone_info[i].zone_alpha
+                || !is_same_rect(gmixinfo[mix_index].disp_rect[pzone_mag->zone_info[i].layer_index],pzone_mag->zone_info[i].disp_rect))
             {
                 gpu_draw = 1;
                 layer->compositionType = HWC_FRAMEBUFFER;
                 gmixinfo[mix_index].gpu_draw_fd[pzone_mag->zone_info[i].layer_index] = pzone_mag->zone_info[i].layer_fd;  
                 gmixinfo[mix_index].alpha[pzone_mag->zone_info[i].layer_index] = pzone_mag->zone_info[i].zone_alpha;
+                memcpy(&gmixinfo[mix_index].disp_rect[pzone_mag->zone_info[i].layer_index],&pzone_mag->zone_info[i].disp_rect,sizeof(hwc_rect_t));
             }
             else
             {
-                layer->compositionType = HWC_FRAMEBUFFER;
+                layer->compositionType = HWC_NODRAW;
             }
             if(gpu_draw && pzone_mag->zone_info[i].layer_index > 1)
             {
@@ -8329,16 +8340,16 @@ int sprite_replace(hwcContext * Context,hwc_display_contents_1_t * list)
     clip.ymin = 0;
     clip.ymax = 63;
 
-    ALOGD_IF(mLogL>2,"src addr=[%x],w-h[%d,%d],act[%d,%d],off[%d,%d][f=%d]",
+    ALOGD_IF(1,"src addr=[%x],w-h[%d,%d],act[%d,%d],off[%d,%d][f=%d]",
         handle->share_fd, SrcVirW, SrcVirH,SrcActW,SrcActH,x_offset,y_offset,hwChangeRgaFormat(handle->format));
-    ALOGD_IF(mLogL>2,"dst fd=[%x],w-h[%d,%d],act[%d,%d],off[%d,%d][f=%d],rot=%d,rot_mod=%d",
+    ALOGD_IF(1,"dst fd=[%x],w-h[%d,%d],act[%d,%d],off[%d,%d][f=%d],rot=%d,rot_mod=%d",
         fd_dst, DstVirW, DstVirH,DstActW,DstActH,xoffset,yoffset,Dstfmt,Rotation,RotateMode);
 
     RGA_set_src_vir_info(&Rga_Request, handle->share_fd, 0, 0,SrcVirW, SrcVirH, hwChangeRgaFormat(handle->format), 0);    
     RGA_set_dst_vir_info(&Rga_Request, fd_dst, 0, 0,DstVirW,DstVirH,&clip, Dstfmt, 0);
     RGA_set_bitblt_mode(&Rga_Request, 0, RotateMode,Rotation,0,0,0);
     RGA_set_src_act_info(&Rga_Request,SrcActW,SrcActH, x_offset,y_offset);
-    RGA_set_dst_act_info(&Rga_Request,DstActW,DstActH, xoffset,yoffset);
+    RGA_set_dst_act_info(&Rga_Request,DstActW,DstActH, 0,0);
 
     if( handle->type == 1 )
     {

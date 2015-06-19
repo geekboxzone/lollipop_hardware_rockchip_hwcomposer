@@ -192,7 +192,7 @@ typedef struct _mix_info
 {
     int gpu_draw_fd[GPUDRAWCNT];
     int alpha[GPUDRAWCNT];
-
+    hwc_rect_t  disp_rect[GPUDRAWCNT];
 }
 mix_info;
 
