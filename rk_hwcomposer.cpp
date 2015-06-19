@@ -5635,7 +5635,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
         fb_info.rel_fence_fd[i] = -1;
     }
 
-    if(mix_flag == 1)
+    if(mix_flag == 1 && !context->mHdmiSI.mix_up)
         z_order ++;
     for(i=0;i<pzone_mag->zone_cnt;i++)
     {
@@ -5961,12 +5961,12 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
         }
 
         win_no ++;
-        if(mix_flag == 1)
+        if(mix_flag == 1 && !context->mHdmiSI.mix_up)
         {
             format = context->fbhandle.format;
             z_order=1;
         }
-        else if(mix_flag == 2)
+        else if(mix_flag == 2 || (mix_flag == 1 && context->mHdmiSI.mix_up))
         {
             format = HAL_PIXEL_FORMAT_RGBA_8888;
             z_order++;
@@ -5979,10 +5979,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
             fb_info.win_par[win_no-1].win_id = 1;    
         else
             fb_info.win_par[win_no-1].win_id = 3;
-        if(context->mHdmiSI.mix_up && mix_flag == 1)
-            fb_info.win_par[win_no-1].z_order = z_order+2;
-        else
-            fb_info.win_par[win_no-1].z_order = z_order-1;
+        fb_info.win_par[win_no-1].z_order = z_order-1;
         fb_info.win_par[win_no-1].area_par[0].ion_fd = handle->share_fd;
 #if USE_HWC_FENCE
         fb_info.win_par[win_no-1].area_par[0].acq_fence_fd = -1;//fbLayer->acquireFenceFd;
