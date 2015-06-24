@@ -3844,15 +3844,16 @@ hwcDumpArea(
 static int CompareLines(int *da,int w)
 {
     int i,j;
-    for(i = 0;i<4;i++) // compare 4 lins
+    for(i = 0;i<1;i++) // compare 4 lins
     {
-        for(j= 0;j<w;j++)  
+        for(j= 0;j<w;j+=8)  
         {
             if((unsigned int)*da != 0xff000000 && (unsigned int)*da != 0x0)
             {
                 return 1;
-            }            
-            da ++;    
+            }
+            da +=8;    
+
         }
     }    
     return 0;
@@ -3861,16 +3862,16 @@ static int CompareVers(int *da,int w,int h)
 {
     int i,j;
     int *data ;
-    for(i = 0;i<4;i++) // compare 4 lins
+    for(i = 0;i<1;i++) // compare 4 lins
     {
         data = da + i;
-        for(j= 0;j<h;j++)  
+        for(j= 0;j<h;j+=4)  
         {
             if((unsigned int)*data != 0xff000000 && (unsigned int)*data != 0x0 )
             {
                 return 1;
-            }    
-            data +=w;    
+            }
+            data +=4*w;    
         }
     }    
     return 0;
@@ -3902,18 +3903,18 @@ static int DetectValidData(int *data,int w,int h)
     */
     if(data == NULL)
         return 1;
-    for(i = h/4;i<h;i+= h/4)
+    for(i = 2;i<h;i+= 8)
     {
         da = data +  i *w;
         if(CompareLines(da,w))
             return 1;
     }    
-    for(i = w/4;i<w;i+= w/4)
-    {
-        da = data +  i ;
-        if(CompareVers(da,w,h))
-            return 1;
-    }
+    //for(i = 8;i<w;i+= 8)
+    //{
+    //    da = data +  i ;
+    //    if(CompareVers(da,w,h))
+    //        return 1;
+    //}
    
     return 0; 
     
@@ -7787,7 +7788,7 @@ int hotplug_get_config(int flag){
     /*sprite*/
     for(int i=0;i<MaxSpriteBNUM;i++)
     {
-        err = context->mAllocDev->alloc(context->mAllocDev, 64,64,HAL_PIXEL_FORMAT_RGBA_8888,\
+        err = context->mAllocDev->alloc(context->mAllocDev, BufferSize,BufferSize,HAL_PIXEL_FORMAT_RGBA_8888,\
                     GRALLOC_USAGE_HW_COMPOSER|GRALLOC_USAGE_HW_RENDER,\
                     (buffer_handle_t*)(&context->mSrBI.handle[i]),&stride_gr);
         if(!err){
@@ -8267,8 +8268,8 @@ int sprite_replace(hwcContext * Context,hwc_display_contents_1_t * list)
 	}
     memcpy(&mZoneInfo,&pzone_mag->zone_info[i],sizeof(ZoneInfo));
 
-    DstVirW = 64;
-    DstVirH = 64;
+    DstVirW = BufferSize;
+    DstVirH = BufferSize;
     DstActW = mZoneInfo.disp_rect.right  - mZoneInfo.disp_rect.left;
     DstActH = mZoneInfo.disp_rect.bottom - mZoneInfo.disp_rect.top;
 	
@@ -8279,11 +8280,11 @@ int sprite_replace(hwcContext * Context,hwc_display_contents_1_t * list)
     if(mZoneInfo.disp_rect.left <= width - mZoneInfo.disp_rect.right)
         xpos = mZoneInfo.disp_rect.left;
     else
-		xpos = mZoneInfo.disp_rect.right - 64;
+		xpos = mZoneInfo.disp_rect.right - BufferSize;
 	if(mZoneInfo.disp_rect.top <= height - mZoneInfo.disp_rect.bottom)
         ypos = mZoneInfo.disp_rect.top;
     else
-		ypos = mZoneInfo.disp_rect.bottom - 64;
+		ypos = mZoneInfo.disp_rect.bottom - BufferSize;
 
 	xoffset = mZoneInfo.disp_rect.left - xpos;
 	yoffset = mZoneInfo.disp_rect.top  - ypos;
@@ -8295,18 +8296,23 @@ int sprite_replace(hwcContext * Context,hwc_display_contents_1_t * list)
     SrcVirH = handle->height;
     SrcActW = mZoneInfo.src_rect.right - mZoneInfo.src_rect.left;
     SrcActH = mZoneInfo.src_rect.bottom - mZoneInfo.src_rect.top;
-    
+    SrcActW = SrcActW<16?(SrcActW+SrcActW%2):(SrcActW);
+    SrcActH = SrcActH<16?(SrcActH+SrcActH%2):(SrcActH);
+
+    mZoneInfo.stride = (BufferSize + 31)&(~31);
+    mZoneInfo.width = BufferSize;
+    mZoneInfo.height = BufferSize;
     mZoneInfo.disp_rect.left   = xpos;
-    mZoneInfo.disp_rect.right  = xpos + 64;
+    mZoneInfo.disp_rect.right  = xpos + BufferSize;
     mZoneInfo.disp_rect.top    = ypos;
-    mZoneInfo.disp_rect.bottom = ypos + 64;
+    mZoneInfo.disp_rect.bottom = ypos + BufferSize;
     mZoneInfo.src_rect.left    = 0;
-    mZoneInfo.src_rect.right   = 64;
+    mZoneInfo.src_rect.right   = BufferSize;
     mZoneInfo.src_rect.top     = 0;
-    mZoneInfo.src_rect.bottom  = 64;
+    mZoneInfo.src_rect.bottom  = BufferSize;
     
 	mZoneInfo.layer_fd = Context->mSrBI.fd[Context->mSrBI.mCurIndex];
-    memset((void*)(Context->mSrBI.hd_base[Context->mSrBI.mCurIndex]),0x00,16384);
+    memset((void*)(Context->mSrBI.hd_base[Context->mSrBI.mCurIndex]),0x55,BufferSize*BufferSize*4);
     
     memcpy(&pzone_mag->zone_info[i],&mZoneInfo,sizeof(ZoneInfo));
     ALOGD_IF(mLogL>2,"Sprite Zone[%d]->layer[%d],"
@@ -8336,9 +8342,9 @@ int sprite_replace(hwcContext * Context,hwc_display_contents_1_t * list)
     memset(&Rga_Request, 0x0, sizeof(Rga_Request));
 
     clip.xmin = 0;
-    clip.xmax = 63;
+    clip.xmax = BufferSize-1;
     clip.ymin = 0;
-    clip.ymax = 63;
+    clip.ymax = BufferSize-1;
 
     ALOGD_IF(1,"src addr=[%x],w-h[%d,%d],act[%d,%d],off[%d,%d][f=%d]",
         handle->share_fd, SrcVirW, SrcVirH,SrcActW,SrcActH,x_offset,y_offset,hwChangeRgaFormat(handle->format));
@@ -8349,7 +8355,7 @@ int sprite_replace(hwcContext * Context,hwc_display_contents_1_t * list)
     RGA_set_dst_vir_info(&Rga_Request, fd_dst, 0, 0,DstVirW,DstVirH,&clip, Dstfmt, 0);
     RGA_set_bitblt_mode(&Rga_Request, 0, RotateMode,Rotation,0,0,0);
     RGA_set_src_act_info(&Rga_Request,SrcActW,SrcActH, x_offset,y_offset);
-    RGA_set_dst_act_info(&Rga_Request,DstActW,DstActH, 0,0);
+    RGA_set_dst_act_info(&Rga_Request,DstActW,DstActH, xoffset,yoffset);
 
     if( handle->type == 1 )
     {
