@@ -1671,11 +1671,13 @@ int try_wins_dispatch_mix_up(void * ctx,hwc_display_contents_1_t * list)
 
     if(contextAh->mHdmiSI.Is3D)
         return -1;
-        
+
     for(int k=0;k<2;k++)
     {
         if(pzone_mag->zone_info[k].scale_err || pzone_mag->zone_info[k].toosmall
-            || pzone_mag->zone_info[k].zone_err)
+            || pzone_mag->zone_info[k].zone_err || (pzone_mag->zone_info[k].transform
+                && pzone_mag->zone_info[k].format != HAL_PIXEL_FORMAT_YCrCb_NV12 && 0==k)
+                    || (pzone_mag->zone_info[k].transform && 1 == k))
             return -1;
     }
 
@@ -2094,9 +2096,9 @@ int try_wins_dispatch_mix_down(void * ctx,hwc_display_contents_1_t * list)
     for(int k=2;k<pzone_mag->zone_cnt;k++)
     {
         if(pzone_mag->zone_info[k].scale_err || pzone_mag->zone_info[k].toosmall
-            || pzone_mag->zone_info[k].zone_err)
+            || pzone_mag->zone_info[k].zone_err || pzone_mag->zone_info[k].transform)
             return -1;
-    }    
+    }
 
     for(i=0,j=0;i<pzone_mag->zone_cnt;i++)
     {
@@ -2952,10 +2954,11 @@ int try_wins_dispatch_mix_vh (void * ctx,hwc_display_contents_1_t * list)
     if(contextAh->mHdmiSI.Is3D && !contextAh->mHdmiSI.IsVideo3D)
         return -1;
 
-    for(int k=0;k<pzone_mag->zone_cnt;k++)
+    for(int k=0;k<1;k++)
     {
         if(pzone_mag->zone_info[k].scale_err || pzone_mag->zone_info[k].toosmall
-            || pzone_mag->zone_info[k].zone_err)
+            || pzone_mag->zone_info[k].zone_err || (pzone_mag->zone_info[k].transform
+                && (pzone_mag->zone_info[k].format != HAL_PIXEL_FORMAT_YCrCb_NV12)))
             return -1;
     }
 
