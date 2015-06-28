@@ -6512,7 +6512,18 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
         else if(1 == flag)
             context->mHdmiSI.CvbsOn = true;
         hotplug_set_frame(context,0);
+        char value[PROPERTY_VALUE_MAX];
         context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 1);
+        property_get("callbak.hwc.htg",value,"hotplug");
+        int count = 0;
+        while(strcmp(value,"true")){
+            count ++;
+            if(count%3==0)
+                context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 0);
+            context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 1);
+            property_get("callbak.hwc.htg",value,"hotplug");
+            ALOGI("Trying to hotplug device[%d,%d,%d]",__LINE__,mode,flag);
+        }
         ALOGI("connet to hotplug device [%d,%d,%d]",__LINE__,hdmi_mode,flag);
 #if (defined(GPU_G6110) || defined(RK3288_BOX))
         hotplug_set_overscan(0);
