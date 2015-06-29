@@ -5604,13 +5604,8 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
         }          
 #endif
 
-        {
-                struct timeval ts,te;
-                gettimeofday(&ts,NULL);
-                ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info);
-                gettimeofday(&te,NULL);
-                ALOGD("fb post t use %ld us",(te.tv_sec-ts.tv_sec)*1000000+te.tv_usec-ts.tv_usec);
-        }
+        ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info);
+
 #if USE_HWC_FENCE
         for(int k=0;k<RK_MAX_BUF_NUM;k++)
         {
@@ -6063,13 +6058,9 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
                     ALOGW("reset_dst fail [%d]",__LINE__);
             }          
 #endif                   
-            {
-                struct timeval ts,te;
-                gettimeofday(&ts,NULL);
-                ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info);
-                gettimeofday(&te,NULL);
-                ALOGD("t use %ld us",(te.tv_sec-ts.tv_sec)*1000000+te.tv_usec-ts.tv_usec);
-            }
+
+            ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info);
+
         }
 #if USE_HWC_FENCE
         for(unsigned int i=0;i<RK_MAX_BUF_NUM;i++)
