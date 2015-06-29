@@ -5604,8 +5604,13 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
         }          
 #endif
 
-        ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info);
-
+        {
+                struct timeval ts,te;
+                gettimeofday(&ts,NULL);
+                ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info);
+                gettimeofday(&te,NULL);
+                ALOGD("fb post t use %ld us",(te.tv_sec-ts.tv_sec)*1000000+te.tv_usec-ts.tv_usec);
+        }
 #if USE_HWC_FENCE
         for(int k=0;k<RK_MAX_BUF_NUM;k++)
         {
@@ -6058,10 +6063,13 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
                     ALOGW("reset_dst fail [%d]",__LINE__);
             }          
 #endif                   
-            if(ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info) == -1)
             {
-                ALOGE("RK_FBIOSET_CONFIG_DONE err line=%d !",__LINE__);
-            }           
+                struct timeval ts,te;
+                gettimeofday(&ts,NULL);
+                ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info);
+                gettimeofday(&te,NULL);
+                ALOGD("t use %ld us",(te.tv_sec-ts.tv_sec)*1000000+te.tv_usec-ts.tv_usec);
+            }
         }
 #if USE_HWC_FENCE
         for(unsigned int i=0;i<RK_MAX_BUF_NUM;i++)
@@ -6522,7 +6530,7 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
                 context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 0);
             context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 1);
             property_get("callbak.hwc.htg",value,"hotplug");
-            ALOGI("Trying to hotplug device[%d,%d,%d]",__LINE__,mode,flag);
+            ALOGI("Trying to hotplug device[%d,%d,%d]",__LINE__,hdmi_mode,flag);
         }
         ALOGI("connet to hotplug device [%d,%d,%d]",__LINE__,hdmi_mode,flag);
 #if (defined(GPU_G6110) || defined(RK3288_BOX))
