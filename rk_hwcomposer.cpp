@@ -8245,26 +8245,26 @@ int hwc_sprite_replace(hwcContext * Context,hwc_display_contents_1_t * list)
     if(mLogL>0)
         ATRACE_CALL();
 
+    ZoneInfo mZoneInfo;
     ZoneManager* pzone_mag = &Context->zone_manager;
     int i = pzone_mag->zone_cnt-1;//Must be Sprite if has
+    memcpy(&mZoneInfo,&pzone_mag->zone_info[i],sizeof(ZoneInfo));
 
-    if(pzone_mag->zone_info[i].zone_err)
+    if(pzone_mag->zone_info[i].zone_err || pzone_mag->zone_info[i].transform)
         return -1;
 
     int mSize = 64;
     if(_contextAnchor->mHdmiSI.NeedReDst)
         mSize = 128;
 
-    if(!strcmp(pzone_mag->zone_info[i].LayerName,"Sprite")
-        && !pzone_mag->zone_info[i].transform &&
+    if(!strcmp(pzone_mag->zone_info[i].LayerName,"Sprite") &&
         (pzone_mag->zone_info[i].toosmall || pzone_mag->zone_info[i].is_stretch)){
-        pzone_mag->zone_info[i].toosmall = false;
-        pzone_mag->zone_info[i].is_stretch = false;
+        mZoneInfo.toosmall = false;
+        mZoneInfo.is_stretch = false;
     }else{
         return 0;
     }
 
-	ZoneInfo mZoneInfo;
     int width=0,height=0;
 	int xpos,ypos;
 	int x_offset,y_offset;
@@ -8291,7 +8291,6 @@ int hwc_sprite_replace(hwcContext * Context,hwc_display_contents_1_t * list)
 		width  = Context->dpyAttr[1].xres;
         height = Context->dpyAttr[1].yres;
 	}
-    memcpy(&mZoneInfo,&pzone_mag->zone_info[i],sizeof(ZoneInfo));
 
     DstVirW = mSize;
     DstVirH = mSize;
@@ -8339,11 +8338,11 @@ int hwc_sprite_replace(hwcContext * Context,hwc_display_contents_1_t * list)
 
     if(SrcVirW<=0 || SrcVirH<=0 || SrcActW<=0 || SrcActH<=0)
         return -1;
-    
+
     if(DstVirW<=0 || DstVirH<=0 || DstActW<=0 || DstActH<=0)
         return -1;
     memcpy(&pzone_mag->zone_info[i],&mZoneInfo,sizeof(ZoneInfo));
-    memset((void*)(Context->mSrBI.hd_base[Context->mSrBI.mCurIndex]),0x55,mSize*mSize*4);
+    memset((void*)(Context->mSrBI.hd_base[Context->mSrBI.mCurIndex]),0x0,mSize*mSize*4);
     ALOGD_IF(mLogL>2,"Sprite Zone[%d]->layer[%d],"
         "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
         "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],acq_fence_fd=%d,"
