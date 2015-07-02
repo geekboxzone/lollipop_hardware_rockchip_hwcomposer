@@ -11,9 +11,7 @@
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
 #include "rk_hwcomposer.h"
-
 #include <hardware/hardware.h>
-
 
 #include <stdlib.h>
 #include <errno.h>
@@ -31,16 +29,7 @@
 #include <linux/ion.h>
 #include <ion/ion.h>
 #include <linux/rockchip_ion.h>
-
-#define MAX_DO_SPECIAL_COUNT        8
-#define RK_FBIOSET_ROTATE           0x5003 
-#define FPS_NAME                    "com.aatt.fpsm"
-#define BOTTOM_LAYER_NAME           "NavigationBar"
-#define TOP_LAYER_NAME              "StatusBar"
-#define WALLPAPER                   "ImageWallpaper"
-#define VIDEO_PLAY_ACTIVITY_LAYER_NAME "android.rk.RockVideoPlayer/android.rk.RockVideoPlayer.VideoP"
-#define RK_QUEDDR_FREQ              0x8000
-#define HAL_PIXEL_FORMAT_YCrCb_NV12_OLD  0x20
+#include <utils/Trace.h>
 
 //primary and hotplug device context
 static hwcContext * _contextAnchor = NULL;
@@ -140,7 +129,7 @@ hotplug_set_frame(
     int flag);
 
 int
-sprite_replace(
+hwc_sprite_replace(
     hwcContext * Context,
     hwc_display_contents_1_t * list);
 
@@ -4866,6 +4855,8 @@ int hwc_prepare_virtual(hwc_composer_device_1_t * dev, hwc_display_contents_1_t 
 
 static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1_t *list, int dpyID) 
 {
+    if(mLogL>0)
+        ATRACE_CALL();
 
 	size_t i;
     size_t j;
@@ -5259,7 +5250,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
 #endif
 
     ret = collect_all_zones(context,list);
-    sprite_replace(context,list);
+    hwc_sprite_replace(context,list);
     if(ret !=0 )
     {
 		ALOGD_IF(mLogL>4,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
@@ -5332,6 +5323,8 @@ hwc_prepare(
     hwc_display_contents_1_t** displays
     )
 {
+    if(mLogL>0)
+        ATRACE_CALL();
     hwcContext * context = _contextAnchor;
     int ret = 0;
     size_t i;
@@ -5491,6 +5484,8 @@ static int hwc_fbPost(hwc_composer_device_1_t * dev, size_t numDisplays, hwc_dis
 
 static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
 {
+    if(mLogL>0)
+        ATRACE_CALL();
 
     if (list == NULL)
     {
@@ -5636,6 +5631,9 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
 
 static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int mix_flag) 
 {
+    if(mLogL>0)
+        ATRACE_CALL();
+
     ZoneManager* pzone_mag = &(context->zone_manager);
     int i,j;
     int z_order = 0;
@@ -6143,6 +6141,9 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
 
 static int hwc_set_screen(hwc_composer_device_1 *dev, hwc_display_contents_1_t *list,int dpyID) 
 {
+    if(mLogL>0)
+        ATRACE_CALL();
+
 #if (defined(GPU_G6110) || defined(RK3288_BOX))
     if(hdmi_noready && dpyID == 1)
     {
@@ -6289,6 +6290,9 @@ static int hwc_set_screen(hwc_composer_device_1 *dev, hwc_display_contents_1_t *
 
 int hwc_set_virtual(hwc_composer_device_1_t * dev, hwc_display_contents_1_t  **contents, unsigned int rga_fb_addr)
 {
+    if(mLogL>0)
+        ATRACE_CALL();
+
 	hwc_display_contents_1_t* list_pri = contents[0];
 	hwc_display_contents_1_t* list_wfd = contents[2];
 	hwc_layer_1_t *  fbLayer = &list_pri->hwLayers[list_pri->numHwLayers - 1];
@@ -6348,6 +6352,8 @@ hwc_set(
     hwc_display_contents_1_t  ** displays
     )
 {
+    if(mLogL>0)
+        ATRACE_CALL();
 
     int ret = 0;
 #if (defined(GPU_G6110) || defined(RK3288_BOX))
@@ -8232,16 +8238,22 @@ int hotplug_set_frame(hwcContext* context,int flag)
     return ret;
 }
 
-int sprite_replace(hwcContext * Context,hwc_display_contents_1_t * list)
+int hwc_sprite_replace(hwcContext * Context,hwc_display_contents_1_t * list)
 {
 #if SPRITEOPTIMATION
-    //struct timeval ts,te;
-    //gettimeofday(&ts,NULL);
+#if (defined(RK3368_BOX) || defined(RK3288_BOX))
+    if(mLogL>0)
+        ATRACE_CALL();
+
     ZoneManager* pzone_mag = &Context->zone_manager;
     int i = pzone_mag->zone_cnt-1;//Must be Sprite if has
 
-    if(pzone_mag->zone_info[i].zone_err || _contextAnchor->mHdmiSI.NeedReDst)
+    if(pzone_mag->zone_info[i].zone_err)
         return -1;
+
+    int mSize = 64;
+    if(_contextAnchor->mHdmiSI.NeedReDst)
+        mSize = 128;
 
     if(!strcmp(pzone_mag->zone_info[i].LayerName,"Sprite")
         && !pzone_mag->zone_info[i].transform &&
@@ -8281,8 +8293,8 @@ int sprite_replace(hwcContext * Context,hwc_display_contents_1_t * list)
 	}
     memcpy(&mZoneInfo,&pzone_mag->zone_info[i],sizeof(ZoneInfo));
 
-    DstVirW = BufferSize;
-    DstVirH = BufferSize;
+    DstVirW = mSize;
+    DstVirH = mSize;
     DstActW = mZoneInfo.disp_rect.right  - mZoneInfo.disp_rect.left;
     DstActH = mZoneInfo.disp_rect.bottom - mZoneInfo.disp_rect.top;
 	
@@ -8293,11 +8305,11 @@ int sprite_replace(hwcContext * Context,hwc_display_contents_1_t * list)
     if(mZoneInfo.disp_rect.left <= width - mZoneInfo.disp_rect.right)
         xpos = mZoneInfo.disp_rect.left;
     else
-		xpos = mZoneInfo.disp_rect.right - BufferSize;
+		xpos = mZoneInfo.disp_rect.right - mSize;
 	if(mZoneInfo.disp_rect.top <= height - mZoneInfo.disp_rect.bottom)
         ypos = mZoneInfo.disp_rect.top;
     else
-		ypos = mZoneInfo.disp_rect.bottom - BufferSize;
+		ypos = mZoneInfo.disp_rect.bottom - mSize;
 
 	xoffset = mZoneInfo.disp_rect.left - xpos;
 	yoffset = mZoneInfo.disp_rect.top  - ypos;
@@ -8312,22 +8324,26 @@ int sprite_replace(hwcContext * Context,hwc_display_contents_1_t * list)
     SrcActW = SrcActW<16?(SrcActW+SrcActW%2):(SrcActW);
     SrcActH = SrcActH<16?(SrcActH+SrcActH%2):(SrcActH);
 
-    mZoneInfo.stride = (BufferSize + 31)&(~31);
-    mZoneInfo.width = BufferSize;
-    mZoneInfo.height = BufferSize;
+    mZoneInfo.stride = (mSize + 31)&(~31);
+    mZoneInfo.width = mSize;
+    mZoneInfo.height = mSize;
     mZoneInfo.disp_rect.left   = xpos;
-    mZoneInfo.disp_rect.right  = xpos + BufferSize;
+    mZoneInfo.disp_rect.right  = xpos + mSize;
     mZoneInfo.disp_rect.top    = ypos;
-    mZoneInfo.disp_rect.bottom = ypos + BufferSize;
+    mZoneInfo.disp_rect.bottom = ypos + mSize;
     mZoneInfo.src_rect.left    = 0;
-    mZoneInfo.src_rect.right   = BufferSize;
+    mZoneInfo.src_rect.right   = mSize;
     mZoneInfo.src_rect.top     = 0;
-    mZoneInfo.src_rect.bottom  = BufferSize;
+    mZoneInfo.src_rect.bottom  = mSize;
+    mZoneInfo.layer_fd = Context->mSrBI.fd[Context->mSrBI.mCurIndex];
+
+    if(SrcVirW<=0 || SrcVirH<=0 || SrcActW<=0 || SrcActH<=0)
+        return -1;
     
-	mZoneInfo.layer_fd = Context->mSrBI.fd[Context->mSrBI.mCurIndex];
-    memset((void*)(Context->mSrBI.hd_base[Context->mSrBI.mCurIndex]),0x55,BufferSize*BufferSize*4);
-    
+    if(DstVirW<=0 || DstVirH<=0 || DstActW<=0 || DstActH<=0)
+        return -1;
     memcpy(&pzone_mag->zone_info[i],&mZoneInfo,sizeof(ZoneInfo));
+    memset((void*)(Context->mSrBI.hd_base[Context->mSrBI.mCurIndex]),0x55,mSize*mSize*4);
     ALOGD_IF(mLogL>2,"Sprite Zone[%d]->layer[%d],"
         "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
         "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],acq_fence_fd=%d,"
@@ -8355,9 +8371,9 @@ int sprite_replace(hwcContext * Context,hwc_display_contents_1_t * list)
     memset(&Rga_Request, 0x0, sizeof(Rga_Request));
 
     clip.xmin = 0;
-    clip.xmax = BufferSize-1;
+    clip.xmax = mSize-1;
     clip.ymin = 0;
-    clip.ymax = BufferSize-1;
+    clip.ymax = mSize-1;
 
     ALOGD_IF(1,"src addr=[%x],w-h[%d,%d],act[%d,%d],off[%d,%d][f=%d]",
         handle->share_fd, SrcVirW, SrcVirH,SrcActW,SrcActH,x_offset,y_offset,hwChangeRgaFormat(handle->format));
@@ -8388,6 +8404,7 @@ int sprite_replace(hwcContext * Context,hwc_display_contents_1_t * list)
     Context->mSrBI.mCurIndex = (Context->mSrBI.mCurIndex + 1)%MaxSpriteBNUM;
     //gettimeofday(&te,NULL);
     //ALOGD("SPRITE USE TIME T = %ld",(te.tv_sec-ts.tv_sec)*1000000+te.tv_usec-ts.tv_usec);
+#endif
     return 0;
 #else
     return 0;

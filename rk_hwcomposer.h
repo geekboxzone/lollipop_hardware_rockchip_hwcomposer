@@ -53,7 +53,7 @@
 #define OPTIMIZATION_FOR_DIMLAYER       1           //1: optimise for dim layer
 #define HWC_EXTERNAL                    1           //1:hwc control two lcdc for display
 #define USE_QUEUE_DDRFREQ               1
-#define SPRITEOPTIMATION                0
+#define SPRITEOPTIMATION                1           //1:support sprite optimation for overlay
 
 #ifdef GPU_G6110
 #define G6110_SUPPORT_FBDC              0
@@ -84,15 +84,29 @@
 #define GPU_FORMAT      handle->format
 #define GPU_DST_FORMAT  DstHandle->format
 
+#define MAX_DO_SPECIAL_COUNT        8
+#define RK_FBIOSET_ROTATE           0x5003 
+#define FPS_NAME                    "com.aatt.fpsm"
+#define BOTTOM_LAYER_NAME           "NavigationBar"
+#define TOP_LAYER_NAME              "StatusBar"
+#define WALLPAPER                   "ImageWallpaper"
+#define VIDEO_PLAY_ACTIVITY_LAYER_NAME "android.rk.RockVideoPlayer/android.rk.RockVideoPlayer.VideoP"
+#define RK_QUEDDR_FREQ              0x8000
+#define HAL_PIXEL_FORMAT_YCrCb_NV12_OLD  0x20
 
-#define GHWC_VERSION  "2.039"
+//#if  (defined(ATRACE_TAG))
+//#undef  ATRACE_TAG
+#define ATRACE_TAG                  ATRACE_TAG_GRAPHICS
+//#endif
+
+#define GHWC_VERSION  "2.040"
 //HWC version Tag
 //Get commit info:  git log --format="Author: %an%nTime:%cd%nCommit:%h%n%n%s%n%n"
 //Get version: busybox strings /system/lib/hw/hwcomposer.rk30board.so | busybox grep HWC_VERSION
 //HWC_VERSION Author:zxl Time:Tue Aug 12 17:27:36 2014 +0800 Version:1.17 Branch&Previous-Commit:rk/rk312x/mid/4.4_r1/develop-9533348.
 #define HWC_VERSION "HWC_VERSION  \
 Author: wzq \
-Version:2.039 \
+Version:2.040 \
 "
 
 #ifdef GPU_G6110
