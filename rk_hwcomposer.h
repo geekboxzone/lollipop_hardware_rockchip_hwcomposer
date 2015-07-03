@@ -57,6 +57,9 @@
 
 #ifdef GPU_G6110
 #define G6110_SUPPORT_FBDC              0
+#define VIRTUAL_RGA_BLIT                0           //1:wfd optimazition by rga
+#else
+#define VIRTUAL_RGA_BLIT                0           //1:wfd optimazition by rga
 #endif
 
 //Command macro
@@ -93,20 +96,17 @@
 #define VIDEO_PLAY_ACTIVITY_LAYER_NAME "android.rk.RockVideoPlayer/android.rk.RockVideoPlayer.VideoP"
 #define RK_QUEDDR_FREQ              0x8000
 #define HAL_PIXEL_FORMAT_YCrCb_NV12_OLD  0x20
-
-//#if  (defined(ATRACE_TAG))
-//#undef  ATRACE_TAG
 #define ATRACE_TAG                  ATRACE_TAG_GRAPHICS
-//#endif
 
-#define GHWC_VERSION  "2.040"
+
+#define GHWC_VERSION  "2.042"
 //HWC version Tag
 //Get commit info:  git log --format="Author: %an%nTime:%cd%nCommit:%h%n%n%s%n%n"
 //Get version: busybox strings /system/lib/hw/hwcomposer.rk30board.so | busybox grep HWC_VERSION
 //HWC_VERSION Author:zxl Time:Tue Aug 12 17:27:36 2014 +0800 Version:1.17 Branch&Previous-Commit:rk/rk312x/mid/4.4_r1/develop-9533348.
 #define HWC_VERSION "HWC_VERSION  \
 Author: wzq \
-Version:2.040 \
+Version:2.042 \
 "
 
 #ifdef GPU_G6110
@@ -231,6 +231,16 @@ typedef struct _hwcRECT
     int                    bottom;
 }
 hwcRECT;
+
+#if VIRTUAL_RGA_BLIT
+typedef struct _FenceMangrRga
+{
+    bool is_last;
+    int  rel_fd;
+    bool use_fence;
+}
+FenceMangrRga;
+#endif
 
 typedef enum _hwc_lcdc_res
 {
@@ -505,6 +515,7 @@ typedef struct _hwcContext
     unsigned int fbPhysical;
     unsigned int fbStride;
 	int          wfdOptimize;
+	bool         wfdRgaBlit;
     /* PMEM stuff. */
     unsigned int pmemPhysical;
     unsigned int pmemLength;
@@ -627,7 +638,35 @@ hwcGetFormat(
     IN  struct private_handle_t * Handle,
     OUT RgaSURF_FORMAT * Format
     );
+#if VIRTUAL_RGA_BLIT
+hwcSTATUS
+hwcGetBufFormat(
+    IN  struct private_handle_t * Handle,
+    OUT RgaSURF_FORMAT * Format
+);
 
+hwcSTATUS
+hwcGetBufferInfo(
+    IN  hwcContext *  Context,
+    IN  struct private_handle_t * Handle,
+    OUT void * *  Logical,
+    OUT unsigned int* Physical,
+    OUT unsigned int* Width,
+    OUT unsigned int* Height,
+    OUT unsigned int* Stride,
+    OUT void * *  Info
+);
+
+
+hwcSTATUS
+hwcUnlockBuffer(
+    IN hwcContext * Context,
+    IN struct private_handle_t * Handle,
+    IN void * Logical,
+    IN void * Info,
+    IN unsigned int  Physical
+);
+#endif
 int hwChangeRgaFormat(IN int fmt );
 
 #if defined(__arm64__) || defined(__aarch64__)
@@ -680,3 +719,41 @@ extern "C" int clock_nanosleep(clockid_t clock_id, int flags,
 
 #endif 
 
+/******************************************************************************\
+ ********************************* Blitters ***********************************
+\******************************************************************************/
+
+/* 2D blit. */
+#if VIRTUAL_RGA_BLIT
+hwcSTATUS
+hwcBlit(
+    IN hwcContext * Context,
+    IN hwc_layer_1_t * Src,
+    IN struct private_handle_t * DstHandle,
+    IN hwc_rect_t * SrcRect,
+    IN hwc_rect_t * DstRect,
+    IN hwc_region_t * Region,
+    IN FenceMangrRga *FceMrga,
+    IN int index
+);
+
+
+hwcSTATUS
+hwcDim(
+    IN hwcContext * Context,
+    IN hwc_layer_1_t * Src,
+    IN struct private_handle_t * DstHandle,
+    IN hwc_rect_t * DstRect,
+    IN hwc_region_t * Region
+);
+
+hwcSTATUS
+hwcClear(
+    IN hwcContext * Context,
+    IN unsigned int Color,
+    IN hwc_layer_1_t * Src,
+    IN struct private_handle_t * DstHandle,
+    IN hwc_rect_t * DstRect,
+    IN hwc_region_t * Region
+);
+#endif

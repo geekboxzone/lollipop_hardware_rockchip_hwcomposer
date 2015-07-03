@@ -31,10 +31,10 @@
 #include <linux/rockchip_ion.h>
 #include <utils/Trace.h>
 
-//primary and hotplug device context
+//primary,hotplug and virtual device context
 static hwcContext * _contextAnchor = NULL;
 static hwcContext * _contextAnchor1 = NULL;
-
+static hwcContext * _contextAnchor2 = NULL;
 //#define ENABLE_HDMI_APP_LANDSCAP_TO_PORTRAIT
 #undef LOGV
 #define LOGV(...)
@@ -4829,16 +4829,19 @@ int hwc_try_policy(hwcContext * context,hwc_display_contents_1_t * list,int dpyI
     return ret;
 }
     
-int hwc_prepare_virtual(hwc_composer_device_1_t * dev, hwc_display_contents_1_t  *contents)
+int hwc_prepare_virtual(hwc_composer_device_1_t * dev, hwc_display_contents_1_t  *list)
 {
-	if (contents==NULL)
+	if (list==NULL)
 	{
 		return -1;
 	}
-	hwcContext * context = _contextAnchor;
-	for (size_t j = 0; j <(contents->numHwLayers - 1); j++)
+
+    hwcContext * context = _contextAnchor;
+
+    context->wfdRgaBlit = false;
+	for (size_t j = 0; j <(list->numHwLayers - 1); j++)
 	{
-		struct private_handle_t * handle = (struct private_handle_t *)contents->hwLayers[j].handle;
+		struct private_handle_t * handle = (struct private_handle_t *)list->hwLayers[j].handle;
 
 		if (handle && GPU_FORMAT==HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
 		{
@@ -4850,6 +4853,50 @@ int hwc_prepare_virtual(hwc_composer_device_1_t * dev, hwc_display_contents_1_t 
 			}
 		}
 	}
+#if VIRTUAL_RGA_BLIT
+    unsigned int  i ;
+    bool mBlit = true;
+    int  pixelSize  = 0;
+
+    /*if wfdOptimize,than return*/
+    if(context->wfdOptimize > 0)
+        return 0;
+        
+    for (  i = 0; i < (list->numHwLayers - 1); i++)
+    {
+        hwc_layer_1_t * layer = &list->hwLayers[i];
+        struct private_handle_t * handle = (struct private_handle_t *)layer->handle;
+        if ((layer->flags & HWC_SKIP_LAYER) || (handle == NULL))
+        {
+            return 0;
+        }
+    }
+
+    for (i = 0; i < (list->numHwLayers - 1); i++)
+    {
+        hwc_layer_1_t * layer = &list->hwLayers[i];
+        struct private_handle_t * handle = (struct private_handle_t *)layer->handle;
+
+        pixelSize += ((layer->sourceCrop.bottom - layer->sourceCrop.top) * \
+                        (layer->sourceCrop.right - layer->sourceCrop.left));
+        if(pixelSize > 4718592)  // pixel too large,RGA done use more time
+        {
+            mBlit = false;
+            break;
+        }
+        layer->compositionType = HWC_BLITTER;
+    }
+
+    if(!mBlit)
+    {
+        for (i = 0; i < (list->numHwLayers - 1); i++)
+        {
+            hwc_layer_1_t * layer = &list->hwLayers[i];
+            layer->compositionType = HWC_FRAMEBUFFER;
+        }
+    }else
+        context->wfdRgaBlit = true;
+#endif
 	return 0;
 }
 
@@ -5395,7 +5442,7 @@ hwc_prepare(
                 break;
             case HWC_DISPLAY_VIRTUAL:
                 if(list){
-                    ret = hwc_prepare_virtual(dev, displays[0]);
+                    ret = hwc_prepare_virtual(dev, list);
                 }
                 break;
             default:
@@ -6137,7 +6184,281 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
     }
     return 0;
 }
+int hwc_rga_blit( hwcContext * context ,hwc_display_contents_1_t *list)
+{
+#if VIRTUAL_RGA_BLIT
+    hwcSTATUS status = hwcSTATUS_OK;
+    unsigned int i;
+    unsigned int index = 0;
 
+#if hwcUseTime
+    struct timeval tpend1, tpend2;
+    long usec1 = 0;
+#endif
+#if hwcBlitUseTime
+    struct timeval tpendblit1, tpendblit2;
+    long usec2 = 0;
+#endif
+
+    hwc_layer_1_t *fbLayer = NULL;
+    struct private_handle_t * fbhandle = NULL;
+    bool bNeedFlush = false;
+    FenceMangrRga RgaFenceMg;
+
+#if hwcUseTime
+    gettimeofday(&tpend1, NULL);
+#endif
+    memset(&RgaFenceMg,0,sizeof(FenceMangrRga));
+
+    LOGV("%s(%d):>>> Set  %d layers <<<",
+         __FUNCTION__,
+         __LINE__,
+         list->numHwLayers);
+    /* Prepare. */
+    for (i = 0; i < (list->numHwLayers - 1); i++)
+    {
+        /* Check whether this composition can be handled by hwcomposer. */
+        if (list->hwLayers[i].compositionType >= HWC_BLITTER)
+        {
+#if FENCE_TIME_USE
+            struct timeval tstart, tend;
+            gettimeofday(&tstart, NULL);
+#endif
+
+            #if 0
+            if(context->membk_fence_acqfd[context->membk_index] > 0)
+            {
+                sync_wait(context->membk_fence_acqfd[context->membk_index], 500);
+                close(context->membk_fence_acqfd[context->membk_index]);
+                context->membk_fence_acqfd[context->membk_index] = -1;
+                //ALOGD("close0 rga acq_fd=%d",fb_info.win_par[0].area_par[0].acq_fence_fd);
+            }
+            #endif
+#if FENCE_TIME_USE
+            gettimeofday(&tend, NULL);
+            if(((tend.tv_sec - tstart.tv_sec)*1000 + (tend.tv_usec - tstart.tv_usec)/1000) > 16)
+            {
+                ALOGW("wait for LCDC fence too long ,spent t = %ld ms",((tend.tv_sec - tstart.tv_sec)*1000 + (tend.tv_usec - tstart.tv_usec)/1000));
+            }
+#endif
+
+#if ENABLE_HWC_WORMHOLE
+            hwcRECT FbRect;
+            hwcArea * area;
+            hwc_region_t holeregion;
+#endif
+            bNeedFlush = true;
+
+            fbLayer = &list->hwLayers[list->numHwLayers - 1];
+            ALOGV("fbLyaer = %x,num=%d",fbLayer,list->numHwLayers);
+            if (fbLayer == NULL)
+            {
+                ALOGE("fbLayer is null");
+                hwcONERROR(hwcSTATUS_INVALID_ARGUMENT);
+            }
+            fbhandle = (struct private_handle_t*)fbLayer->handle;
+            if (fbhandle == NULL)
+            {
+                ALOGE("fbhandle is null");
+                hwcONERROR(hwcSTATUS_INVALID_ARGUMENT);
+            }
+            ALOGV("i=%d,tpye=%d,hanlde=%p",i,list->hwLayers[i].compositionType,fbhandle);
+#if ENABLE_HWC_WORMHOLE
+            /* Reset allocated areas. */
+            if (context->compositionArea != NULL)
+            {
+                ZoneFree(context, context->compositionArea);
+
+                context->compositionArea = NULL;
+            }
+
+            FbRect.left = 0;
+            FbRect.top = 0;
+            FbRect.right = fbhandle->width;
+            FbRect.bottom = fbhandle->height;
+
+            /* Generate new areas. */
+            /* Put a no-owner area with screen size, this is for worm hole,
+             * and is needed for clipping. */
+            context->compositionArea = zone_alloc(context,
+                                       NULL,
+                                       &FbRect,
+                                       0U);
+
+            /* Split areas: go through all regions. */
+            for (unsigned int k = 0; k < list->numHwLayers - 1; k++)
+            {
+                int owner = 1U << k;
+                hwc_layer_1_t *  hwLayer = &list->hwLayers[k];
+                hwc_region_t * region  = &hwLayer->visibleRegionScreen;
+                //struct private_handle_t* srchnd = (struct private_handle_t *) hwLayer->handle;
+
+                if((hwLayer->blending & 0xFFFF) != HWC_BLENDING_NONE)
+                {
+                    ALOGV("ignore alpha layer");
+                    continue;
+                }
+                /* Now go through all rectangles to split areas. */
+                for (int j = 0; j < region->numRects; j++)
+                {
+                    /* Assume the region will never go out of dest surface. */
+                    DivArea(context,
+                               context->compositionArea,
+                               (hwcRECT *) &region->rects[j],
+                               owner);
+
+                }
+
+            }
+#if DUMP_SPLIT_AREA
+            LOGV("SPLITED AREA:");
+            hwcDumpArea(context->compositionArea);
+#endif
+
+            area = context->compositionArea;
+
+            while (area != NULL)
+            {
+                /* Check worm hole first. */
+                if (area->owners == 0U)
+                {
+
+                    holeregion.numRects = 1;
+                    holeregion.rects = (hwc_rect_t const*) & area->rect;
+                    /* Setup worm hole source. */
+                    LOGV(" WormHole [%d,%d,%d,%d]",
+                         area->rect.left,
+                         area->rect.top,
+                         area->rect.right,
+                         area->rect.bottom
+                        );
+
+                    hwcClear(context,
+                             0xFF000000,
+                             &list->hwLayers[i],
+                             fbhandle,
+                             (hwc_rect_t *)&area->rect,
+                             &holeregion
+                            );
+
+                    /* Advance to next area. */
+                }
+                area = area->next;
+            }
+#endif
+            /* Done. */
+            break;
+        }
+        else if (list->hwLayers[i].compositionType == HWC_FRAMEBUFFER)
+        {
+            /* Previous swap rectangle is gone. */
+            break;
+
+        }
+    }
+    /* Go through the layer list one-by-one blitting each onto the FB */
+
+#if RGA_USE_FENCE
+    for(i = 0;i< RGA_REL_FENCE_NUM;i++)
+    {
+        context->rga_fence_relfd[i] = -1;
+    }
+    if(context->composer_mode == HWC_RGA)
+        RgaFenceMg.use_fence = true;
+#endif
+
+    for (i = 0; i < list->numHwLayers -1; i++)
+    {
+        switch (list->hwLayers[i].compositionType)
+        {
+            case HWC_BLITTER:
+                ALOGV("%s(%d):Layer %d ,name=%s,is BLIITER", __FUNCTION__, __LINE__, i,list->hwLayers[i].LayerName);
+                /* Do the blit. */
+
+#if hwcBlitUseTime
+                gettimeofday(&tpendblit1, NULL);
+#endif
+                hwcONERROR(
+                    hwcBlit(context,
+                            &list->hwLayers[i],
+                            fbhandle,
+                            &list->hwLayers[i].sourceCrop,
+                            &list->hwLayers[i].displayFrame,
+                            &list->hwLayers[i].visibleRegionScreen,
+                            &RgaFenceMg,index));
+
+#if hwcBlitUseTime
+                gettimeofday(&tpendblit2, NULL);
+                usec2 = 1000 * (tpendblit2.tv_sec - tpendblit1.tv_sec) + (tpendblit2.tv_usec - tpendblit1.tv_usec) / 1000;
+                LOGD("hwcBlit compositer %d layers=%s use time=%ld ms", i, list->hwLayers[i].LayerName, usec2);
+#endif
+                index++;
+                break;
+
+            case HWC_CLEAR_HOLE:
+                LOGV("%s(%d):Layer %d is CLEAR_HOLE", __FUNCTION__, __LINE__, i);
+                /* Do the clear, color = (0, 0, 0, 1). */
+                /* TODO: Only clear holes on screen.
+                 * See Layer::onDraw() of surfaceflinger. */
+                if (i != 0) break;
+
+                hwcONERROR(
+                    hwcClear(context,
+                             0xFF000000,
+                             &list->hwLayers[i],
+                             fbhandle,
+                             &list->hwLayers[i].displayFrame,
+                             &list->hwLayers[i].visibleRegionScreen));
+                break;
+
+            case HWC_DIM:
+                LOGV("%s(%d):Layer %d is DIM", __FUNCTION__, __LINE__, i);
+                if (i == 0)
+                {
+                    /* Use clear instead of dim for the first layer. */
+                    hwcONERROR(
+                        hwcClear(context,
+                                 ((list->hwLayers[0].blending & 0xFF0000) << 8),
+                                 &list->hwLayers[i],
+                                 fbhandle,
+                                 &list->hwLayers[i].displayFrame,
+                                 &list->hwLayers[i].visibleRegionScreen));
+                }
+                else
+                {
+                    /* Do the dim. */
+                    hwcONERROR(
+                        hwcDim(context,
+                               &list->hwLayers[i],
+                               fbhandle,
+                               &list->hwLayers[i].displayFrame,
+                               &list->hwLayers[i].visibleRegionScreen));
+                }
+                break;
+
+            case HWC_OVERLAY:
+                /* TODO: HANDLE OVERLAY LAYERS HERE. */
+                LOGV("%s(%d):Layer %d is OVERLAY", __FUNCTION__, __LINE__, i);
+                break;
+            }
+
+    }
+
+#if hwcUseTime
+    gettimeofday(&tpend2, NULL);
+    usec1 = 1000 * (tpend2.tv_sec - tpend1.tv_sec) + (tpend2.tv_usec - tpend1.tv_usec) / 1000;
+    LOGV("hwcBlit compositer %d layers use time=%ld ms", list->numHwLayers -1, usec1);
+#endif
+
+    return 0; //? 0 : HWC_EGL_ERROR;
+OnError:
+
+    LOGE("%s(%d):Failed!", __FUNCTION__, __LINE__);
+    return HWC_EGL_ERROR;
+#else
+    return 0;
+#endif
+}
 
 static int hwc_set_screen(hwc_composer_device_1 *dev, hwc_display_contents_1_t *list,int dpyID) 
 {
@@ -6333,7 +6654,13 @@ int hwc_set_virtual(hwc_composer_device_1_t * dev, hwc_display_contents_1_t  **c
 		set_rga_cfg(&cfg);
 		do_rga_transform_and_scale();
 	}
-	
+#if VIRTUAL_RGA_BLIT
+	else if(context->wfdRgaBlit)
+	{
+	    hwcContext * ctx = _contextAnchor2;
+	    hwc_rga_blit(ctx, list_wfd);
+	}
+#endif
 	if (list_wfd)
 	{
 		hwc_sync_release(list_wfd);
@@ -7392,6 +7719,10 @@ hwc_device_open(
     context->fun_policy[HWC_RGA_TRSM_VOP] = try_wins_dispatch_mix_down;
     context->fun_policy[HWC_RGA_TRSM_GPU_VOP] = try_wins_dispatch_mix_vh;
     _contextAnchor = context;
+#if VIRTUAL_RGA_BLIT
+    _contextAnchor2 = (hwcContext *) malloc(sizeof (hwcContext));
+    memcpy((void*)_contextAnchor2,(void*)context,sizeof(hwcContext));
+#endif
     if (context->fbhandle.width > context->fbhandle.height)
     {
         property_set("sys.display.oritation","0");
@@ -8279,11 +8610,23 @@ int hwc_sprite_replace(hwcContext * Context,hwc_display_contents_1_t * list)
     int fd_dst = Context->mSrBI.fd[Context->mSrBI.mCurIndex];
     int Dstfmt = hwChangeRgaFormat(HAL_PIXEL_FORMAT_RGBA_8888);
     int rga_fd = _contextAnchor->engine_fd;
+    hwcContext * context = _contextAnchor;
 
     if (!rga_fd)
         return -1;
-       
-    hwcContext * context = _contextAnchor;
+
+    DstActW = mZoneInfo.disp_rect.right  - mZoneInfo.disp_rect.left;
+    DstActH = mZoneInfo.disp_rect.bottom - mZoneInfo.disp_rect.top;
+
+    if(mSize < DstActW || mSize < DstActH)
+        mSize = 128
+
+    if(mSize < DstActW || mSize < DstActH)
+        return -1;
+
+    DstVirW = mSize;
+    DstVirH = mSize;
+
     if(Context==_contextAnchor){
         width  = Context->dpyAttr[0].xres;
         height = Context->dpyAttr[0].yres;
@@ -8291,11 +8634,6 @@ int hwc_sprite_replace(hwcContext * Context,hwc_display_contents_1_t * list)
 		width  = Context->dpyAttr[1].xres;
         height = Context->dpyAttr[1].yres;
 	}
-
-    DstVirW = mSize;
-    DstVirH = mSize;
-    DstActW = mZoneInfo.disp_rect.right  - mZoneInfo.disp_rect.left;
-    DstActH = mZoneInfo.disp_rect.bottom - mZoneInfo.disp_rect.top;
 	
     struct private_handle_t *handle = mZoneInfo.handle;
     if (!handle)

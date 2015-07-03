@@ -23,6 +23,11 @@ LOCAL_SRC_FILES := \
 	rk_hwcomposer_hdmi.cpp \
 	hwc_rga.cpp 
 
+ifeq ($(strip $(TARGET_BOARD_PLATFORM_PRODUCT)),tablet)
+LOCAL_SRC_FILES += \
+	rk_hwcomposer_blit.cpp
+endif
+
 LOCAL_CFLAGS := \
 	$(CFLAGS) \
 	-Wall \
