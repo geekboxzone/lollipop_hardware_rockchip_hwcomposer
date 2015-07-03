@@ -8619,7 +8619,7 @@ int hwc_sprite_replace(hwcContext * Context,hwc_display_contents_1_t * list)
     DstActH = mZoneInfo.disp_rect.bottom - mZoneInfo.disp_rect.top;
 
     if(mSize < DstActW || mSize < DstActH)
-        mSize = 128
+        mSize = 128;
 
     if(mSize < DstActW || mSize < DstActH)
         return -1;
