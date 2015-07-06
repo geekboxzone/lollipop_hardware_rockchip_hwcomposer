@@ -668,15 +668,9 @@ int is_yuv(int format)
 {
     int ret = 0;
     switch(format){
-        case HAL_PIXEL_FORMAT_YCbCr_420_888:
-        case HAL_PIXEL_FORMAT_YCbCr_422_SP:
-        case HAL_PIXEL_FORMAT_YCrCb_420_SP:
-        case HAL_PIXEL_FORMAT_YCbCr_422_I:
         case HAL_PIXEL_FORMAT_YCrCb_NV12:
         case HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO:
         case HAL_PIXEL_FORMAT_YCrCb_NV12_10:
-        case HAL_PIXEL_FORMAT_YCbCr_422_SP_10:
-        case HAL_PIXEL_FORMAT_YCrCb_420_SP_10:
             ret = 1;
             break;
 
@@ -4931,6 +4925,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
         //||  !(list->flags & HWC_GEOMETRY_CHANGED)
     )
     {
+        ALOGD_IF(mLogL>1,"dpyID=%d list null",dpyID);
         return 0;
     }
 
@@ -4944,10 +4939,12 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
             hwc_layer_1_t * layer = &list->hwLayers[i];
             layer->compositionType = HWC_NODRAW;
         }
+        ALOGD_IF(mLogL>6,"Primary nodraw %s,%d",__FUNCTION__,__LINE__);
         return 0;
     }
     if(hdmi_noready && dpyID == 1)
     {
+        ALOGD_IF(mLogL>6,"Hotplug nodraw %s,%d",__FUNCTION__,__LINE__);
         return 0;
     }
 #endif
@@ -4981,6 +4978,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
         }
         if(handle && GPU_FORMAT == HAL_PIXEL_FORMAT_YV12)
         {
+            ALOGD_IF(mLogL>4,"HAL_PIXEL_FORMAT_YV12 out");
             goto GpuComP;
         }
     }
@@ -6110,7 +6108,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
 #if USE_HWC_FENCE
         for(unsigned int i=0;i<RK_MAX_BUF_NUM;i++)
     	{
-            //ALOGD("rel_fence_fd[%d] = %d", i, fb_info.rel_fence_fd[i]);
+            ALOGD_IF(mLogL>6,"rel_fence_fd[%d] = %d", i, fb_info.rel_fence_fd[i]);
             if(fb_info.rel_fence_fd[i] >= 0)
             {
                 if(i< list->numHwLayers)
@@ -6145,8 +6143,8 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
                     close(fb_info.rel_fence_fd[i]);
              }
     	}
-        //for(unsigned int i=0;i< (list->numHwLayers);i++)
-            //ALOGD("list->hwLayers[%d].releaseFenceFd=%d",i,list->hwLayers[i].releaseFenceFd);
+        for(unsigned int i=0;i< (list->numHwLayers);i++)
+            ALOGD_IF(mLogL>6,"list->hwLayers[%d].releaseFenceFd=%d",i,list->hwLayers[i].releaseFenceFd);
 
         if(list->retireFenceFd > 0)
         {
@@ -7691,7 +7689,7 @@ hwc_device_open(
     /*sprite*/
     for(i=0;i<3;i++)
     {
-        err = context->mAllocDev->alloc(context->mAllocDev, 64,64,HAL_PIXEL_FORMAT_RGBA_8888,\
+        err = context->mAllocDev->alloc(context->mAllocDev, BufferSize,BufferSize,HAL_PIXEL_FORMAT_RGBA_8888,\
                     GRALLOC_USAGE_HW_COMPOSER|GRALLOC_USAGE_HW_RENDER,\
                     (buffer_handle_t*)(&context->mSrBI.handle[i]),&stride_gr);
         if(!err){
@@ -7990,9 +7988,14 @@ int hotplug_get_config(int flag){
 	}
 #endif
 
-    context->fd_3d = open("/sys/class/display/HDMI/3dmode", O_RDWR, 0);
-    if(context->fd_3d < 0)
-        ALOGE("open /sys/class/display/HDMI/3dmode fail");
+    context->fd_3d = _contextAnchor->fd_3d;
+    if(context->fd_3d<=0)
+    {
+        context->fd_3d = open("/sys/class/display/HDMI/3dmode", O_RDWR, 0);
+        if(context->fd_3d < 0)
+            ALOGE("open /sys/class/display/HDMI/3dmode fail");
+        _contextAnchor->fd_3d = context->fd_3d;
+    }
 
 #if (defined(RK3368_BOX) || defined(RK3288_BOX))
     if(flag == 1)
@@ -8138,22 +8141,32 @@ int hotplug_get_config(int flag){
     /*sprite*/
     for(int i=0;i<MaxSpriteBNUM;i++)
     {
-        err = context->mAllocDev->alloc(context->mAllocDev, BufferSize,BufferSize,HAL_PIXEL_FORMAT_RGBA_8888,\
+            if(_contextAnchor->mSrBI.handle[i])
+            {
+                context->mSrBI.fd[i]      = _contextAnchor->mSrBI.fd[i];
+                context->mSrBI.hd_base[i] = _contextAnchor->mSrBI.hd_base[i];
+                context->mSrBI.handle[i]  = _contextAnchor->mSrBI.handle[i];
+            }else{
+                err = context->mAllocDev->alloc(context->mAllocDev, BufferSize,BufferSize,HAL_PIXEL_FORMAT_RGBA_8888,\
                     GRALLOC_USAGE_HW_COMPOSER|GRALLOC_USAGE_HW_RENDER,\
                     (buffer_handle_t*)(&context->mSrBI.handle[i]),&stride_gr);
-        if(!err){
-            struct private_handle_t*handle = (struct private_handle_t*)context->mSrBI.handle[i];
-            context->mSrBI.fd[i] = handle->share_fd;
+            if(!err){
+                struct private_handle_t*handle = (struct private_handle_t*)context->mSrBI.handle[i];
+                context->mSrBI.fd[i] = handle->share_fd;
 #if defined(__arm64__) || defined(__aarch64__)
-            context->mSrBI.hd_base[i] = (long)(GPU_BASE);
+                context->mSrBI.hd_base[i] = (long)(GPU_BASE);
 #else
-            context->mSrBI.hd_base[i] = (int)(GPU_BASE);
+                context->mSrBI.hd_base[i] = (int)(GPU_BASE);
 #endif
-            ALOGD("@hwc alloc[%d] [%dx%d,f=%d],fd=%d ",
-                i,handle->width,handle->height,handle->format,handle->share_fd);
-        }else{
-            ALOGE("hwc alloc[%d] faild",i);
-            goto OnError;
+                _contextAnchor->mSrBI.fd[i]      = context->mSrBI.fd[i];
+                _contextAnchor->mSrBI.hd_base[i] = context->mSrBI.hd_base[i];
+                _contextAnchor->mSrBI.handle[i]  = context->mSrBI.handle[i];
+                ALOGD("@hwc alloc[%d] [%dx%d,f=%d],fd=%d ",
+                    i,handle->width,handle->height,handle->format,handle->share_fd);
+            }else{
+                ALOGE("hwc alloc[%d] faild",i);
+                goto OnError;
+            }
         }
     }
     context->mSrBI.mCurIndex = 0;
@@ -8575,6 +8588,9 @@ int hwc_sprite_replace(hwcContext * Context,hwc_display_contents_1_t * list)
 #if (defined(RK3368_BOX) || defined(RK3288_BOX))
     if(mLogL>0)
         ATRACE_CALL();
+
+    if(Context == _contextAnchor)
+        return 0;
 
     ZoneInfo mZoneInfo;
     ZoneManager* pzone_mag = &Context->zone_manager;
