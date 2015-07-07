@@ -1051,11 +1051,12 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
             }   
             ALOGV("layer->transform=%d",layer->transform);
             if(layer->transform){
-                static int lastfd = -1;
+                int lastfd = -1;
                 bool fd_update = true;
+                lastfd = Context->mRgaTBI.lastfd;
                 if(trsfrmbyrga && lastfd == SrcHnd->share_fd && 
                     SrcHnd->format != HAL_PIXEL_FORMAT_YCrCb_NV12){
-                    fd_update = false; 
+                    fd_update = false;
                 }
                 if(fd_update){
                     ALOGV("Zone[%d]->layer[%d],"
@@ -1082,15 +1083,23 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                         Context->zone_manager.zone_info[j].acq_fence_fd,
                         Context->zone_manager.zone_info[j].LayerName,
                         Context->zone_manager.zone_info[j].layer_fd);
-                    rga_video_copybit(SrcHnd,layer->transform,w_valid,h_valid, \
-                                        Context->zone_manager.zone_info[j].layer_fd,\
-                        trsfrmbyrga ? hwChangeRgaFormat(SrcHnd->format) : RK_FORMAT_YCbCr_420_SP,trsfrmbyrga);
-                    lastfd = SrcHnd->share_fd;
+                    Context->mRgaTBI.hdl = SrcHnd;
+                    Context->mRgaTBI.index = i;
+                    Context->mRgaTBI.w_valid = w_valid;
+                    Context->mRgaTBI.h_valid = h_valid;
+                    Context->mRgaTBI.transform = layer->transform;
+                    Context->mRgaTBI.trsfrmbyrga = trsfrmbyrga;
+                    Context->mRgaTBI.layer_fd = Context->zone_manager.zone_info[j].layer_fd;
+					Context->mRgaTBI.lastfd = SrcHnd->share_fd;
+                    Context->mNeedRgaTransform = true;
+                    //rga_video_copybit(SrcHnd,layer->transform,w_valid,h_valid, 
+                    //                    Context->zone_manager.zone_info[j].layer_fd,
+                    //    trsfrmbyrga ? hwChangeRgaFormat(SrcHnd->format) : RK_FORMAT_YCbCr_420_SP,trsfrmbyrga);
 #if USE_VIDEO_BACK_BUFFERS
-                Context->mCurVideoIndex++;  //update video buffer index
+                //Context->mCurVideoIndex++;  //update video buffer index
 #else
-                if(trsfrmbyrga)
-                    Context->mCurVideoIndex++;  //update video buffer index
+                //if(trsfrmbyrga)
+                //    Context->mCurVideoIndex++;  //update video buffer index
 #endif
                 }
 
@@ -4987,6 +4996,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
     context->mIsMediaView=false;
     context->mHdmiSI.mix_up=false;
     context->mHdmiSI.mix_vh=false;
+    context->mNeedRgaTransform = false;
     context->mNV12_VIDEO_VideoMode=false;
 #if OPTIMIZATION_FOR_DIMLAYER
     context->bHasDimLayer = false;
@@ -5255,7 +5265,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
         err = 0;
         for(i=0;i<MaxVideoBackBuffers;i++)
         {
-            ALOGD("free video fd=%d,base=%p,%p",context->fd_video_bk[i], context->base_video_bk[i],context->pbvideo_bk[i]);
+            ALOGD("dpyID=%d,free video fd=%d,base=%p,%p",dpyID,context->fd_video_bk[i],context->base_video_bk[i],context->pbvideo_bk[i]);
             if(context->pbvideo_bk[i] != NULL)
                 err = context->mAllocDev->free(context->mAllocDev, context->pbvideo_bk[i]);
             if(!err)
@@ -5302,14 +5312,37 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
         goto GpuComP;
     }
    
-    //if(vertical == true)  
+    //if(vertical == true)
     ret = hwc_try_policy(context,list,dpyID);
+    if(list->hwLayers[context->mRgaTBI.index].compositionType == HWC_FRAMEBUFFER)
+    {
+        context->mNeedRgaTransform = false;
+    }
+    else if(context->mNeedRgaTransform)
+    {
+        int w_valid = context->mRgaTBI.w_valid;
+        int h_valid = context->mRgaTBI.h_valid;
+        int layer_fd = context->mRgaTBI.layer_fd;
+        int lastfd = context->mRgaTBI.transform;
+        uint32_t transform = context->mRgaTBI.transform;
+        bool trsfrmbyrga = context->mRgaTBI.trsfrmbyrga;
+        struct private_handle_t* hdl = context->mRgaTBI.hdl;
+        int Dstfmt = trsfrmbyrga ? hwChangeRgaFormat(hdl->format) : RK_FORMAT_YCbCr_420_SP;
+        rga_video_copybit(hdl,transform,w_valid,h_valid,layer_fd,Dstfmt,trsfrmbyrga);
+#if USE_VIDEO_BACK_BUFFERS
+        context->mCurVideoIndex++;  //update video buffer index
+#else
+        if(trsfrmbyrga)
+            context->mCurVideoIndex++;  //update video buffer index
+#endif
+    }
+
     if(ret !=0 )
     {
 		ALOGD_IF(mLogL>4,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
         goto GpuComP;
     }
-    
+
     if(context->zone_manager.composter_mode != HWC_MIX)
     {
         for(i = 0;i<GPUDRAWCNT;i++)
@@ -7700,8 +7733,8 @@ hwc_device_open(
 #else
             context->mSrBI.hd_base[i] = (int)(GPU_BASE);
 #endif
-            ALOGD("@hwc alloc[%d] [%dx%d,f=%d],fd=%d ",
-                i,handle->width,handle->height,handle->format,handle->share_fd);
+            ALOGD("@hwc alloc[%d] [%dx%d,f=%d],[hande->type=%d],fd=%d",
+                i,handle->width,handle->height,handle->format,handle->type,handle->share_fd);
         }else{
             ALOGE("hwc alloc[%d] faild",i);
             goto OnError;
@@ -8728,9 +8761,9 @@ int hwc_sprite_replace(hwcContext * Context,hwc_display_contents_1_t * list)
     clip.ymin = 0;
     clip.ymax = mSize-1;
 
-    ALOGD_IF(1,"src addr=[%x],w-h[%d,%d],act[%d,%d],off[%d,%d][f=%d]",
-        handle->share_fd, SrcVirW, SrcVirH,SrcActW,SrcActH,x_offset,y_offset,hwChangeRgaFormat(handle->format));
-    ALOGD_IF(1,"dst fd=[%x],w-h[%d,%d],act[%d,%d],off[%d,%d][f=%d],rot=%d,rot_mod=%d",
+    ALOGD_IF(mLogL>2,"src addr=[%x],handle type=[%d],w-h[%d,%d],act[%d,%d],off[%d,%d][f=%d]",
+        handle->share_fd,handle->type,SrcVirW, SrcVirH,SrcActW,SrcActH,x_offset,y_offset,hwChangeRgaFormat(handle->format));
+    ALOGD_IF(mLogL>2,"dst fd=[%x],w-h[%d,%d],act[%d,%d],off[%d,%d][f=%d],rot=%d,rot_mod=%d",
         fd_dst, DstVirW, DstVirH,DstActW,DstActH,xoffset,yoffset,Dstfmt,Rotation,RotateMode);
 
     RGA_set_src_vir_info(&Rga_Request, handle->share_fd, 0, 0,SrcVirW, SrcVirH, hwChangeRgaFormat(handle->format), 0);    

@@ -295,13 +295,25 @@ typedef struct _ZoneInfo
 }
 ZoneInfo;
 
+typedef struct _RgaTrfBakInfo
+{
+    int w_valid;
+    int h_valid;
+    int layer_fd;
+    int index;
+    int lastfd;
+    uint32_t transform;
+    bool trsfrmbyrga;
+    struct private_handle_t* hdl;
+}
+RgaTBI;
+
 typedef struct _ZoneManager
 {
     ZoneInfo    zone_info[MaxZones];
     int         bp_size;
-    int         zone_cnt;   
-    int         composter_mode;        
-	        
+    int         zone_cnt;
+    int         composter_mode;
 }
 ZoneManager;
 typedef struct _vop_info
@@ -549,6 +561,10 @@ typedef struct _hwcContext
 
      /*hdmi 3d detech*/
      int fd_3d;
+
+     /*rrg tramsform*/
+     RgaTBI   mRgaTBI;
+     bool     mNeedRgaTransform;
      
 #if SPRITEOPTIMATION
      /*sprite*/
