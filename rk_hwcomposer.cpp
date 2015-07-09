@@ -8618,7 +8618,7 @@ int hotplug_set_frame(hwcContext* context,int flag)
 int hwc_sprite_replace(hwcContext * Context,hwc_display_contents_1_t * list)
 {
 #if SPRITEOPTIMATION
-#if (defined(RK3368_BOX) || defined(RK3288_BOX))
+#if (defined(RK3368_BOX))// || defined(RK3288_BOX))
     if(mLogL>0)
         ATRACE_CALL();
 
