@@ -6837,7 +6837,7 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
     if(context->mHdmiSI.CvbsOn || context->mHdmiSI.HdmiOn)
     {
         int count = 0;
-        while(_contextAnchor1->fb_blanked)
+        while(_contextAnchor1 && _contextAnchor1->fb_blanked)
         {
             count++;
             usleep(10000);
@@ -6852,15 +6852,15 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
 		    buffer_handle_t mhandle = _contextAnchor1->mDimHandle;
             int err = context->mAllocDev->free(context->mAllocDev, mhandle);
             ALOGW_IF(err,"free mDimHandle failed %d (%s)", err, strerror(-err));
-
+            _contextAnchor1->mDimHandle = 0;
 		}
-        _contextAnchor1->mDimHandle = 0;
 #endif
         if(context->mHdmiSI.CvbsOn)
             context->mHdmiSI.CvbsOn = false;
         else
             context->mHdmiSI.HdmiOn = false;
-        _contextAnchor1->fb_blanked = 1;
+        if(_contextAnchor1)
+            _contextAnchor1->fb_blanked = 1;
         hotplug_set_frame(context,0);
         context->dpyAttr[HWC_DISPLAY_EXTERNAL].connected = false;
         context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 0);
