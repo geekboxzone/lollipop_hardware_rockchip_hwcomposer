@@ -31,7 +31,7 @@
 #include <vpu_mem.h>
 
 //Control macro
-#define hwcDEBUG                    0
+#define hwcDEBUG                    1
 #define hwcUseTime                  0
 #define hwcBlitUseTime              0
 #define hwcDumpSurface              0
@@ -98,16 +98,8 @@
 #define HAL_PIXEL_FORMAT_YCrCb_NV12_OLD  0x20
 #define ATRACE_TAG                  ATRACE_TAG_GRAPHICS
 
-
 #define GHWC_VERSION  "2.044"
-//HWC version Tag
-//Get commit info:  git log --format="Author: %an%nTime:%cd%nCommit:%h%n%n%s%n%n"
-//Get version: busybox strings /system/lib/hw/hwcomposer.rk30board.so | busybox grep HWC_VERSION
-//HWC_VERSION Author:zxl Time:Tue Aug 12 17:27:36 2014 +0800 Version:1.17 Branch&Previous-Commit:rk/rk312x/mid/4.4_r1/develop-9533348.
-#define HWC_VERSION "HWC_VERSION  \
-Author: wzq \
-Version:2.044 \
-"
+#define HWC_VERSION "HWC_VERSION Author:wzq Version:2.044"
 
 #ifdef GPU_G6110
 #if G6110_SUPPORT_FBDC
@@ -185,7 +177,6 @@ extern "C" {
 #endif
 
 #if PLATFORM_SDK_VERSION >= 17
-
 #define  hwc_layer_list_t	 	hwc_display_contents_1_t
 #endif
 enum
@@ -201,7 +192,19 @@ enum
     
 };
 
-
+enum
+{
+    //Log level flag
+    HWC_LOG_LEVEL_ONE = 1 << 1,
+    HWC_LOG_LEVEL_TWO = 1 << 2,
+    HWC_LOG_LEVEL_THR = 1 << 3,
+    HWC_LOG_LEVEL_FOU = 1 << 4,
+    HWC_LOG_LEVEL_FIV = 1 << 5,
+    HWC_LOG_LEVEL_SIX = 1 << 6,
+    HWC_LOG_LEVEL_sev = 1 << 7,
+    HWC_LOG_LEVEL_EIG = 1 << 8,
+    HWC_LOG_LEVEL_NIE = 1 << 9,
+};
 
 typedef struct _mix_info
 {
