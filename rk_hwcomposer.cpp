@@ -1694,9 +1694,9 @@ int try_wins_dispatch_mix_up(void * ctx,hwc_display_contents_1_t * list)
             {
                 layer->compositionType = HWC_NODRAW;
             }
-            if(gpu_draw && pzone_mag->zone_info[i].layer_index > 1)
+            if(gpu_draw && i == pzone_mag->zone_cnt-1)
             {
-                for(int j=1;j<pzone_mag->zone_info[i].layer_index;j++)
+                for(int j=1;j<pzone_mag->zone_cnt;j++)
                 {
                     layer = &list->hwLayers[j];
                     layer->compositionType = HWC_FRAMEBUFFER;
@@ -2468,6 +2468,7 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
     BpVopInfo  bpvinfo;    
     int tsize = 0;
     int mix_index = 0;
+    int mFtrfl = 0;
     int iFirstTransformLayer=-1;
     bool bTransform=false;
 
@@ -2503,6 +2504,7 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
     {
         if(pzone_mag->zone_info[i].transform != 0)
         {
+            mFtrfl = i;
             iFirstTransformLayer = pzone_mag->zone_info[i].layer_index;
             bTransform = true;
             break;
@@ -2515,10 +2517,10 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
     if(contextAh->mHdmiSI.Is3D)
         return -1;
 
-    for(int k=0;k<pzone_mag->zone_cnt;k++)
+    for(int k=0;k<mFtrfl;k++)
     {
         if(pzone_mag->zone_info[k].scale_err || pzone_mag->zone_info[k].toosmall
-            || pzone_mag->zone_info[k].zone_err)
+            || pzone_mag->zone_info[k].zone_err || pzone_mag->zone_info[k].transform)
             return -1;
     }
 
