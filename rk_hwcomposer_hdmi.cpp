@@ -39,7 +39,11 @@ void rk_parse_uevent_buf(const char *buf,int* type,int* flag,int len)
 
 void rk_check_hdmi_state()
 {
+#ifdef RK3288_BOX
+    int fd = open("/sys/devices/virtual/display/HDMI/connect", O_RDONLY);
+#else
     int fd = open("/sys/devices/virtual/switch/hdmi/state", O_RDONLY);
+#endif
 	if (fd > 0)
 	{
 		char statebuf[100];
@@ -53,7 +57,7 @@ void rk_check_hdmi_state()
 		close(fd);
 		g_hdmi_mode = atoi(statebuf);
 		//if(g_hdmi_mode == 0)
-		    hdmi_noready = true;
+		hdmi_noready = true;
 		/* if (g_hdmi_mode==0)
 		{
 			property_set("sys.hdmi.mode", "0");
