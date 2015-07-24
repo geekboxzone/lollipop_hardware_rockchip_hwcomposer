@@ -54,6 +54,7 @@
 #define HWC_EXTERNAL                    1           //1:hwc control two lcdc for display
 #define USE_QUEUE_DDRFREQ               1
 #define SPRITEOPTIMATION                1           //1:support sprite optimation for overlay
+#define SUPPORTFORCE3D                  1           
 
 #ifdef GPU_G6110
 #define G6110_SUPPORT_FBDC              0
@@ -98,8 +99,8 @@
 #define HAL_PIXEL_FORMAT_YCrCb_NV12_OLD  0x20
 #define ATRACE_TAG                  ATRACE_TAG_GRAPHICS
 
-#define GHWC_VERSION  "2.046"
-#define HWC_VERSION "HWC_VERSION Author:wzq Version:2.046"
+#define GHWC_VERSION  "2.047"
+#define HWC_VERSION "HWC_VERSION Author:wzq Version:2.047"
 
 #ifdef GPU_G6110
 #if G6110_SUPPORT_FBDC
@@ -463,6 +464,7 @@ typedef struct _hdmiStateInfo
      int FrameBase;
      bool IsVideo3D;
      bool Is3D;
+     bool mForce3D;
      buffer_handle_t FrameHandle;
 }hdmiStateInfo;
 

@@ -4756,12 +4756,24 @@ int hwc_pre_prepare(hwc_display_contents_1_t** displays, int flag)
 {
     mLogL = is_out_log();
 #if (defined(GPU_G6110) || defined(RK3288_BOX))
+    int forceStereo = 0;
     hwcContext * context = _contextAnchor;
     context->mHdmiSI.hdmi_anm = 0;
     context->mHdmiSI.anroidSt = false;
     context->mHdmiSI.IsVideo3D = false;
     context->mHdmiSI.Is3D = false;
 #ifdef SUPPORT_STEREO
+#if SUPPORTFORCE3D
+    char pro_value[PROPERTY_VALUE_MAX];
+    property_get("sys.hwc.force3d",pro_value,0);
+    int force3d = atoi(pro_value);
+    if(1==force3d || 2==force3d){
+        context->mHdmiSI.Is3D = true;
+        forceStereo = force3d;
+    }else{
+        forceStereo = 0;
+    }
+#endif
     for(int i=0;i<2;i++)
     {
         if(displays[i] != NULL)
@@ -4774,6 +4786,9 @@ int hwc_pre_prepare(hwc_display_contents_1_t** displays, int flag)
                         needStereo = displays[i]->hwLayers[j].alreadyStereo;
                         break;
                     }
+                }
+                if(forceStereo){
+                    needStereo = forceStereo;
                 }
                 if(needStereo) {
                     context->mHdmiSI.Is3D = true;
