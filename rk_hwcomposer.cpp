@@ -13,6 +13,7 @@
 #include "rk_hwcomposer.h"
 #include <hardware/hardware.h>
 
+#include <sys/prctl.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <cutils/properties.h>
@@ -6822,13 +6823,11 @@ static void handle_vsync_event(hwcContext * context )
     }
     buf[sizeof(buf) - 1] = '\0';
 
-  //  errno = 0;
+    //errno = 0;
     uint64_t timestamp = strtoull(buf, NULL, 0) ;/*+ (uint64_t)(1e9 / context->fb_fps)  ;*/
     context->procs->vsync(context->procs, 0, timestamp);
 /*
     uint64_t mNextFakeVSync = timestamp + (uint64_t)(1e9 / context->fb_fps);
-
-
     struct timespec spec;
     spec.tv_sec  = mNextFakeVSync / 1000000000;
     spec.tv_nsec = mNextFakeVSync % 1000000000;
@@ -6853,15 +6852,13 @@ static void handle_vsync_event(hwcContext * context )
 void handle_hotplug_event(int hdmi_mode ,int flag )
 {
     hwcContext * context = _contextAnchor;
-#ifdef RK3288_BOX
-    if (!context->procs)
+    if (!context->procs){
         return;
+    }
 
-    if(context->mHdmiSI.CvbsOn || context->mHdmiSI.HdmiOn)
-    {
+    if(context->mHdmiSI.CvbsOn || context->mHdmiSI.HdmiOn){
         int count = 0;
-        while(_contextAnchor1 && _contextAnchor1->fb_blanked)
-        {
+        while(_contextAnchor1 && _contextAnchor1->fb_blanked){
             count++;
             usleep(10000);
             if(300==count){
@@ -6870,48 +6867,54 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
             }
         }
 #if OPTIMIZATION_FOR_DIMLAYER
-		if(_contextAnchor1 && _contextAnchor1->mDimHandle)
-		{
+		if(_contextAnchor1 && _contextAnchor1->mDimHandle){
 		    buffer_handle_t mhandle = _contextAnchor1->mDimHandle;
             int err = context->mAllocDev->free(context->mAllocDev, mhandle);
             ALOGW_IF(err,"free mDimHandle failed %d (%s)", err, strerror(-err));
             _contextAnchor1->mDimHandle = 0;
 		}
 #endif
-        if(context->mHdmiSI.CvbsOn)
+        if(context->mHdmiSI.CvbsOn){
             context->mHdmiSI.CvbsOn = false;
-        else
+        }else{
             context->mHdmiSI.HdmiOn = false;
-        if(_contextAnchor1)
+        }
+        if(_contextAnchor1){
             _contextAnchor1->fb_blanked = 1;
-#if 0
+        }
+#ifdef RK3288_MID
         hotplug_set_frame(context,0);
 #endif
         context->dpyAttr[HWC_DISPLAY_EXTERNAL].connected = false;
         context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 0);
-        ALOGI("connet to hotplug device [%d,%d,%d]",__LINE__,hdmi_mode,flag);
+#if (defined(GPU_G6110) || defined(RK3288_BOX))
+        hotplug_set_overscan(1);
+#endif
+        ALOGI("remove hotplug device [%d,%d,%d]",__LINE__,hdmi_mode,flag);
     }
-    if(hdmi_mode)
-    {
+    if(hdmi_mode){
         hotplug_get_config(1);
         hotplug_set_config();
-        if(6 == flag)
+        if(6 == flag){
             context->mHdmiSI.HdmiOn = true;
-        else if(1 == flag)
+        }else if(1 == flag){
             context->mHdmiSI.CvbsOn = true;
-#if 0
+        }
+#ifdef RK3288_MID
         hotplug_set_frame(context,0);
 #endif
         char value[PROPERTY_VALUE_MAX];
+        property_set("sys.hwc.htg","hotplug");
         context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 1);
-        property_get("callbak.hwc.htg",value,"hotplug");
+        property_get("sys.hwc.htg",value,"hotplug");
         int count = 0;
         while(strcmp(value,"true")){
             count ++;
-            if(count%3==0)
+            if(count%3==0){
                 context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 0);
+            }
             context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 1);
-            property_get("callbak.hwc.htg",value,"hotplug");
+            property_get("sys.hwc.htg",value,"hotplug");
             ALOGI("Trying to hotplug device[%d,%d,%d]",__LINE__,hdmi_mode,flag);
         }
         ALOGI("connet to hotplug device [%d,%d,%d]",__LINE__,hdmi_mode,flag);
@@ -6921,158 +6924,6 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
     }
 
     return;
-#else
-#if HWC_EXTERNAL
-    if (!context->procs)
-        return;
-        
-    switch(flag){
-    case 0:
-    case 1:
-        if(hdmi_mode && !context->mHdmiSI.HdmiOn)
-        {
-#if (defined(RK3368_BOX) || defined(RK3288_BOX))
-            if(context->mHdmiSI.CvbsOn)
-            {
-                usleep(500000);
-    #if OPTIMIZATION_FOR_DIMLAYER
-    			if(_contextAnchor1 && _contextAnchor1->mDimHandle)
-    			{
-                    int err = context->mAllocDev->free(context->mAllocDev, _contextAnchor1->mDimHandle);
-                    _contextAnchor1->mDimHandle = 0;
-                    ALOGW_IF(err, "free mDimHandle (...) failed %d (%s)", err, strerror(-err));
-    			}
-    #endif
-			    context->dpyAttr[HWC_DISPLAY_EXTERNAL].connected = false;
-                context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 0);
-                context->mHdmiSI.CvbsOn = false;
-                hotplug_set_frame(context,0);
-                usleep(50000);
-            }
-#endif
-            if(hotplug_get_config(0) != 1)
-            {
-                return;
-            }
-            if(hotplug_set_config() != 1)
-            {
-                return;
-            }
-            context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, hdmi_mode);
-            context->mHdmiSI.HdmiOn = true;
-            ALOGD("TRY to connet to hotplug device line=%d",__LINE__);
-#if (defined(GPU_G6110) || defined(RK3288_BOX))
-            hotplug_set_overscan(0);
-#endif
-        }
-        else
-        {
-            if(context->mHdmiSI.HdmiOn)
-            {
-#if !(defined(GPU_G6110) || defined(RK3288_BOX))
-                if(hotplug_set_frame(context,0))
-                {
-                    usleep(50000);
-                    if(hotplug_set_frame(context,0))
-                    {
-                        ALOGE("set last frame but kernel return fenceFd not -1");
-                    }
-                }
-#endif
-                _contextAnchor1->fb_blanked = 1;
-                _contextAnchor->mHdmiSI.NeedReDst = false;
-				context->dpyAttr[HWC_DISPLAY_EXTERNAL].connected = false;
-                context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, hdmi_mode);
-#if (defined(GPU_G6110) || defined(RK3288_BOX))
-                hotplug_set_overscan(1);
-#endif        
-                context->mHdmiSI.HdmiOn = false;
-				context->mHdmiSI.flag_blank = 0;
-#if OPTIMIZATION_FOR_DIMLAYER
-				if(_contextAnchor1 &&_contextAnchor1->mDimHandle)
-				{
-					int err = context->mAllocDev->free(context->mAllocDev, _contextAnchor1->mDimHandle);
-					_contextAnchor1->mDimHandle = 0;
-					ALOGW_IF(err, "free mDimHandle (...) failed %d (%s)", err, strerror(-err));
-				}
-#endif
-            }
-        }    
-        break;
-
-#if (defined(RK3368_BOX) || defined(RK3288_BOX))
-    case 2:
-        if(!hdmi_mode || context->mHdmiSI.CvbsOn)
-        {
-            usleep(50000);
-    #if OPTIMIZATION_FOR_DIMLAYER
-            if(_contextAnchor1 && _contextAnchor1->mDimHandle)
-            {
-                int err = context->mAllocDev->free(context->mAllocDev, _contextAnchor1->mDimHandle);
-                _contextAnchor1->mDimHandle = 0;
-                ALOGW_IF(err, "free mDimHandle (...) failed %d (%s)", err, strerror(-err));
-            }
-    #endif
-            context->dpyAttr[HWC_DISPLAY_EXTERNAL].connected = false;
-            context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 0);
-            hotplug_set_frame(context,0);
-            context->mHdmiSI.CvbsOn = false;
-            usleep(500000);
-        }
-        if(hdmi_mode)
-        {
-            if(hotplug_get_config(1) != 1)
-            {
-                context->mHdmiSI.CvbsOn = false;
-                return;
-            }
-            if(hotplug_set_config() != 1)
-            {
-                context->mHdmiSI.CvbsOn = false;
-                return;
-            }
-            context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 1);
-            ALOGD("TRY to connet to hotplug cvbs device line=%d",__LINE__);
-    #if (defined(GPU_G6110) || defined(RK3288_BOX))
-            hotplug_set_overscan(0);
-    #endif 
-            context->mHdmiSI.CvbsOn = true;
-        }
-        break;
-#endif
-        
-    case 3:
-        if(context->mHdmiSI.HdmiOn)
-        {
-			context->dpyAttr[HWC_DISPLAY_EXTERNAL].connected = false;
-            context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 0);
-#if OPTIMIZATION_FOR_DIMLAYER
-            if(_contextAnchor1 && _contextAnchor1->mDimHandle)
-            {
-                int err = context->mAllocDev->free(context->mAllocDev, _contextAnchor1->mDimHandle);
-                _contextAnchor1->mDimHandle = 0;
-                ALOGW_IF(err, "free mDimHandle (...) failed %d (%s)", err, strerror(-err));
-            }
-#endif      
-            hotplug_get_config(0);
-            hotplug_set_config();
-#if (defined(GPU_G6110) || defined(RK3288_BOX))
-            hotplug_set_overscan(1);
-#endif 
-            usleep(50000);
-            context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 1);
-#if (defined(GPU_G6110) || defined(RK3288_BOX))
-            hotplug_set_overscan(0);
-#endif 
-        }
-        break;
-        
-    default:
-        ALOGI("handle hotplug:do nothing");
-        break;
-    }
-#endif
-#endif
 }
 
 
@@ -7518,6 +7369,7 @@ hwc_device_open(
     
     vsync_period  = 1000000000 / refreshRate;
 
+    context->fb_blanked = 1;
     context->dpyAttr[HWC_DISPLAY_PRIMARY].fd = context->fbFd;
     //xres, yres may not be 32 aligned
     context->dpyAttr[HWC_DISPLAY_PRIMARY].stride = fixInfo.line_length /(info.xres/8);
@@ -8237,7 +8089,7 @@ int hotplug_get_config(int flag){
     context->fun_policy[HWC_RGA_TRSM_VOP] = try_wins_dispatch_mix_down;
     context->fun_policy[HWC_RGA_TRSM_GPU_VOP] = try_wins_dispatch_mix_vh;
     _contextAnchor1 = context;
-#ifndef RK3288_BOX
+#ifdef RK3288_MID
     hotplug_set_frame(_contextAnchor,0);
 #endif
 
@@ -8434,54 +8286,32 @@ int hotplug_close_device()
 
 void *hotplug_try_register(void *arg)
 {
-    struct timeval tstart,tend;
-    gettimeofday(&tstart,NULL);
-    do{  		
-    	gettimeofday(&tend,NULL);
-        if((((tend.tv_sec - tstart.tv_sec)*1000000)+(tend.tv_usec - tstart.tv_usec)) % 6000 == 0 )
-        {
-    	    //ALOGW("Try to hotplug_try_register spent time = %ld us",
-    	    //    (((tend.tv_sec - tstart.tv_sec)*1000000)+(tend.tv_usec - tstart.tv_usec)));	
-        }                        
-        ALOGV("getHdmiMode()=%d,HdmiOn=%d,flag_blank=%d,flag_hwcup_external=%d",getHdmiMode(),
-            _contextAnchor->mHdmiSI.HdmiOn,_contextAnchor->mHdmiSI.flag_blank,
-                _contextAnchor->mHdmiSI.flag_hwcup_external);
-        if(getHdmiMode() == 1 && !_contextAnchor->mHdmiSI.HdmiOn &&
-            _contextAnchor->mHdmiSI.flag_blank == 0 && _contextAnchor->mHdmiSI.flag_hwcup_external == 2)
-        {
-#ifdef RK3288_BOX
-            handle_hotplug_event(getHdmiMode(), 6);
-#else
-            handle_hotplug_event(getHdmiMode(), 0);
+    prctl(PR_SET_NAME,"HWC_htg1");
+    HWC_UNREFERENCED_PARAMETER(arg);
+    hwcContext * context = _contextAnchor;
+    int count = 0;
+#if !(defined(RK3368_BOX) || defined(RK3288_BOX))
+    if(getHdmiMode() == 1){
+        hotplug_get_config(0);
+    }
 #endif
-			ALOGI("hotplug_try_register at line = %d",__LINE__);
-			break;
+    while(context->fb_blanked){
+        count++;
+        usleep(10000);
+        if(300==count){
+            ALOGW("wait for primary unblank");
+            break;
         }
-    }while(_contextAnchor->mHdmiSI.flag_hwcup_external < 3 && getHdmiMode()==1);
+    }
+    if(getHdmiMode() == 1){
+        handle_hotplug_event(1, 6);
+		ALOGI("hotplug_try_register at line = %d",__LINE__);
+    }else{
 #if (defined(RK3368_BOX) || defined(RK3288_BOX))
-    if(getHdmiMode() == 0)
-    {
-        _contextAnchor->mHdmiSI.CvbsOn = true;
-        usleep(800000);
-        if(hotplug_get_config(1) != 1)
-        {
-            ALOGE("%s,%d,hotplug_get_config(1) ERROR",__FUNCTION__,__LINE__);
-            return NULL;
-        }
-        if(hotplug_set_config() != 1)
-        {
-            ALOGE("%s,%d,hotplug_set_config() ERROR",__FUNCTION__,__LINE__);
-            return NULL;
-        }
-        _contextAnchor->procs->hotplug(_contextAnchor->procs, HWC_DISPLAY_EXTERNAL, 1);
-        ALOGD("TRY to connet to hotplug cvbs device line=%d",__LINE__);
-#if (defined(GPU_G6110) || defined(RK3288_BOX))
-        hotplug_set_overscan(0);
-#endif 
-        _contextAnchor->mHdmiSI.CvbsOn = true;
-    }else
-        _contextAnchor->mHdmiSI.CvbsOn = false;
+        handle_hotplug_event(1, 1);
+        ALOGI("hotplug_try_register at line = %d",__LINE__);
 #endif
+    }
     pthread_exit(NULL);
     return NULL;
 }
