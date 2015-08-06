@@ -2963,19 +2963,6 @@ int try_wins_dispatch_mix_vh (void * ctx,hwc_display_contents_1_t * list)
             return -1;
     }
 
-    hwc_layer_1_t * layer = &list->hwLayers[0];
-    struct private_handle_t * handle = (struct private_handle_t *) list->hwLayers[0].handle;
-    if(!(handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12 
-            || handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12_10
-                    || handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO))
-    {
-		ALOGV("Is NOT video format,not need do this");
-        return -1;
-    }else
-    {
-        layer->compositionType = HWC_MIX_V2;
-    }
-    
     for(i=0,j=0;i<pzone_mag->zone_cnt;i++)
     {
         //Set the layer which it's layer_index bigger than the first transform layer index to HWC_FRAMEBUFFER or HWC_NODRAW
@@ -3308,6 +3295,9 @@ int try_wins_dispatch_mix_vh (void * ctx,hwc_display_contents_1_t * list)
 #endif   
     //Mark the composer mode to HWC_MIX_V2
     memcpy(&Context->zone_manager,&zone_m,sizeof(ZoneManager));
+    if(list){
+        list->hwLayers[0].compositionType = HWC_MIX_V2;
+    }
     Context->mHdmiSI.mix_vh = true;
     Context->zone_manager.composter_mode = HWC_MIX_V2;
     return 0;
@@ -8448,8 +8438,10 @@ int hwc_sprite_replace(hwcContext * Context,hwc_display_contents_1_t * list)
         return -1;
 
     int mSize = 64;
-    if(_contextAnchor->mHdmiSI.NeedReDst)
+    if(_contextAnchor->mHdmiSI.NeedReDst){
         mSize = 128;
+        return -1;
+    }
 
     if(!strcmp(pzone_mag->zone_info[i].LayerName,"Sprite") &&
         (pzone_mag->zone_info[i].toosmall || pzone_mag->zone_info[i].is_stretch)){

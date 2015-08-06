@@ -53,13 +53,14 @@
 #define OPTIMIZATION_FOR_DIMLAYER       1           //1: optimise for dim layer
 #define HWC_EXTERNAL                    1           //1:hwc control two lcdc for display
 #define USE_QUEUE_DDRFREQ               1
-#define SPRITEOPTIMATION                1           //1:support sprite optimation for overlay
 #define SUPPORTFORCE3D                  1           
 
 #ifdef GPU_G6110
 #define G6110_SUPPORT_FBDC              0
 #define VIRTUAL_RGA_BLIT                0           //1:wfd optimazition by rga
+#define SPRITEOPTIMATION                1           //1:support sprite optimation for overlay
 #else
+#define SPRITEOPTIMATION                0           //1:support sprite optimation for overlay
 #define VIRTUAL_RGA_BLIT                0           //1:wfd optimazition by rga
 #endif
 
@@ -99,8 +100,8 @@
 #define HAL_PIXEL_FORMAT_YCrCb_NV12_OLD  0x20
 #define ATRACE_TAG                  ATRACE_TAG_GRAPHICS
 
-#define GHWC_VERSION  "2.048"
-#define HWC_VERSION "HWC_VERSION Author:wzq Version:2.048"
+#define GHWC_VERSION  "2.049"
+#define HWC_VERSION "HWC_VERSION Author:wzq Version:2.049"
 
 #ifdef GPU_G6110
 #if G6110_SUPPORT_FBDC
