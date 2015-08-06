@@ -2086,6 +2086,9 @@ int try_wins_dispatch_mix_down(void * ctx,hwc_display_contents_1_t * list)
     if(contextAh->mHdmiSI.Is3D)
         return -1;
 
+    if(contextAh->mHdmiSI.NeedReDst)
+        return -1;
+
     for(int k=2;k<pzone_mag->zone_cnt;k++)
     {
         if(pzone_mag->zone_info[k].scale_err || pzone_mag->zone_info[k].toosmall
@@ -2513,6 +2516,9 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
     }
 
     if(Context->mAlphaError)
+        return -1;
+
+    if(contextAh->mHdmiSI.NeedReDst)
         return -1;
 
     if(contextAh->mHdmiSI.Is3D)
@@ -4948,37 +4954,31 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
     char gts_status[PROPERTY_VALUE_MAX];
  
     /* Check layer list. */
-    if (list == NULL || (list->numHwLayers  == 0)
-        //||  !(list->flags & HWC_GEOMETRY_CHANGED)
-    )
-    {
+    if (list == NULL || (list->numHwLayers  == 0)/*||!(list->flags & HWC_GEOMETRY_CHANGED)*/){
         ALOGD_IF(mLogL&HWC_LOG_LEVEL_TWO,"dpyID=%d list null",dpyID);
         return 0;
     }
-
     
 #if (defined(GPU_G6110) || defined(RK3288_BOX))
     if((!hdmi_noready  && dpyID == 0 
-        && (getHdmiMode() == 1 || _contextAnchor->mHdmiSI.CvbsOn))) 
-    {
-        for (unsigned int i = 0; i < (list->numHwLayers - 1); i++)
-        {
+        && (getHdmiMode() == 1 || _contextAnchor->mHdmiSI.CvbsOn))){
+        for (unsigned int i = 0; i < (list->numHwLayers - 1); i++){
             hwc_layer_1_t * layer = &list->hwLayers[i];
             layer->compositionType = HWC_NODRAW;
         }
         ALOGD_IF(mLogL&HWC_LOG_LEVEL_SIX,"Primary nodraw %s,%d",__FUNCTION__,__LINE__);
         return 0;
     }
-    if(hdmi_noready && dpyID == 1)
-    {
+    if(hdmi_noready && dpyID == 1){
         ALOGD_IF(mLogL&HWC_LOG_LEVEL_SIX,"Hotplug nodraw %s,%d",__FUNCTION__,__LINE__);
         return 0;
     }
 #endif
 
 #if (defined(GPU_G6110) || defined(RK3288_BOX))
-    if(_contextAnchor->mHdmiSI.anroidSt)
+    if(_contextAnchor->mHdmiSI.anroidSt){
         goto GpuComP;
+    }
 #endif
 
     LOGV("%s(%d):>>> hwc_prepare_primary %d layers <<<",
@@ -4989,22 +4989,18 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
     
 #if GET_VPU_INTO_FROM_HEAD
     //init handles,reset bMatch
-    for (i = 0; i < MAX_VIDEO_SOURCE; i++)
-    {
+    for (i = 0; i < MAX_VIDEO_SOURCE; i++){
         handles[i]=NULL;
         context->video_info[i].bMatch=false;
     }
 #endif
     
-    for (i = 0; i < (list->numHwLayers - 1); i++)
-    {
+    for (i = 0; i < (list->numHwLayers - 1); i++){
         struct private_handle_t * handle = (struct private_handle_t *) list->hwLayers[i].handle;
-        if(handle && GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
-        {
+        if(handle && GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO){
             video_cnt ++;
         }
-        if(handle && GPU_FORMAT == HAL_PIXEL_FORMAT_YV12)
-        {
+        if(handle && GPU_FORMAT == HAL_PIXEL_FORMAT_YV12){
             ALOGD_IF(mLogL&HWC_LOG_LEVEL_FOU,"HAL_PIXEL_FORMAT_YV12 out");
             goto GpuComP;
         }
@@ -5020,8 +5016,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
     context->bHasDimLayer = false;
 #endif
     context->mtrsformcnt  = 0;
-    for (i = 0; i < (list->numHwLayers - 1); i++)
-    {
+    for (i = 0; i < (list->numHwLayers - 1); i++){
         struct private_handle_t * handle = (struct private_handle_t *) list->hwLayers[i].handle;
 
 #if 0
@@ -5031,18 +5026,15 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
         if(!strcmp(list->hwLayers[i].LayerName,"MediaView"))
             context->mIsMediaView=true;
 
-        if(list->hwLayers[i].transform != 0)
-        {
+        if(list->hwLayers[i].transform != 0){
             context->mtrsformcnt ++;
         }
 
-        if(handle && GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12)
-        {
+        if(handle && GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12){
             context->mVideoMode = true;
         }
 
-        if(handle && GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
-        {
+        if(handle && GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO){
             tVPU_FRAME vpu_hd;
 
             context->mVideoMode = true;
@@ -5050,13 +5042,11 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
 
             ALOGV("video");
 #if GET_VPU_INTO_FROM_HEAD
-            for(m=0;m<MAX_VIDEO_SOURCE;m++)
-            {
-                ALOGV("m=%d,[%p,%p],[%p,%p]",m,context->video_info[m].video_hd,handle, context->video_info[m].video_base,(void*)handle->base);
-                if( (context->video_info[m].video_hd == handle)
-                    && (context->video_info[m].video_base == (void*)handle->base)
-                    && handle->video_width != 0)
-                {
+            for(m=0;m<MAX_VIDEO_SOURCE;m++){
+                ALOGV("m=%d,[%p,%p],[%p,%p]",m,context->video_info[m].video_hd,handle,
+                    context->video_info[m].video_base,(void*)handle->base);
+                if( (context->video_info[m].video_hd == handle)&& handle->video_width != 0
+                    && (context->video_info[m].video_base == (void*)handle->base)){
                     //match video,but handle info been update
                     context->video_info[m].bMatch=true;
                     break;
@@ -5079,8 +5069,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
 #endif
                 //if find invalid params,then increase iVideoSources and try again.
                 if(vpu_hd.FrameWidth>8192 || vpu_hd.FrameWidth <=0 || \
-                    vpu_hd.FrameHeight>8192 || vpu_hd.FrameHeight<=0)
-                {
+                    vpu_hd.FrameHeight>8192 || vpu_hd.FrameHeight<=0){
                     ALOGE("invalid video(w=%d,h=%d)",vpu_hd.FrameWidth,vpu_hd.FrameHeight);
                 }
 
@@ -5091,8 +5080,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
                 handle->video_disp_height = vpu_hd.DisplayHeight;
 
 #if WRITE_VPU_FRAME_DATA
-                if(hwc_get_int_property("sys.hwc.write_vpu_frame_data","0"))
-                {
+                if(hwc_get_int_property("sys.hwc.write_vpu_frame_data","0")){
                     static FILE* pOutFile = NULL;
                     VPUMemLink(&vpu_hd.vpumem);
                     pOutFile = fopen("/data/raw.yuv", "wb");
@@ -5121,25 +5109,21 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
             }
         }
         if(list->hwLayers[i].realtransform == HAL_TRANSFORM_ROT_90
-            || list->hwLayers[i].realtransform == HAL_TRANSFORM_ROT_270 )
-        {
+            || list->hwLayers[i].realtransform == HAL_TRANSFORM_ROT_270 ){
             vertical = true;
         }
 
     }
 
 #if GET_VPU_INTO_FROM_HEAD
-    for (i = 0; i < index; i++)
-    {
+    for (i = 0; i < index; i++){
         struct private_handle_t * handle = handles[i];
         if(handle == NULL)
             continue;
 
-        for(m=0;m<MAX_VIDEO_SOURCE;m++)
-        {
+        for(m=0;m<MAX_VIDEO_SOURCE;m++){
             //save handle into video_info which doesn't match before.
-            if(!context->video_info[m].bMatch)
-            {
+            if(!context->video_info[m].bMatch){
                 ALOGV("save handle=%p,base=%p,w=%d,h=%d",handle,GPU_BASE,handle->video_width,handle->video_height);
                 context->video_info[m].video_hd = handle ;
                 context->video_info[m].video_base = (void*)(GPU_BASE);
@@ -5150,8 +5134,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
          }
     }
 
-    for(m=0;m<MAX_VIDEO_SOURCE;m++)
-    {
+    for(m=0;m<MAX_VIDEO_SOURCE;m++){
         //clear handle into video_info which doesn't match before.
         ALOGV("cancel m=%d,handle=%p,base=%p",m,context->video_info[m].video_hd,context->video_info[m].video_base);
         if(!context->video_info[m].bMatch)
@@ -5163,51 +5146,46 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
 #endif
 
 
-    if(video_cnt >1) // more videos goto gpu cmp
-    {
+    if(video_cnt >1){
+        // more videos goto gpu cmp
         ALOGW("more2 video=%d goto GpuComP",video_cnt);
 		ALOGD_IF(mLogL&HWC_LOG_LEVEL_FOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
         goto GpuComP;
     }          
     //Get gts staus,save in context->mGtsStatus
     hwc_get_string_property("sys.cts_gts.status","false",gts_status);
-    if(!strcmp(gts_status,"true"))
+    if(!strcmp(gts_status,"true")){
         context->mGtsStatus = true;
-    else
+    }else{
         context->mGtsStatus = false;
+    }
 
     context->mTrsfrmbyrga = false;
     /* Check all layers: tag with different compositionType. */
-    for (i = 0; i < (list->numHwLayers - 1); i++)
-    {
+    for (i = 0; i < (list->numHwLayers - 1); i++){
         hwc_layer_1_t * layer = &list->hwLayers[i];
 
         uint32_t compositionType =
              check_layer(context, list->numHwLayers - 1, i,context->mVideoMode, layer);
 
-        if (compositionType == HWC_FRAMEBUFFER)
-        {
+        if (compositionType == HWC_FRAMEBUFFER){
             break;
         }
     }
 
-    if(hwc_get_int_property("sys.hwc.disable","0")== 1)
-    {
+    if(hwc_get_int_property("sys.hwc.disable","0")== 1){
 		ALOGD_IF(mLogL&HWC_LOG_LEVEL_FOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
         goto GpuComP;
 	}
     /* Roll back to FRAMEBUFFER if any layer can not be handled. */
-    if (i != (list->numHwLayers - 1) || (list->numHwLayers==1) /*|| context->mtrsformcnt > 1*/)
-    {
+    if (i != (list->numHwLayers - 1) || (list->numHwLayers==1) /*|| context->mtrsformcnt > 1*/){
 		ALOGD_IF(mLogL&HWC_LOG_LEVEL_FOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
         goto GpuComP;
     }
 
 #if !ENABLE_LCDC_IN_NV12_TRANSFORM
-    if(!context->mGtsStatus)
-    {
-        if(context->mVideoMode &&  !context->mNV12_VIDEO_VideoMode && context->mtrsformcnt>0)
-        {
+    if(!context->mGtsStatus){
+        if(context->mVideoMode &&  !context->mNV12_VIDEO_VideoMode && context->mtrsformcnt>0){
             ALOGV("Go into GLES,in nv12 transform case");
 			ALOGD_IF(mLogL&HWC_LOG_LEVEL_FOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
             goto GpuComP;
@@ -5215,25 +5193,21 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
     }
 #endif
 
-    for (i = 0; i < (list->numHwLayers - 1); i++)
-    {
+    for (i = 0; i < (list->numHwLayers - 1); i++){
         struct private_handle_t * handle = (struct private_handle_t *) list->hwLayers[i].handle;
         int stride_gr;
         int video_w=0,video_h=0;
 
-        if(GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
-        {
+        if(GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO){
             video_w = handle->video_width;
             video_h = handle->video_height;
-        }
-        else if(GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12)
-        {
+        }else if(GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12){
             video_w = handle->width;
             video_h = handle->height;
         }
 
-        if(handle && (GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO || GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12))
-        {
+        if(handle && (GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO 
+            || GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12)){
             //alloc video gralloc buffer in video mode
             if(context->fd_video_bk[0] == -1 && (
 #if USE_VIDEO_BACK_BUFFERS
@@ -5278,11 +5252,9 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
 #if USE_VIDEO_BACK_BUFFERS
         !context->mNV12_VIDEO_VideoMode && 
 #endif
-        !context->mTrsfrmbyrga) || (video_cnt >1)))
-    {
+        !context->mTrsfrmbyrga) || (video_cnt >1))){
         err = 0;
-        for(i=0;i<MaxVideoBackBuffers;i++)
-        {
+        for(i=0;i<MaxVideoBackBuffers;i++){
             ALOGD("dpyID=%d,free video fd=%d,base=%p,%p",dpyID,context->fd_video_bk[i],context->base_video_bk[i],context->pbvideo_bk[i]);
             if(context->pbvideo_bk[i] != NULL)
                 err = context->mAllocDev->free(context->mAllocDev, context->pbvideo_bk[i]);
@@ -5301,12 +5273,9 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
 #if USE_VIDEO_BACK_BUFFERS
     context->mNV12_VIDEO_VideoMode ||
 #endif
-   context->mTrsfrmbyrga)
-    {
-        for(i=0;i<MaxVideoBackBuffers;i++)
-        {
-            if(context->fd_video_bk[i] < 0 )
-            {
+    context->mTrsfrmbyrga){
+        for(i=0;i<MaxVideoBackBuffers;i++){
+            if(context->fd_video_bk[i] < 0 ){
                 ALOGV("@video fd[%d]=%d",i,context->fd_video_bk[i]);
 				ALOGD_IF(mLogL&HWC_LOG_LEVEL_FOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
                 goto GpuComP;
@@ -5316,28 +5285,23 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
 
     //G6110 FBDC: only let video case continue.
 #if G6110_SUPPORT_FBDC
-    if(!context->mVideoMode)
-    {
+    if(!context->mVideoMode){
         goto GpuComP;
     }
 #endif
 
     ret = collect_all_zones(context,list);
     hwc_sprite_replace(context,list);
-    if(ret !=0 )
-    {
+    if(ret !=0 ){
 		ALOGD_IF(mLogL&HWC_LOG_LEVEL_FOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
         goto GpuComP;
     }
    
     //if(vertical == true)
     ret = hwc_try_policy(context,list,dpyID);
-    if(list->hwLayers[context->mRgaTBI.index].compositionType == HWC_FRAMEBUFFER)
-    {
+    if(list->hwLayers[context->mRgaTBI.index].compositionType == HWC_FRAMEBUFFER){
         context->mNeedRgaTransform = false;
-    }
-    else if(context->mNeedRgaTransform)
-    {
+    }else if(context->mNeedRgaTransform){
         int w_valid = context->mRgaTBI.w_valid;
         int h_valid = context->mRgaTBI.h_valid;
         int layer_fd = context->mRgaTBI.layer_fd;
@@ -5355,22 +5319,18 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
 #endif
     }
 
-    if(ret !=0 )
-    {
+    if(ret !=0 ){
 		ALOGD_IF(mLogL&HWC_LOG_LEVEL_FOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
         goto GpuComP;
     }
 
-    if(context->zone_manager.composter_mode != HWC_MIX)
-    {
-        for(i = 0;i<GPUDRAWCNT;i++)
-        {
+    if(context->zone_manager.composter_mode != HWC_MIX){
+        for(i = 0;i<GPUDRAWCNT;i++){
             gmixinfo[mix_index].gpu_draw_fd[i] = 0;
         }
     }  
 
-    if(check_zone(context) && dpyID == 0)
-    {
+    if(check_zone(context) && dpyID == 0){
         ALOGD_IF(mLogL&HWC_LOG_LEVEL_FOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
         goto GpuComP;
     }
