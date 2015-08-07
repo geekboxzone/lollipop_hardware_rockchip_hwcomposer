@@ -40,6 +40,9 @@
 #define DUMP_SPLIT_AREA             0
 #define SYNC_IN_VIDEO               0
 #define USE_HWC_FENCE               1
+#define HWCP                        0    //HWC_DISPLAY_PRIMARY
+#define HWCE                        1    //HWC_DISPLAY_EXTERNAL
+#define HWCV                        2    //HWC_DISPLAY_VIRTUAL
 //#define USE_QUEUE_DDRFREQ           0
 #define USE_VIDEO_BACK_BUFFERS      1
 #define USE_SPECIAL_COMPOSER        0
