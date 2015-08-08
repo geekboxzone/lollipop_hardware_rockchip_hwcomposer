@@ -1081,7 +1081,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                 lastfd = Context->mRgaTBI.lastfd;
                 if(trsfrmbyrga && lastfd == SrcHnd->share_fd && 
                     SrcHnd->format != HAL_PIXEL_FORMAT_YCrCb_NV12){
-                    fd_update = false;
+                    fd_update = true;
                 }
                 if(fd_update){
                     ALOGV("Zone[%d]->layer[%d],"
@@ -1117,17 +1117,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                     Context->mRgaTBI.layer_fd = Context->zone_manager.zone_info[j].layer_fd;
 					Context->mRgaTBI.lastfd = SrcHnd->share_fd;
                     Context->mNeedRgaTransform = true;
-                    //rga_video_copybit(SrcHnd,layer->transform,w_valid,h_valid, 
-                    //                    Context->zone_manager.zone_info[j].layer_fd,
-                    //    trsfrmbyrga ? hwChangeRgaFormat(SrcHnd->format) : RK_FORMAT_YCbCr_420_SP,trsfrmbyrga);
-#if USE_VIDEO_BACK_BUFFERS
-                //Context->mCurVideoIndex++;  //update video buffer index
-#else
-                //if(trsfrmbyrga)
-                //    Context->mCurVideoIndex++;  //update video buffer index
-#endif
                 }
-
             }
 			psrc_rect->left = psrc_rect->left - psrc_rect->left%2;
 			psrc_rect->top = psrc_rect->top - psrc_rect->top%2;
@@ -5214,43 +5204,44 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
             video_h = handle->height;
         }
 
-        if(handle && (GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO 
-            || GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12)){
-            //alloc video gralloc buffer in video mode
-            if(context->fd_video_bk[0] == -1 && (
-#if USE_VIDEO_BACK_BUFFERS
-            context->mNV12_VIDEO_VideoMode ||
-#endif
-            context->mTrsfrmbyrga
-          //  context->mVideoMode
-            ))
-            {
-                ALOGV("context->mNV12_VIDEO_VideoMode=%d,context->mTrsfrmbyrga=%d,w=%d,h=%d",context->mNV12_VIDEO_VideoMode,context->mTrsfrmbyrga,video_w,video_h);
-                for(j=0;j<MaxVideoBackBuffers;j++)
-                {
-                    err = context->mAllocDev->alloc(context->mAllocDev, 4096, \
-                                                    2304,HAL_PIXEL_FORMAT_YCrCb_NV12, \
-                                                    GRALLOC_USAGE_HW_COMPOSER|GRALLOC_USAGE_HW_RENDER|GRALLOC_USAGE_HW_VIDEO_ENCODER, \
-                                                    (buffer_handle_t*)(&(context->pbvideo_bk[j])),&stride_gr);
-                    if(!err){
-                        struct private_handle_t*handle = (struct private_handle_t*)context->pbvideo_bk[j];
-                        context->fd_video_bk[j] = handle->share_fd;
+        //alloc video gralloc buffer in video mode
+        if(context->fd_video_bk[0] == -1 && context->mTrsfrmbyrga){
+            ALOGD_IF(mLogL&HWC_LOG_LEVEL_FOU,"mNV12_VIDEO_VideoMode=%d,mTrsfrmbyrga=%d,w=%d,h=%d",
+                context->mNV12_VIDEO_VideoMode,context->mTrsfrmbyrga,video_w,video_h);
+            for(j=0;j<MaxVideoBackBuffers;j++){
+                err = context->mAllocDev->alloc(context->mAllocDev, 4096,2304,HAL_PIXEL_FORMAT_YCrCb_NV12, \
+                    GRALLOC_USAGE_HW_COMPOSER|GRALLOC_USAGE_HW_RENDER|GRALLOC_USAGE_HW_VIDEO_ENCODER, \
+                    (buffer_handle_t*)(&(context->pbvideo_bk[j])),&stride_gr);
+                if(!err){
+                    struct private_handle_t*handle = (struct private_handle_t*)context->pbvideo_bk[j];
+                    context->fd_video_bk[j] = handle->share_fd;
 #if defined(__arm64__) || defined(__aarch64__)
-                        context->base_video_bk[j]= (long)(GPU_BASE);
+                    context->base_video_bk[j]= (long)(GPU_BASE);
 #else
-                        context->base_video_bk[j]= (int)(GPU_BASE);
+                    context->base_video_bk[j]= (int)(GPU_BASE);
 #endif
-                        ALOGD_IF(mLogL&HWC_LOG_LEVEL_TWO,"video alloc fd [%dx%d,f=%d],fd=%d",handle->width,handle->height,handle->format,handle->share_fd);
+                    ALOGD_IF(mLogL&HWC_LOG_LEVEL_TWO,"video alloc fd [%dx%d,f=%d],fd=%d",
+                        handle->width,handle->height,handle->format,handle->share_fd);
 
-                    }else {
-                        ALOGE("video alloc faild video(w=%d,h=%d,format=0x%x)",handle->video_width,handle->video_height,context->fbhandle.format);
-						ALOGD_IF(mLogL&HWC_LOG_LEVEL_FOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
-						goto GpuComP;
-                    }
+                }else {
+                    ALOGE("video alloc faild video(w=%d,h=%d,format=0x%x,error=%s)",handle->video_width,
+                        handle->video_height,context->fbhandle.format,strerror(errno));
+					ALOGD_IF(mLogL&HWC_LOG_LEVEL_FOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
+					for(size_t k=0;k<j;k++){
+					    if(context->fd_video_bk[k] != -1){
+                            err = context->mAllocDev->free(context->mAllocDev,context->pbvideo_bk[k]);
+                            if(err){
+                                ALOGW("free back buff error %s,%d,%d",strerror(errno),j,k);
+                            }
+                            context->fd_video_bk[k] = -1;
+                        }
+					}
+					context->fd_video_bk[j] != -1;
+					goto GpuComP;
                 }
             }
-         }
-     }
+        }
+    }
 
 
     // free video gralloc buffer in ui mode
