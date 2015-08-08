@@ -693,6 +693,41 @@ bool is_same_rect(hwc_rect_t rect1,hwc_rect_t rect2)
         return false;
 }
 
+bool is_need_post(hwc_display_contents_1_t *list,int dpyID)
+{
+#if (defined(GPU_G6110) || defined(RK3288_BOX))
+    if(hdmi_noready && dpyID == HWCE){
+#if (defined(RK3368_BOX) || defined(RK3288_BOX))
+        if((!hdmi_noready && (getHdmiMode() == 1 || _contextAnchor->mHdmiSI.CvbsOn))){
+            hotplug_set_frame(_contextAnchor,0);
+        }
+#endif
+        return false;
+    }
+#endif
+    return true;
+}
+
+bool is_gpu_or_nodraw(hwc_display_contents_1_t *list,int dpyID)
+{
+#if (defined(GPU_G6110) || defined(RK3288_BOX))
+    if((!hdmi_noready  && dpyID == HWCP
+        && (getHdmiMode() == 1 || _contextAnchor->mHdmiSI.CvbsOn))){
+        for (unsigned int i = 0; i < (list->numHwLayers - 1); i++){
+            hwc_layer_1_t * layer = &list->hwLayers[i];
+            layer->compositionType = HWC_NODRAW;
+        }
+        ALOGD_IF(mLogL&HWC_LOG_LEVEL_SIX,"Primary nodraw %s,%d",__FUNCTION__,__LINE__);
+        return true;
+    }
+    if(hdmi_noready && dpyID == HWCE){
+        ALOGD_IF(mLogL&HWC_LOG_LEVEL_SIX,"Hotplug nodraw %s,%d",__FUNCTION__,__LINE__);
+        return true;
+    }
+#endif
+    return false;
+}
+
 static int ZoneDispatchedCheck(hwcContext* ctx,ZoneManager* pzone_mag,int flag)
 {
     int ret = 0;
@@ -2871,7 +2906,10 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
         ALOGD_IF(mLogL&HWC_LOG_LEVEL_THR,"lagre win > 2,and Scale-down 1.5 multiple,lcdc no support");
         return -1;
     }
-
+    if(list){
+        list->hwLayers[0].compositionType = HWC_MIX_V2;
+        list->hwLayers[1].compositionType = HWC_MIX_V2;
+    }
     //Mark the composer mode to HWC_MIX_V2
     memcpy(&Context->zone_manager,&zone_m,sizeof(ZoneManager));
     Context->zone_manager.composter_mode = HWC_MIX_V2;
@@ -4823,6 +4861,7 @@ int hwc_pre_prepare(hwc_display_contents_1_t** displays, int flag)
 #endif
     return 0;
 }
+
 int hwc_try_policy(hwcContext * context,hwc_display_contents_1_t * list,int dpyID)
 {
     int ret;
@@ -4940,23 +4979,9 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
         ALOGD_IF(mLogL&HWC_LOG_LEVEL_TWO,"dpyID=%d list null",dpyID);
         return 0;
     }
-    
-#if (defined(GPU_G6110) || defined(RK3288_BOX))
-    if((!hdmi_noready  && dpyID == 0 
-        && (getHdmiMode() == 1 || _contextAnchor->mHdmiSI.CvbsOn))){
-        for (unsigned int i = 0; i < (list->numHwLayers - 1); i++){
-            hwc_layer_1_t * layer = &list->hwLayers[i];
-            layer->compositionType = HWC_NODRAW;
-        }
-        ALOGD_IF(mLogL&HWC_LOG_LEVEL_SIX,"Primary nodraw %s,%d",__FUNCTION__,__LINE__);
+    if(is_gpu_or_nodraw(list,dpyID)){
         return 0;
     }
-    if(hdmi_noready && dpyID == 1){
-        ALOGD_IF(mLogL&HWC_LOG_LEVEL_SIX,"Hotplug nodraw %s,%d",__FUNCTION__,__LINE__);
-        return 0;
-    }
-#endif
-
 #if (defined(GPU_G6110) || defined(RK3288_BOX))
     if(_contextAnchor->mHdmiSI.anroidSt){
         goto GpuComP;
@@ -6443,28 +6468,40 @@ OnError:
 #endif
 }
 
+int hwc_check_fencefd(size_t numDisplays,hwc_display_contents_1_t  ** displays)
+{
+    for (size_t i = 0; i < numDisplays; i++) {
+        hwc_display_contents_1_t *list = displays[i];
+        if(list){
+            int numLayers = list->numHwLayers;
+            for(int j = 0;j<numLayers;j++){
+                hwc_layer_1_t *layer = &list->hwLayers[j];
+                if(layer && layer->acquireFenceFd>0){
+                    ALOGW("Foce to close aqFenceFd,%d,%d",i,j);
+                    close(layer->acquireFenceFd);
+                    layer->acquireFenceFd = -1;
+                }
+                if(layer){
+                    ALOGD_IF(mLogL&HWC_LOG_LEVEL_SIX,"%d,%d,%d",i,j,layer->releaseFenceFd);
+                }
+            }
+        }
+    }
+    return 0;
+}
+
 static int hwc_set_screen(hwc_composer_device_1 *dev, hwc_display_contents_1_t *list,int dpyID) 
 {
     if(mLogL&HWC_LOG_LEVEL_ONE){
         ATRACE_CALL();
     }
-
-#if (defined(GPU_G6110) || defined(RK3288_BOX))
-    if(hdmi_noready && dpyID == HWCE){
-#if (defined(RK3368_BOX) || defined(RK3288_BOX))
-        if((!hdmi_noready && (getHdmiMode() == 1 || _contextAnchor->mHdmiSI.CvbsOn))){
-            hotplug_set_frame(_contextAnchor,0);
-        }
-#endif
+    if(!is_need_post(list,dpyID)){
         if(list){
             hwc_sync_release(list);
         }
         return 0;
     }
-#endif
-
     hwcContext * context = _contextAnchor;
-    
     if(dpyID == HWCE){
         context = _contextAnchor1;
     }
@@ -6669,16 +6706,14 @@ hwc_set(
                     unsigned int fb_addr = 0;
                     // fb_addr = context->hwc_ion.pion->phys + context->hwc_ion.last_offset;
                     hwc_set_virtual(dev, displays,fb_addr);
-                }                
+                }
                 break;
             default:
                 ret = -EINVAL;
         }
     }
-    // This is only indicative of how many times SurfaceFlinger posts
-    // frames to the display.
-
-
+    
+    hwc_check_fencefd(numDisplays,displays);
     return ret;
 }
 

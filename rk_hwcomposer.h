@@ -103,8 +103,8 @@
 #define HAL_PIXEL_FORMAT_YCrCb_NV12_OLD  0x20
 #define ATRACE_TAG                  ATRACE_TAG_GRAPHICS
 
-#define GHWC_VERSION  "2.049"
-#define HWC_VERSION "HWC_VERSION Author:wzq Version:2.049"
+#define GHWC_VERSION  "2.050"
+#define HWC_VERSION "HWC_VERSION Author:wzq Version:2.050"
 
 #ifdef GPU_G6110
 #if G6110_SUPPORT_FBDC
