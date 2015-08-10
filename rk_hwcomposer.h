@@ -29,6 +29,7 @@
 #endif
 #include <vpu_global.h>
 #include <vpu_mem.h>
+#include <hardware/rk_fh.h>
 
 //Control macro
 #define hwcDEBUG                    1
@@ -103,8 +104,8 @@
 #define HAL_PIXEL_FORMAT_YCrCb_NV12_OLD  0x20
 #define ATRACE_TAG                  ATRACE_TAG_GRAPHICS
 
-#define GHWC_VERSION  "2.050"
-#define HWC_VERSION "HWC_VERSION Author:wzq Version:2.050"
+#define GHWC_VERSION  "2.051"
+#define HWC_VERSION "HWC_VERSION Author:wzq Version:2.051"
 
 #ifdef GPU_G6110
 #if G6110_SUPPORT_FBDC
@@ -546,7 +547,7 @@ typedef struct _hwcContext
 	int           iommuEn;
     alloc_device_t  *mAllocDev;	
 	ZoneManager  zone_manager;;
-
+    struct rk_fb_win_cfg_data fb_info;
     /* skip flag */
      int      mSkipFlag;
      int      flag;
