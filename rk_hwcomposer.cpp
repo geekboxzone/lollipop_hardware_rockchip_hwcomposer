@@ -684,18 +684,32 @@ bool is_same_rect(hwc_rect_t rect1,hwc_rect_t rect2)
         return false;
 }
 
-bool is_need_post(hwc_display_contents_1_t *list,int dpyID)
+bool is_need_post(hwc_display_contents_1_t *list,int dpyID,int flag)
 {
+    switch(flag){
+        case 0:
 #if (defined(GPU_G6110) || defined(RK3288_BOX))
-    if(hdmi_noready && dpyID == HWCE){
+            if(hdmi_noready && dpyID == HWCE){
 #if (defined(RK3368_BOX) || defined(RK3288_BOX))
-        if((!hdmi_noready && (getHdmiMode() == 1 || _contextAnchor->mHdmiSI.CvbsOn))){
-            hotplug_set_frame(_contextAnchor,0);
-        }
+                if((!hdmi_noready && (getHdmiMode() == 1 || _contextAnchor->mHdmiSI.CvbsOn))){
+                    hotplug_set_frame(_contextAnchor,0);
+                }
 #endif
-        return false;
+                return false;
+            }
+#endif
+            break;
+
+        case 1:
+#if (defined(GPU_G6110) || defined(RK3288_BOX))
+            if((!hdmi_noready && (getHdmiMode() == 1 || _contextAnchor->mHdmiSI.CvbsOn)) && dpyID==0){
+                return false;
+            }
+#endif
+            break;
+        default:
+            break;
     }
-#endif
     return true;
 }
 
@@ -5953,20 +5967,17 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
     if(mLogL&HWC_LOG_LEVEL_ONE)
         ATRACE_CALL();
 
-    if (list == NULL)
-    {
+    if (list == NULL){
         return -1;
     }
 
-#if (defined(GPU_G6110) || defined(RK3288_BOX))
-    if((!hdmi_noready && (getHdmiMode() == 1 
-        || _contextAnchor->mHdmiSI.CvbsOn)) 
-            && context == _contextAnchor)
-    {
+    int dpyID = 0;
+    if(context!=_contextAnchor){
+        dpyID = 1;
+    }
+    if(!is_need_post(list,dpyID,1)){
         return 0;
     }
-#endif
-    
     if (context->fbFd>0 && !context->fb_blanked)
     {      
         struct fb_var_screeninfo info;
@@ -6134,8 +6145,9 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
 #endif
 
             ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info);
+            ALOGD_IF(mLogL&HWC_LOG_LEVEL_ONE,"ID=%d:",context!=_contextAnchor);
             if(mix_flag){
-                    dump_config_info(fb_info,context,1);
+                dump_config_info(fb_info,context,1);
             }else{
                 dump_config_info(fb_info,context,0);
             }
@@ -6505,7 +6517,7 @@ static int hwc_set_screen(hwc_composer_device_1 *dev, hwc_display_contents_1_t *
     if(mLogL&HWC_LOG_LEVEL_ONE){
         ATRACE_CALL();
     }
-    if(!is_need_post(list,dpyID)){
+    if(!is_need_post(list,dpyID,0)){
         return 0;
     }
     hwcContext * context = _contextAnchor;
