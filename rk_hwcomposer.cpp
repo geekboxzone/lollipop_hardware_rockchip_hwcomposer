@@ -18,6 +18,7 @@
 #include <errno.h>
 #include <cutils/properties.h>
 #include <fcntl.h>
+#include <hardware/rk_fh.h>
 #include <sync/sync.h>
 #include <time.h>
 #include <poll.h>
@@ -4830,7 +4831,7 @@ bool hwc_check_cfg(hwcContext * ctx,struct rk_fb_win_cfg_data fb_info)
     return ret;
 }
 
-int hwc_collect_cfg(hwcContext * context, hwc_display_contents_1_t *list,int mix_flag)
+int hwc_collect_cfg(hwcContext * context, hwc_display_contents_1_t *list,struct rk_fb_win_cfg_data *fbinfo,int mix_flag)
 {
     ZoneManager* pzone_mag = &(context->zone_manager);
     int i,j;
@@ -5181,11 +5182,7 @@ int hwc_collect_cfg(hwcContext * context, hwc_display_contents_1_t *list,int mix
         fb_info.wait_fs=0;
 #endif
     }
-    if(!hwc_check_cfg(context,fb_info)){
-        dump_config_info(fb_info,context,3);
-        return -1;
-    }
-    memcpy((void*)&context->fb_info,(void*)&fb_info,sizeof(rk_fb_win_cfg_data));
+    memcpy((void*)fbinfo,(void*)&fb_info,sizeof(rk_fb_win_cfg_data));
     return 0;
 }
 
@@ -5745,16 +5742,23 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
         goto GpuComP;
     }
     //before composition:do overlay no error???
+    struct rk_fb_win_cfg_data fbinfo;
     if(context->zone_manager.composter_mode == HWC_LCDC){
-        err = hwc_collect_cfg(context,list,0);
+        err = hwc_collect_cfg(context,list,&fbinfo,0);
     }else if(context->zone_manager.composter_mode == HWC_MIX){
-        err = hwc_collect_cfg(context,list,1);
+        err = hwc_collect_cfg(context,list,&fbinfo,1);
     }else if(context->zone_manager.composter_mode == HWC_MIX_V2){
-        err = hwc_collect_cfg(context,list,2);
+        err = hwc_collect_cfg(context,list,&fbinfo,2);
     }
     if(err){
         ALOGD_IF(mLogL&HWC_LOG_LEVEL_FOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
         goto GpuComP;
+    }else{
+        if(!hwc_check_cfg(context,fbinfo)){
+            ALOGD_IF(mLogL&HWC_LOG_LEVEL_FOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
+            dump_config_info(fbinfo,context,3);
+            goto GpuComP;
+        }
     }
     return 0;
 GpuComP   :
@@ -6113,7 +6117,8 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
     }
 
     struct rk_fb_win_cfg_data fb_info;
-    memcpy((void*)&fb_info,(void*)&context->fb_info,sizeof(rk_fb_win_cfg_data));
+    hwc_collect_cfg(context,list,&fb_info,mix_flag);
+
     if(!context->fb_blanked){
 #ifndef GPU_G6110  //This will lead nenamark fps go down in rk3368.
         if(context != _contextAnchor1){

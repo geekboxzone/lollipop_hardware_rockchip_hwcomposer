@@ -29,7 +29,6 @@
 #endif
 #include <vpu_global.h>
 #include <vpu_mem.h>
-#include <hardware/rk_fh.h>
 
 //Control macro
 #define hwcDEBUG                    1
@@ -547,7 +546,7 @@ typedef struct _hwcContext
 	int           iommuEn;
     alloc_device_t  *mAllocDev;	
 	ZoneManager  zone_manager;;
-    struct rk_fb_win_cfg_data fb_info;
+
     /* skip flag */
      int      mSkipFlag;
      int      flag;
