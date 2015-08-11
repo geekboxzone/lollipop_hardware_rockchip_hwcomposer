@@ -511,10 +511,15 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
             Dstfmt = RK_FORMAT_YCbCr_420_SP;
             break;
         }
-    }       
-    ALOGV("src addr=[%x],w-h[%d,%d],act[%d,%d][f=%d]",
+    }
+    int size = hwcGetBufferSizeForRga(DstActW,DstActH,Dstfmt) ;
+    if(size > RLAGESIZE){
+        ALOGD_IF(mLogL&HWC_LOG_LEVEL_SEV,"now size=%d,largesize=%d,w_h_f[%d,%d,%d]",size,RLAGESIZE,DstActW,DstActH,Dstfmt);
+        return -1;
+    }
+    ALOGD_IF(mLogL&HWC_LOG_LEVEL_SEV,"src addr=[%x],w-h[%d,%d],act[%d,%d][f=%d]",
         specialwin ? handle->share_fd:handle->video_addr, SrcVirW, SrcVirH,SrcActW,SrcActH,specialwin ?  hwChangeRgaFormat(handle->format):RK_FORMAT_YCbCr_420_SP);
-    ALOGV("dst fd=[%x],w-h[%d,%d],act[%d,%d][f=%d],rot=%d,rot_mod=%d",
+    ALOGD_IF(mLogL&HWC_LOG_LEVEL_SEV,"dst fd=[%x],w-h[%d,%d],act[%d,%d][f=%d],rot=%d,rot_mod=%d",
         fd_dst, DstVirW, DstVirH,DstActW,DstActH,Dstfmt,Rotation,RotateMode);
     if(specialwin)  
         RGA_set_src_vir_info(&Rga_Request, handle->share_fd, 0, 0,SrcVirW, SrcVirH, hwChangeRgaFormat(handle->format), 0);    
@@ -544,7 +549,7 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
         else
         {
             RGA_set_dst_vir_info(&Rga_Request, fd_dst,context->base_video_bk[index_v], 0,DstVirW,DstVirH,&clip, Dstfmt, 0);
-            ALOGV("rga_video_copybit fd_dst=%d,base=%d,index_v=%d",fd_dst,context->base_video_bk[index_v],index_v);
+            ALOGD_IF(mLogL&HWC_LOG_LEVEL_SEV,"rga_video_copybit fd_dst=%d,base=%x,index_v=%d",fd_dst,context->base_video_bk[index_v],index_v);
         }
         RGA_set_mmu_info(&Rga_Request, 1, 0, 0, 0, 0, 2);
         Rga_Request.mmu_info.mmu_flag |= (1<<31) | (1<<10) | (1<<8);
@@ -5629,7 +5634,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
             ALOGD_IF(mLogL&HWC_LOG_LEVEL_FOU,"mNV12_VIDEO_VideoMode=%d,mTrsfrmbyrga=%d,w=%d,h=%d",
                 context->mNV12_VIDEO_VideoMode,context->mTrsfrmbyrga,video_w,video_h);
             for(j=0;j<MaxVideoBackBuffers;j++){
-                err = context->mAllocDev->alloc(context->mAllocDev, 4096,2304,HAL_PIXEL_FORMAT_YCrCb_NV12, \
+                err = context->mAllocDev->alloc(context->mAllocDev, RWIDTH,RHEIGHT,HAL_PIXEL_FORMAT_YCrCb_NV12, \
                     GRALLOC_USAGE_HW_COMPOSER|GRALLOC_USAGE_HW_RENDER|GRALLOC_USAGE_HW_VIDEO_ENCODER, \
                     (buffer_handle_t*)(&(context->pbvideo_bk[j])),&stride_gr);
                 if(!err){

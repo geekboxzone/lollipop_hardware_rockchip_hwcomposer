@@ -80,6 +80,7 @@ hwcGetFormat(
     return hwcSTATUS_OK;
 }
 
+
 int hwChangeRgaFormat(IN int fmt )
 {
     switch (fmt)
@@ -102,6 +103,33 @@ int hwChangeRgaFormat(IN int fmt )
         return hwcSTATUS_INVALID_ARGUMENT;
     }
 }
+
+int hwcGetBufferSizeForRga(IN int w,IN int h,IN int fmt)
+{
+    float bpp = 4;
+    int size;
+    switch(fmt){
+        case RK_FORMAT_RGB_565:
+            bpp = 2;
+            break;
+        case RK_FORMAT_RGB_888:
+            bpp = 3;
+            break;
+        case RK_FORMAT_RGBA_8888:
+        case RK_FORMAT_RGBX_8888:
+        case RK_FORMAT_BGRA_8888:
+            bpp = 4;
+            break;
+        case RK_FORMAT_YCbCr_420_SP:
+            bpp = 1.5;
+            break;
+        default:
+            break;
+    }
+    size = int(w * h * bpp) + 1;
+    return size;
+}
+
 #if VIRTUAL_RGA_BLIT
 hwcSTATUS
 hwcGetBufferInfo(

@@ -85,6 +85,9 @@
 #define GPUDRAWCNT                  (10)
 #define MaxSpriteBNUM               (3)
 #define BufferSize                  (128)
+#define RWIDTH                      (4096)
+#define RHEIGHT                     (2304)
+#define RLAGESIZE                   (14155776)      //RLAGESIZE = RWIDTH * RHEIGHT * 1.5
 
 //Other macro
 #define GPU_WIDTH       handle->width
@@ -103,8 +106,8 @@
 #define HAL_PIXEL_FORMAT_YCrCb_NV12_OLD  0x20
 #define ATRACE_TAG                  ATRACE_TAG_GRAPHICS
 
-#define GHWC_VERSION  "2.051"
-#define HWC_VERSION "HWC_VERSION Author:wzq Version:2.051"
+#define GHWC_VERSION  "2.052"
+#define HWC_VERSION "HWC_VERSION Author:wzq Version:2.052"
 
 #ifdef GPU_G6110
 #if G6110_SUPPORT_FBDC
@@ -200,15 +203,15 @@ enum
 enum
 {
     //Log level flag
-    HWC_LOG_LEVEL_ONE = 1 << 1,
-    HWC_LOG_LEVEL_TWO = 1 << 2,
-    HWC_LOG_LEVEL_THR = 1 << 3,
-    HWC_LOG_LEVEL_FOU = 1 << 4,
-    HWC_LOG_LEVEL_FIV = 1 << 5,
-    HWC_LOG_LEVEL_SIX = 1 << 6,
-    HWC_LOG_LEVEL_sev = 1 << 7,
-    HWC_LOG_LEVEL_EIG = 1 << 8,
-    HWC_LOG_LEVEL_NIE = 1 << 9,
+    HWC_LOG_LEVEL_ONE = 1 << 0,
+    HWC_LOG_LEVEL_TWO = 1 << 1,
+    HWC_LOG_LEVEL_THR = 1 << 2,
+    HWC_LOG_LEVEL_FOU = 1 << 3,
+    HWC_LOG_LEVEL_FIV = 1 << 4,
+    HWC_LOG_LEVEL_SIX = 1 << 5,
+    HWC_LOG_LEVEL_SEV = 1 << 6,
+    HWC_LOG_LEVEL_EIG = 1 << 7,
+    HWC_LOG_LEVEL_NIE = 1 << 8,
 };
 
 typedef struct _mix_info
@@ -693,6 +696,7 @@ hwcUnlockBuffer(
 );
 #endif
 int hwChangeRgaFormat(IN int fmt );
+int hwcGetBufferSizeForRga(IN int w,IN int h,IN int fmt);
 
 #if defined(__arm64__) || defined(__aarch64__)
 
