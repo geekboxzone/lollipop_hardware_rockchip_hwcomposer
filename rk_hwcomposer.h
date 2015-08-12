@@ -56,7 +56,8 @@
 #define OPTIMIZATION_FOR_DIMLAYER       1           //1: optimise for dim layer
 #define HWC_EXTERNAL                    1           //1:hwc control two lcdc for display
 #define USE_QUEUE_DDRFREQ               1
-#define SUPPORTFORCE3D                  1           
+#define SUPPORTFORCE3D                  1
+#define USE_WM_SIZE                     0
 
 #ifdef GPU_G6110
 #define G6110_SUPPORT_FBDC              0
@@ -106,8 +107,8 @@
 #define HAL_PIXEL_FORMAT_YCrCb_NV12_OLD  0x20
 #define ATRACE_TAG                  ATRACE_TAG_GRAPHICS
 
-#define GHWC_VERSION  "2.052"
-#define HWC_VERSION "HWC_VERSION Author:wzq Version:2.052"
+#define GHWC_VERSION  "2.053"
+#define HWC_VERSION "HWC_VERSION Author:wzq Version:2.053"
 
 #ifdef GPU_G6110
 #if G6110_SUPPORT_FBDC
@@ -457,14 +458,16 @@ typedef struct _videoCacheInfo
 
 typedef struct _hdmiStateInfo
 {
+#if USE_WM_SIZE
      int hdmi_anm;
+     bool anroidSt;
+#endif
      int flag_blank;
      bool HdmiOn;
      int flag_hwcup_external;
      bool mix_vh;
 	 bool mix_up;
      bool vh_flag;
-     bool anroidSt;
      bool NeedReDst;
      bool CvbsOn;
      int FrameFd;

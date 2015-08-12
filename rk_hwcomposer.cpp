@@ -693,7 +693,7 @@ bool is_same_rect(hwc_rect_t rect1,hwc_rect_t rect2)
 bool is_need_post(hwc_display_contents_1_t *list,int dpyID,int flag)
 {
     switch(flag){
-        case 0:
+        case 0://hotplug device not realdy,so we not post:from set_screen
 #if (defined(GPU_G6110) || defined(RK3288_BOX))
             if(hdmi_noready && dpyID == HWCE){
 #if (defined(RK3368_BOX) || defined(RK3288_BOX))
@@ -706,9 +706,16 @@ bool is_need_post(hwc_display_contents_1_t *list,int dpyID,int flag)
 #endif
             break;
 
-        case 1:
+        case 1://hotplug is realdy so primary not post:from fb_post
 #if (defined(GPU_G6110) || defined(RK3288_BOX))
             if((!hdmi_noready && (getHdmiMode() == 1 || _contextAnchor->mHdmiSI.CvbsOn)) && dpyID==0){
+                return false;
+            }
+#endif
+            break;
+        case 2://hotplug is realdy so primary not post:from set_lcdc
+#if (defined(GPU_G6110) || defined(RK3288_BOX))
+            if(!(hdmi_noready || dpyID == HWCE)){
                 return false;
             }
 #endif
@@ -5140,7 +5147,7 @@ int hwc_collect_cfg(hwcContext * context, hwc_display_contents_1_t *list,struct 
         }
         struct private_handle_t*  handle = (struct private_handle_t*)fbLayer->handle;
         if (!handle){
-			ALOGE("hanndle=NULL at line %d",__LINE__);
+            ALOGD_IF(mLogL&HWC_LOG_LEVEL_FOU,"hanndle=NULL at line %d",__LINE__);
             return -1;
         }
 
@@ -5197,8 +5204,10 @@ int hwc_pre_prepare(hwc_display_contents_1_t** displays, int flag)
 #if (defined(GPU_G6110) || defined(RK3288_BOX))
     int forceStereo = 0;
     hwcContext * context = _contextAnchor;
+#if USE_WM_SIZE
     context->mHdmiSI.hdmi_anm = 0;
     context->mHdmiSI.anroidSt = false;
+#endif
     context->mHdmiSI.IsVideo3D = false;
     context->mHdmiSI.Is3D = false;
 #ifdef SUPPORT_STEREO
@@ -5246,6 +5255,7 @@ int hwc_pre_prepare(hwc_display_contents_1_t** displays, int flag)
             {
                 hwc_layer_1_t* layer = &displays[i]->hwLayers[j];
                 struct private_handle_t* SrcHnd = (struct private_handle_t *) layer->handle;
+#if USE_WM_SIZE//we just use for it to wm size
                 if (layer == NULL)
                     ;
                 else if(strstr(layer->LayerName,"BootAnimation") != NULL && (getHdmiMode() == 1 
@@ -5263,6 +5273,7 @@ int hwc_pre_prepare(hwc_display_contents_1_t** displays, int flag)
                     context->mHdmiSI.hdmi_anm = 1;
                     context->mHdmiSI.anroidSt = true;
                 }
+#endif
                 if(i == 1 && layer && SrcHnd && SrcHnd->format == HAL_PIXEL_FORMAT_YCrCb_NV12
                     && layer->alreadyStereo && layer->displayStereo)
                 {
@@ -5398,9 +5409,11 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
         return 0;
     }
 #if (defined(GPU_G6110) || defined(RK3288_BOX))
+#if USE_WM_SIZE
     if(_contextAnchor->mHdmiSI.anroidSt){
         goto GpuComP;
     }
+#endif
 #endif
 
     LOGV("%s(%d):>>> hwc_prepare_primary %d layers <<<",
@@ -6068,25 +6081,28 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
 #endif
 	    fb_info.wait_fs=0;
 #endif
-        dump_config_info(fb_info,context,2);
+        if(context == _contextAnchor1){
+            if(_contextAnchor->mHdmiSI.NeedReDst){
+                if(hotplug_reset_dstposition(&fb_info,0)){
+                    ALOGW("reset_dst fail [%d]",__LINE__);
+                }
+            }
+         }else if(_contextAnchor->mHdmiSI.CvbsOn || _contextAnchor->mHdmiSI.HdmiOn){
 #if (defined(GPU_G6110) || defined(RK3288_BOX))
-        if(_contextAnchor->mHdmiSI.anroidSt && context == _contextAnchor)
-        {
-            _contextAnchor->mHdmiSI.anroidSt = false;
-            if(hotplug_reset_dstposition(&fb_info,1))
+            if(hotplug_reset_dstposition(&fb_info,1)){
                 ALOGW("reset_dst fail [%d]",__LINE__);
-            if(_contextAnchor->mHdmiSI.NeedReDst)
-                hotplug_reset_dstposition(&fb_info,0);
-        }
-        if(_contextAnchor->mHdmiSI.NeedReDst && context == _contextAnchor1)
-        {
-            if(hotplug_reset_dstposition(&fb_info,0))
-                ALOGW("reset_dst fail [%d]",__LINE__);
-        }          
+            }
+            if(_contextAnchor->mHdmiSI.NeedReDst){
+                if(hotplug_reset_dstposition(&fb_info,0)){
+                    ALOGW("reset_dst fail [%d]",__LINE__);
+                }
+            }
 #endif
+        }
 
         ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info);
-
+        ALOGD_IF(mLogL&HWC_LOG_LEVEL_ONE,"ID=%d:",context!=_contextAnchor);
+        dump_config_info(fb_info,context,2);
 #if USE_HWC_FENCE
         for(int k=0;k<RK_MAX_BUF_NUM;k++)
         {
@@ -6121,9 +6137,15 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
         ATRACE_CALL();
     }
 
+    int dpyID = 0;
+    if(context==_contextAnchor1){
+        dpyID = 1;
+    }
+    if(!is_need_post(list,dpyID,2)){
+        return 0;
+    }
     struct rk_fb_win_cfg_data fb_info;
     hwc_collect_cfg(context,list,&fb_info,mix_flag);
-
     if(!context->fb_blanked){
 #ifndef GPU_G6110  //This will lead nenamark fps go down in rk3368.
         if(context != _contextAnchor1){
@@ -6135,32 +6157,31 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
             eglSwapBuffers((EGLDisplay) dpy, (EGLSurface) surf);
         }
 #endif
-        ALOGV("lcdc config done");
-#if (defined(GPU_G6110) || defined(RK3288_BOX))
-        if(hdmi_noready || context == _contextAnchor1)
-#endif
-        {
-#if (defined(GPU_G6110) || defined(RK3288_BOX))
-            if(_contextAnchor->mHdmiSI.hdmi_anm == 1){
-                _contextAnchor->mHdmiSI.hdmi_anm = 0;
-                if(context == _contextAnchor){
-                    if(hotplug_reset_dstposition(&fb_info,1))
-                        ALOGW("reset_dst fail [%d]",__LINE__);
+        if(context == _contextAnchor1){
+            if(_contextAnchor->mHdmiSI.NeedReDst){
+                if(hotplug_reset_dstposition(&fb_info,0)){
+                    ALOGW("reset_dst fail [%d]",__LINE__);
                 }
             }
+         }else if(_contextAnchor->mHdmiSI.CvbsOn || _contextAnchor->mHdmiSI.HdmiOn){
+#if (defined(GPU_G6110) || defined(RK3288_BOX))
+            if(hotplug_reset_dstposition(&fb_info,1)){
+                ALOGW("reset_dst fail [%d]",__LINE__);
+            }
             if(_contextAnchor->mHdmiSI.NeedReDst){
-                if(hotplug_reset_dstposition(&fb_info,0))
+                if(hotplug_reset_dstposition(&fb_info,0)){
                     ALOGW("reset_dst fail [%d]",__LINE__);
+                }
             }
 #endif
+        }
 
-            ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info);
-            ALOGD_IF(mLogL&HWC_LOG_LEVEL_ONE,"ID=%d:",context!=_contextAnchor);
-            if(mix_flag){
-                dump_config_info(fb_info,context,1);
-            }else{
-                dump_config_info(fb_info,context,0);
-            }
+        ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info);
+        ALOGD_IF(mLogL&HWC_LOG_LEVEL_ONE,"ID=%d:",dpyID);
+        if(mix_flag){
+            dump_config_info(fb_info,context,1);
+        }else{
+            dump_config_info(fb_info,context,0);
         }
 #if USE_HWC_FENCE
         for(unsigned int i=0;i<RK_MAX_BUF_NUM;i++){
@@ -7485,10 +7506,8 @@ hwc_device_open(
     context->fbSize = info.xres*info.yres*4*3;
     context->lcdSize = info.xres*info.yres*4; 
 
-    context->mHdmiSI.hdmi_anm = 0;
     context->mHdmiSI.flag_blank = 0;
     context->mHdmiSI.HdmiOn = false;
-    context->mHdmiSI.anroidSt = false;
     context->mHdmiSI.NeedReDst = false;
     context->mHdmiSI.vh_flag = false;
     context->mHdmiSI.flag_hwcup_external = 0;
