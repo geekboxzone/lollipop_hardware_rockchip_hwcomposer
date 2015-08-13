@@ -4738,7 +4738,7 @@ int dump_config_info(struct rk_fb_win_cfg_data fb_info ,hwcContext * context, in
 {
     char poutbuf[20];
     char eoutbuf[20];
-    if(!(mLogL&HWC_LOG_LEVEL_ONE) && flag != 3){
+    if(!(mLogL&HWC_LOG_LEVEL_ONE)){
         return 0;
     }
 
@@ -4836,21 +4836,29 @@ bool hwc_check_cfg(hwcContext * ctx,struct rk_fb_win_cfg_data fb_info)
                     ret = ret && (yact == ysize);
                     ret = ret && (data_format <= 7);
                 }
+                if(!ret){
+                    ALOGW("%s[%d,%d]w[%d],a[%d],z_win[%d,%d],[%d,%d,%d,%d]=>[%d,%d,%d,%d],w_h_f[%d,%d,%d]",
+                          ctx==_contextAnchor ? "PCfg err" : "ECfg err",width,height,i,j,z_order,win_id,
+                          x_offset,y_offset,xact,yact,xpos,ypos,xsize,ysize,xvir,yvir,data_format);
+                    break;
+                }
             }
+        }
+        if(!ret){
+            break;
         }
     }
     ret = ret && z_ret;
     return ret;
 }
 
-int hwc_collect_cfg(hwcContext * context, hwc_display_contents_1_t *list,struct rk_fb_win_cfg_data *fbinfo,int mix_flag)
+int hwc_collect_cfg(hwcContext * context, hwc_display_contents_1_t *list,struct rk_fb_win_cfg_data *fbinfo,int mix_flag,bool mix_prepare)
 {
     ZoneManager* pzone_mag = &(context->zone_manager);
     int i,j;
     int z_order = 0;
     int win_no = 0;
     int is_spewin = is_special_wins(context);
-
     struct rk_fb_win_cfg_data fb_info;
 
     memset(&fb_info,0,sizeof(fb_info));
@@ -5137,7 +5145,8 @@ int hwc_collect_cfg(hwcContext * context, hwc_display_contents_1_t *list,struct 
 #endif
         fb_info.wait_fs=0;  //not wait acquire fence temp(wait in hwc)
 #endif
-    if(mix_flag){
+    //if primary the y_offset will be n times of height
+    if(mix_flag && !mix_prepare){
         int numLayers = list->numHwLayers;
         int format = -1;
         hwc_layer_1_t *fbLayer = &list->hwLayers[numLayers - 1];
@@ -5762,11 +5771,11 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
     //before composition:do overlay no error???
     struct rk_fb_win_cfg_data fbinfo;
     if(context->zone_manager.composter_mode == HWC_LCDC){
-        err = hwc_collect_cfg(context,list,&fbinfo,0);
+        err = hwc_collect_cfg(context,list,&fbinfo,0,true);
     }else if(context->zone_manager.composter_mode == HWC_MIX){
-        err = hwc_collect_cfg(context,list,&fbinfo,1);
+        err = hwc_collect_cfg(context,list,&fbinfo,1,true);
     }else if(context->zone_manager.composter_mode == HWC_MIX_V2){
-        err = hwc_collect_cfg(context,list,&fbinfo,2);
+        err = hwc_collect_cfg(context,list,&fbinfo,2,true);
     }
     if(err){
         ALOGD_IF(mLogL&HWC_LOG_LEVEL_FOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
@@ -6145,7 +6154,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
         return 0;
     }
     struct rk_fb_win_cfg_data fb_info;
-    hwc_collect_cfg(context,list,&fb_info,mix_flag);
+    hwc_collect_cfg(context,list,&fb_info,mix_flag,false);
     if(!context->fb_blanked){
 #ifndef GPU_G6110  //This will lead nenamark fps go down in rk3368.
         if(context != _contextAnchor1){
