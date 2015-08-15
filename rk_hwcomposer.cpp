@@ -18,7 +18,6 @@
 #include <errno.h>
 #include <cutils/properties.h>
 #include <fcntl.h>
-#include <hardware/rk_fh.h>
 #include <sync/sync.h>
 #include <time.h>
 #include <poll.h>
@@ -133,6 +132,8 @@ int
 hwc_sprite_replace(
     hwcContext * Context,
     hwc_display_contents_1_t * list);
+
+int hwc_repet_last();
 
 int hwChangeFormatandroidL(IN int fmt)
 {
@@ -4762,6 +4763,16 @@ int dump_config_info(struct rk_fb_win_cfg_data fb_info ,hwcContext * context, in
         strcpy(poutbuf,"PCfg error:");
         strcpy(eoutbuf,"ECfg error:");
         break;
+
+    case 4:
+        strcpy(poutbuf,"last config:");
+        strcpy(eoutbuf,"last config:");
+        break;
+
+    default:
+        strcpy(poutbuf,"default:");
+        strcpy(eoutbuf,"default:");
+        break;
     }
     for(int i = 0;i<4;i++)
     {
@@ -6007,10 +6018,10 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
         dpyID = 1;
     }
     if(!is_need_post(list,dpyID,1)){
-        return 0;
+        return -1;
     }
-    if (context->fbFd>0 && !context->fb_blanked)
-    {      
+    //if (context->fbFd>0 && !context->fb_blanked)
+    if(true){
         struct fb_var_screeninfo info;
         struct rk_fb_win_cfg_data fb_info;
         memset(&fb_info,0,sizeof(fb_info));
@@ -6109,8 +6120,14 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
 #endif
         }
 
-        ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info);
-        ALOGD_IF(mLogL&HWC_LOG_LEVEL_ONE,"ID=%d:",context!=_contextAnchor);
+        if(ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info)==-1){
+            ALOGE("ID=%d:ioctl fail",context!=_contextAnchor);
+        }else{
+#if ONLY_USE_ONE_VOP
+            memcpy(&_contextAnchor->fb_info,&fb_info,sizeof(rk_fb_win_cfg_data));
+#endif
+            ALOGD_IF(mLogL&HWC_LOG_LEVEL_ONE,"ID=%d:",context!=_contextAnchor);
+        }
         dump_config_info(fb_info,context,2);
 #if USE_HWC_FENCE
         for(int k=0;k<RK_MAX_BUF_NUM;k++)
@@ -6151,11 +6168,12 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
         dpyID = 1;
     }
     if(!is_need_post(list,dpyID,2)){
-        return 0;
+        return -1;
     }
     struct rk_fb_win_cfg_data fb_info;
     hwc_collect_cfg(context,list,&fb_info,mix_flag,false);
-    if(!context->fb_blanked){
+    //if(!context->fb_blanked)
+    if(true){
 #ifndef GPU_G6110  //This will lead nenamark fps go down in rk3368.
         if(context != _contextAnchor1){
             hwc_display_t dpy = NULL;
@@ -6185,8 +6203,14 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
 #endif
         }
 
-        ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info);
-        ALOGD_IF(mLogL&HWC_LOG_LEVEL_ONE,"ID=%d:",dpyID);
+        if(ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info)==-1){
+            ALOGE("ID=%d:ioctl fail",dpyID);
+        }else{
+#if ONLY_USE_ONE_VOP
+            memcpy(&_contextAnchor->fb_info,&fb_info,sizeof(rk_fb_win_cfg_data));
+#endif
+            ALOGD_IF(mLogL&HWC_LOG_LEVEL_ONE,"ID=%d:",dpyID);
+        }
         if(mix_flag){
             dump_config_info(fb_info,context,1);
         }else{
@@ -6558,7 +6582,7 @@ static int hwc_set_screen(hwc_composer_device_1 *dev, hwc_display_contents_1_t *
         ATRACE_CALL();
     }
     if(!is_need_post(list,dpyID,0)){
-        return 0;
+        return -1;
     }
     hwcContext * context = _contextAnchor;
     if(dpyID == HWCE){
@@ -6588,9 +6612,9 @@ static int hwc_set_screen(hwc_composer_device_1 *dev, hwc_display_contents_1_t *
     if ((list == NULL  || list->numHwLayers == 0) && dpyID == 0){
         LOGE("%s(%d): list=NULL list->numHwLayers =%d", __FUNCTION__, __LINE__,list->numHwLayers);
         /* Reset swap rectangles. */
-        return 0;
+        return -1;
     }else if(list == NULL){
-        return 0;
+        return -1;
     }
 
     LOGV("%s(%d):>>> Set start %d layers <<<,mode=%d",
@@ -6608,15 +6632,15 @@ static int hwc_set_screen(hwc_composer_device_1 *dev, hwc_display_contents_1_t *
 #if hwcUseTime
     gettimeofday(&tpend1,NULL);
 #endif
-
+    int ret = -1;
     if(context->zone_manager.composter_mode == HWC_LCDC) {
-        hwc_set_lcdc(context,list,0);
+        ret = hwc_set_lcdc(context,list,0);
     }else if(context->zone_manager.composter_mode == HWC_FRAMEBUFFER){
-        hwc_Post(context,list);
+        ret = hwc_Post(context,list);
     }else if(context->zone_manager.composter_mode == HWC_MIX){
-        hwc_set_lcdc(context,list,1);
+        ret = hwc_set_lcdc(context,list,1);
     }else if(context->zone_manager.composter_mode == HWC_MIX_V2){
-        hwc_set_lcdc(context,list,2);
+        ret = hwc_set_lcdc(context,list,2);
     }
 
 #if !(defined(GPU_G6110) || defined(RK3288_BOX))
@@ -6670,7 +6694,7 @@ static int hwc_set_screen(hwc_composer_device_1 *dev, hwc_display_contents_1_t *
 #endif
 
     //ALOGD("set end");
-    return 0; //? 0 : HWC_EGL_ERROR;
+    return ret; //? 0 : HWC_EGL_ERROR;
 }        
 
 int hwc_set_virtual(hwc_composer_device_1_t * dev, hwc_display_contents_1_t  **contents, unsigned int rga_fb_addr)
@@ -6743,7 +6767,7 @@ hwc_set(
         ATRACE_CALL();
     }
 
-    int ret = 0;
+    int ret[4] = {0,0,0,0};
 #if (defined(GPU_G6110) || defined(RK3288_BOX))
     if(getHdmiMode() == 1 || _contextAnchor->mHdmiSI.CvbsOn)
         hotplug_set_overscan(0);
@@ -6753,17 +6777,17 @@ hwc_set(
         switch(i) {
             case HWC_DISPLAY_PRIMARY:
             case HWC_DISPLAY_EXTERNAL:
-                ret = hwc_set_screen(dev, list, i);
+                ret[i] = hwc_set_screen(dev, list, i);
                 break;
             case HWC_DISPLAY_VIRTUAL:           
                 if (list){
                     unsigned int fb_addr = 0;
                     // fb_addr = context->hwc_ion.pion->phys + context->hwc_ion.last_offset;
-                    hwc_set_virtual(dev, displays,fb_addr);
+                    ret[2] = hwc_set_virtual(dev, displays,fb_addr);
                 }
                 break;
             default:
-                ret = -EINVAL;
+                ret[3] = -EINVAL;
         }
     }
     for (uint32_t i = 0; i < numDisplays; i++) {
@@ -6772,8 +6796,14 @@ hwc_set(
             hwc_sync_release(list);
         }
     }
+#if ONLY_USE_ONE_VOP
+    if(ret[0] && ret[1]){
+        hwc_repet_last();
+    }
+    ALOGD_IF(mLogL&HWC_LOG_LEVEL_ONE,"%d,ret[%d,%d]",numDisplays,ret[0],ret[1]);
+#endif
     hwc_check_fencefd(numDisplays,displays);
-    return ret;
+    return 0;
 }
 
 static void hwc_registerProcs(struct hwc_composer_device_1* dev,
@@ -8448,31 +8478,28 @@ int hotplug_set_frame(hwcContext* context,int flag)
     fb_info.win_par[0].area_par[0].yvir = 32;
     fb_info.wait_fs = 0;
 
-    if(ioctl(_contextAnchor1->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info) == -1)
-    {
+    if(ioctl(_contextAnchor1->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info) == -1){
         ALOGE("%s,%d,RK_FBIOSET_CONFIG_DONE fail",__FUNCTION__,__LINE__);
+    }else{
+        ALOGD_IF(mLogL&HWC_LOG_LEVEL_ONE,"hotplug_set_frame");
     }
 
-    for(int k=0;k<RK_MAX_BUF_NUM;k++)
-    {
+    for(int k=0;k<RK_MAX_BUF_NUM;k++){
         //ALOGD("%s,%d,fb_info.rel_fence_fd[%d]=%d",
             //__FUNCTION__,__LINE__,k,fb_info.rel_fence_fd[k]);
-        if(fb_info.rel_fence_fd[k] >=0 )
-        {
+        if(fb_info.rel_fence_fd[k] >=0 ){
             ret = 1;
             close(fb_info.rel_fence_fd[k]);
         }    
     }
     //ALOGD("%s,%d,fb_info.ret_fence_fd=%d",
         //__FUNCTION__,__LINE__,fb_info.ret_fence_fd);
-    if(fb_info.ret_fence_fd >= 0)
-    {
+    if(fb_info.ret_fence_fd >= 0){
         ret = 1;
         close(fb_info.ret_fence_fd);
     }
     return ret;
 }
-
 int hwc_sprite_replace(hwcContext * Context,hwc_display_contents_1_t * list)
 {
 #if SPRITEOPTIMATION
@@ -8655,4 +8682,36 @@ int hwc_sprite_replace(hwcContext * Context,hwc_display_contents_1_t * list)
 #else
     return 0;
 #endif
+}
+
+int hwc_repet_last()
+{
+#if ONLY_USE_ONE_VOP
+    int ret = 0;
+    hwcContext * context = _contextAnchor;
+    struct rk_fb_win_cfg_data fb_info;
+    memcpy(&fb_info,&context->fb_info,sizeof(rk_fb_win_cfg_data));
+    fb_info.ret_fence_fd = -1;
+    for(int i=0;i<RK_MAX_BUF_NUM;i++) {
+        fb_info.rel_fence_fd[i] = -1;
+    }
+    if(ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info) == -1){
+        ALOGE("%s,%d,RK_FBIOSET_CONFIG_DONE fail",__FUNCTION__,__LINE__);
+    }else{
+        ALOGD_IF(mLogL&HWC_LOG_LEVEL_ONE,"hwc_repet_last");
+    }
+    dump_config_info(fb_info,context,4);
+    for(int k=0;k<RK_MAX_BUF_NUM;k++){
+        if(fb_info.rel_fence_fd[k] >=0 ){
+            ret = 1;
+            close(fb_info.rel_fence_fd[k]);
+        }
+    }
+    if(fb_info.ret_fence_fd >= 0){
+        ret = 1;
+        close(fb_info.ret_fence_fd);
+    }
+    return ret;
+#endif
+    return 0;
 }

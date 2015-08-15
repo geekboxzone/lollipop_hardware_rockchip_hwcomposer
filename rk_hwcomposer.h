@@ -21,6 +21,7 @@
 #include <hardware/rga.h>
 #include <utils/Thread.h>
 #include <linux/fb.h>
+#include <hardware/rk_fh.h>
 #include <hardware/gralloc.h>
 #ifdef GPU_G6110
 #include  <hardware/img_gralloc_public.h>
@@ -68,6 +69,11 @@
 #define VIRTUAL_RGA_BLIT                0           //1:wfd optimazition by rga
 #endif
 
+#ifdef RK3288_MID
+#define ONLY_USE_ONE_VOP                0
+#else
+#define ONLY_USE_ONE_VOP                1
+#endif
 //Command macro
 #define FB1_IOCTL_SET_YUV_ADDR	    0x5002
 #define RK_FBIOSET_VSYNC_ENABLE     0x4629
@@ -107,8 +113,8 @@
 #define HAL_PIXEL_FORMAT_YCrCb_NV12_OLD  0x20
 #define ATRACE_TAG                  ATRACE_TAG_GRAPHICS
 
-#define GHWC_VERSION  "2.053"
-#define HWC_VERSION "HWC_VERSION Author:wzq Version:2.053"
+#define GHWC_VERSION  "2.054"
+#define HWC_VERSION "HWC_VERSION Author:wzq Version:2.054"
 
 #ifdef GPU_G6110
 #if G6110_SUPPORT_FBDC
@@ -551,8 +557,10 @@ typedef struct _hwcContext
 	unsigned int lcdSize;
 	int           iommuEn;
     alloc_device_t  *mAllocDev;	
-	ZoneManager  zone_manager;;
-
+	ZoneManager  zone_manager;
+#if ONLY_USE_ONE_VOP
+    struct rk_fb_win_cfg_data fb_info;
+#endif
     /* skip flag */
      int      mSkipFlag;
      int      flag;

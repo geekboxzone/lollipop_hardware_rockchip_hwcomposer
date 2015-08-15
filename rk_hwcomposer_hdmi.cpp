@@ -7,6 +7,7 @@
 * Copyright (C) 2015 Rockchip Electronics Co., Ltd.
 
 */
+#include <sys/prctl.h>
 #include "rk_hwcomposer_hdmi.h"
 #include <errno.h>
 #include <malloc.h>
@@ -108,6 +109,7 @@ void rk_handle_uevents(const char *buff,int len)
 
 void  *rk_hwc_hdmi_thread(void *arg)
 {
+    prctl(PR_SET_NAME,"hwc_uevent");
     static char uevent_desc[4096];
     struct pollfd fds[1];
     int timeout;
