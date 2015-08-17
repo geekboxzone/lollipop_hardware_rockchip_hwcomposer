@@ -938,6 +938,10 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
         Context->zone_manager.zone_info[j].handle = (struct private_handle_t *)layer->handle;
         Context->zone_manager.zone_info[j].transform = layer->transform;
         Context->zone_manager.zone_info[j].realtransform = layer->realtransform;
+#ifdef SUPPORT_STEREO
+        Context->zone_manager.zone_info[j].alreadyStereo = layer->alreadyStereo;
+        Context->zone_manager.zone_info[j].displayStereo = layer->displayStereo;
+#endif
         strcpy(Context->zone_manager.zone_info[j].LayerName,layer->LayerName);
         Context->zone_manager.zone_info[j].disp_rect.left = dstRects[0].left;
         Context->zone_manager.zone_info[j].disp_rect.top = dstRects[0].top;
@@ -1300,8 +1304,9 @@ int try_wins_dispatch_hor(void * ctx,hwc_display_contents_1_t * list)
     }
 #endif
 
-    if(contextAh->mHdmiSI.Is3D)
+    if(Context->Is3D){
         return -1;
+    }
 
     if(Context->mAlphaError)
         return -1;
@@ -1695,8 +1700,11 @@ int try_wins_dispatch_mix_up(void * ctx,hwc_display_contents_1_t * list)
     if(contextAh->mHdmiSI.NeedReDst)
         return -1;
 
-    if(contextAh->mHdmiSI.Is3D)
+    if(Context->Is3D && 
+    ((!pzone_mag->zone_info[0].alreadyStereo && pzone_mag->zone_info[0].displayStereo)||
+    (!pzone_mag->zone_info[1].alreadyStereo && pzone_mag->zone_info[1].alreadyStereo))){
         return -1;
+    }
 
     for(int k=0;k<2;k++)
     {
@@ -2116,7 +2124,7 @@ int try_wins_dispatch_mix_down(void * ctx,hwc_display_contents_1_t * list)
     }
 #endif
 
-    if(contextAh->mHdmiSI.Is3D)
+    if(Context->Is3D)
         return -1;
 
     if(contextAh->mHdmiSI.NeedReDst)
@@ -2554,7 +2562,7 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
     if(contextAh->mHdmiSI.NeedReDst)
         return -1;
 
-    if(contextAh->mHdmiSI.Is3D)
+    if(Context->Is3D)
         return -1;
 
     for(int k=0;k<mFtrfl;k++)
@@ -2985,11 +2993,14 @@ int try_wins_dispatch_mix_vh (void * ctx,hwc_display_contents_1_t * list)
     	return -1;
     }
 
-    if(Context->mAlphaError)
+    if(Context->mAlphaError){
         return -1;
+    }
 
-    if(contextAh->mHdmiSI.Is3D && !contextAh->mHdmiSI.IsVideo3D)
+    if(Context->Is3D && (!pzone_mag->zone_info[0].alreadyStereo && pzone_mag->zone_info[0].displayStereo))
+    {
         return -1;
+    }
 
     for(int k=0;k<1;k++)
     {
@@ -5221,84 +5232,100 @@ int hwc_collect_cfg(hwcContext * context, hwc_display_contents_1_t *list,struct 
 int hwc_pre_prepare(hwc_display_contents_1_t** displays, int flag)
 {
     mLogL = is_out_log();
-#if (defined(GPU_G6110) || defined(RK3288_BOX))
-    int forceStereo = 0;
-    hwcContext * context = _contextAnchor;
-#if USE_WM_SIZE
-    context->mHdmiSI.hdmi_anm = 0;
-    context->mHdmiSI.anroidSt = false;
-#endif
-    context->mHdmiSI.IsVideo3D = false;
-    context->mHdmiSI.Is3D = false;
+    int forceStereop = 0;
+    int forceStereoe = 0;
+    hwcContext * contextp = _contextAnchor;
+    hwcContext * contexte = _contextAnchor1;
+    contextp->Is3D = false;
+    if(contexte!=NULL){
+        contexte->Is3D = false;
+    }
+
 #ifdef SUPPORT_STEREO
 #if SUPPORTFORCE3D
-    char pro_value[PROPERTY_VALUE_MAX];
-    property_get("sys.hwc.force3d",pro_value,0);
-    int force3d = atoi(pro_value);
-    if(1==force3d || 2==force3d){
-        context->mHdmiSI.Is3D = true;
-        forceStereo = force3d;
+    char pro_valuep[PROPERTY_VALUE_MAX];
+    char pro_valuee[PROPERTY_VALUE_MAX];
+    property_get("sys.hwc.force3d.primary",pro_valuep,0);
+    property_get("sys.hwc.force3d.external",pro_valuee,0);
+    int force3dp = atoi(pro_valuep);
+    int force3de = atoi(pro_valuee);
+    if(1==force3dp || 2==force3dp){
+        forceStereoe = forceStereop = force3dp;
     }else{
-        forceStereo = 0;
+        forceStereoe = forceStereop = 0;
+    }
+    //if(1==force3de || 2==force3de){
+    //    forceStereoe = force3de;
+    //}else{
+    //    forceStereoe = 0;
+    //}
+#endif
+    for(int i=0;i<2;i++){
+        if(displays[i] != NULL){
+            unsigned int numlayer = displays[i]->numHwLayers;
+            int needStereo = 0;
+            for (unsigned int j = 0; j <(numlayer - 1); j++) {
+                if(displays[i]->hwLayers[j].alreadyStereo) {
+                    needStereo = displays[i]->hwLayers[j].alreadyStereo;
+                    break;
+                }
+            }
+
+            if(0==i && forceStereop){
+                needStereo = forceStereop;
+            }else if(1==i && forceStereoe){
+                needStereo = forceStereoe;
+            }
+
+            if(needStereo) {
+                if(0==i){
+                    contextp->Is3D = true;
+                }else if(1==i && contexte){
+                    contexte->Is3D = true;
+                }
+                for (unsigned int j = 0; j <(numlayer - 1); j++) {
+                    displays[i]->hwLayers[j].displayStereo = needStereo;
+                }
+            }else{
+                for (unsigned int j = 0; j <(numlayer - 1); j++) {
+                    displays[i]->hwLayers[j].displayStereo = needStereo;
+                }
+            }
+
+            if(1==i && needStereo != hwc_control_3dmode(2,0)){
+                hwc_control_3dmode(needStereo,1);
+            }
+        }
     }
 #endif
+
+#if (defined(GPU_G6110) || defined(RK3288_BOX))
+#if USE_WM_SIZE
+    contextp->mHdmiSI.hdmi_anm = 0;
+    contextp->mHdmiSI.anroidSt = false;
+
     for(int i=0;i<2;i++)
     {
         if(displays[i] != NULL)
         {
             unsigned int numlayer = displays[i]->numHwLayers;
-            if(i == 1){
-                int needStereo = 0;
-                for (unsigned int j = 0; j <(numlayer - 1); j++) {
-                    if(displays[i]->hwLayers[j].alreadyStereo) {
-                        needStereo = displays[i]->hwLayers[j].alreadyStereo;
-                        break;
-                    }
-                }
-                if(forceStereo){
-                    needStereo = forceStereo;
-                }
-                if(needStereo) {
-                    context->mHdmiSI.Is3D = true;
-                    for (unsigned int j = 0; j <(numlayer - 1); j++) {
-                        displays[i]->hwLayers[j].displayStereo = needStereo;
-                    }
-                }else{
-                    for (unsigned int j = 0; j <(numlayer - 1); j++) {
-                        displays[i]->hwLayers[j].displayStereo = needStereo;
-                    }
-                }
-                if(needStereo != hwc_control_3dmode(2,0))
-                    hwc_control_3dmode(needStereo,1);
-            }
             for(unsigned int j=0;j<numlayer - 1;j++)
             {
                 hwc_layer_1_t* layer = &displays[i]->hwLayers[j];
                 struct private_handle_t* SrcHnd = (struct private_handle_t *) layer->handle;
-#if USE_WM_SIZE//we just use for it to wm size
-                if (layer == NULL)
-                    ;
-                else if(strstr(layer->LayerName,"BootAnimation") != NULL && (getHdmiMode() == 1 
-                    || context->mHdmiSI.CvbsOn))
-                {
+                if (layer == NULL){
+                    ALOGW("%s,%d,layer is null");
+                }else if(strstr(layer->LayerName,"BootAnimation") != NULL && (getHdmiMode()==1 
+                    || contextp->mHdmiSI.CvbsOn)){
                     layer->sourceCrop.left = 0;
                     layer->sourceCrop.top = 0;
                     layer->sourceCrop.right = SrcHnd->stride;
                     layer->sourceCrop.bottom = SrcHnd->height;
-                    context->mHdmiSI.hdmi_anm = 1;
-                }
-                else if(strstr(layer->LayerName,"Android ") == layer->LayerName && (getHdmiMode() == 1
-                    || context->mHdmiSI.CvbsOn))
-                {
-                    context->mHdmiSI.hdmi_anm = 1;
-                    context->mHdmiSI.anroidSt = true;
-                }
-#endif
-                if(i == 1 && layer && SrcHnd && SrcHnd->format == HAL_PIXEL_FORMAT_YCrCb_NV12
-                    && layer->alreadyStereo && layer->displayStereo)
-                {
-                    layer->displayStereo = 0;
-                    context->mHdmiSI.IsVideo3D = true;
+                    contextp->mHdmiSI.hdmi_anm = 1;
+                }else if(strstr(layer->LayerName,"Android ") == layer->LayerName && 
+                (getHdmiMode() == 1|| contextp->mHdmiSI.CvbsOn)){
+                    contextp->mHdmiSI.hdmi_anm = 1;
+                    contextp->mHdmiSI.anroidSt = true;
                 }
             }
         }

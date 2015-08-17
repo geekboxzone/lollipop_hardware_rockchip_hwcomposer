@@ -306,6 +306,8 @@ typedef struct _ZoneInfo
 	int         layer_flag;
 	int         dispatched;
 	int         sort;
+	int         alreadyStereo;
+	int         displayStereo;
 	char        LayerName[LayerNameLength + 1];   
 #ifdef USE_HWC_FENCE
     int         acq_fence_fd;
@@ -478,9 +480,6 @@ typedef struct _hdmiStateInfo
      bool CvbsOn;
      int FrameFd;
      int FrameBase;
-     bool IsVideo3D;
-     bool Is3D;
-     bool mForce3D;
      buffer_handle_t FrameHandle;
 }hdmiStateInfo;
 
@@ -584,6 +583,7 @@ typedef struct _hwcContext
 
      /*hdmi 3d detech*/
      int fd_3d;
+     bool Is3D;
 
      /*rrg tramsform*/
      RgaTBI   mRgaTBI;
