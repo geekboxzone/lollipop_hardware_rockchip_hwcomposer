@@ -57,8 +57,9 @@
 #define OPTIMIZATION_FOR_DIMLAYER       1           //1: optimise for dim layer
 #define HWC_EXTERNAL                    1           //1:hwc control two lcdc for display
 #define USE_QUEUE_DDRFREQ               1
-#define SUPPORTFORCE3D                  1
-#define USE_WM_SIZE                     0
+#define SUPPORTFORCE3D                  1           //1:can be force 3D,but android 4.4
+#define USE_WM_SIZE                     0           //1:use wm command,now bootanimation source error sometimes
+#define VIDEO_UI_OPTIMATION             1           //1:support,so we can reduce the bandwidth
 
 #ifdef GPU_G6110
 #define G6110_SUPPORT_FBDC              0
