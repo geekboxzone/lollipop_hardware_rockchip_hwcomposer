@@ -32,27 +32,23 @@
 #include <vpu_mem.h>
 
 //Control macro
-#define hwcDEBUG                    1
-#define hwcUseTime                  0
-#define hwcBlitUseTime              0
-#define hwcDumpSurface              0
+#define hwcDEBUG                        1
+#define hwcUseTime                      0
+#define hwcBlitUseTime                  0
+#define hwcDumpSurface                  0
 #define DUMP_AFTER_RGA_COPY_IN_GPU_CASE 0
-#define DEBUG_CHECK_WIN_CFG_DATA    0     //check rk_fb_win_cfg_data for lcdc
-#define DUMP_SPLIT_AREA             0
-#define SYNC_IN_VIDEO               0
-#define USE_HWC_FENCE               1
-#define HWCP                        0    //HWC_DISPLAY_PRIMARY
-#define HWCE                        1    //HWC_DISPLAY_EXTERNAL
-#define HWCV                        2    //HWC_DISPLAY_VIRTUAL
-//#define USE_QUEUE_DDRFREQ           0
-#define USE_VIDEO_BACK_BUFFERS      1
-#define USE_SPECIAL_COMPOSER        0
-#define ENABLE_LCDC_IN_NV12_TRANSFORM   1   //1: It will need reserve a phyical memory for transform.
-#define USE_HW_VSYNC                1
-#define WRITE_VPU_FRAME_DATA        0
-#define MOST_WIN_ZONES              4
-#define ENBALE_WIN_ANY_ZONES        0
-#define ENABLE_TRANSFORM_BY_RGA     1               //1: It will need reserve a phyical memory for transform.
+#define DEBUG_CHECK_WIN_CFG_DATA        0           //check rk_fb_win_cfg_data for lcdc
+#define DUMP_SPLIT_AREA                 0
+#define SYNC_IN_VIDEO                   0
+#define USE_HWC_FENCE                   1
+#define USE_VIDEO_BACK_BUFFERS          1
+#define USE_SPECIAL_COMPOSER            0
+#define ENABLE_LCDC_IN_NV12_TRANSFORM   1           //1: It will need reserve a phyical memory for transform.
+#define USE_HW_VSYNC                    1
+#define WRITE_VPU_FRAME_DATA            0
+#define MOST_WIN_ZONES                  4
+#define ENBALE_WIN_ANY_ZONES            0
+#define ENABLE_TRANSFORM_BY_RGA         1           //1: It will need reserve a phyical memory for transform.
 #define OPTIMIZATION_FOR_TRANSFORM_UI   1
 #define OPTIMIZATION_FOR_DIMLAYER       1           //1: optimise for dim layer
 #define HWC_EXTERNAL                    1           //1:hwc control two lcdc for display
@@ -73,55 +69,63 @@
 #ifdef RK3288_MID
 #define ONLY_USE_ONE_VOP                0
 #else
-#define ONLY_USE_ONE_VOP                1
+#ifdef RK3288_BOX_USE_TWO_VOP
+#define BOX_USE_TWO_VOP                 1           //1:3288 BOX use two vop,
+#define ONLY_USE_ONE_VOP                0           //1:use one vop,rk3288 box depend on BOX_USE_TWO_VOP
+#else
+#define ONLY_USE_ONE_VOP                1           //1:use one vop,rk3288 box depend on BOX_USE_TWO_VOP
+#endif
 #endif
 //Command macro
-#define FB1_IOCTL_SET_YUV_ADDR	    0x5002
-#define RK_FBIOSET_VSYNC_ENABLE     0x4629
-#define RK_FBIOSET_DMABUF_FD	    0x5004
-#define RK_FBIOGET_DSP_FD     	    0x4630
-#define RK_FBIOGET_LIST_STAT   		0X4631
+#define FB1_IOCTL_SET_YUV_ADDR	        0x5002
+#define RK_FBIOSET_VSYNC_ENABLE         0x4629
+#define RK_FBIOSET_DMABUF_FD	        0x5004
+#define RK_FBIOGET_DSP_FD     	        0x4630
+#define RK_FBIOGET_LIST_STAT   		    0X4631
 //#define USE_LCDC_COMPOSER
-#define FBIOSET_OVERLAY_STATE     	0x5018
-#define RK_FBIOGET_IOMMU_STA        0x4632
+#define FBIOSET_OVERLAY_STATE     	    0x5018
+#define RK_FBIOGET_IOMMU_STA            0x4632
 
 //Amount macro
-#define MaxZones                    10
-#define bakupbufsize                4
-#define MaxVideoBackBuffers         (3)
-#define MAX_VIDEO_SOURCE            (5)
-#define GPUDRAWCNT                  (10)
-#define MaxSpriteBNUM               (3)
-#define BufferSize                  (128)
-#define RWIDTH                      (4096)
-#define RHEIGHT                     (2304)
-#define RLAGESIZE                   (14155776)      //RLAGESIZE = RWIDTH * RHEIGHT * 1.5
+#define MaxZones                        10
+#define bakupbufsize                    4
+#define MaxVideoBackBuffers             (3)
+#define MAX_VIDEO_SOURCE                (5)
+#define GPUDRAWCNT                      (10)
+#define MaxSpriteBNUM                   (3)
+#define BufferSize                      (128)
+#define RWIDTH                          (4096)
+#define RHEIGHT                         (2304)
+#define RLAGESIZE                       (14155776)      //RLAGESIZE = RWIDTH * RHEIGHT * 1.5
 
 //Other macro
-#define GPU_WIDTH       handle->width
-#define GPU_HEIGHT      handle->height
-#define GPU_FORMAT      handle->format
-#define GPU_DST_FORMAT  DstHandle->format
+#define GPU_WIDTH                       handle->width
+#define GPU_HEIGHT                      handle->height
+#define GPU_FORMAT                      handle->format
+#define GPU_DST_FORMAT                  DstHandle->format
 
-#define MAX_DO_SPECIAL_COUNT        8
-#define RK_FBIOSET_ROTATE           0x5003 
-#define FPS_NAME                    "com.aatt.fpsm"
-#define BOTTOM_LAYER_NAME           "NavigationBar"
-#define TOP_LAYER_NAME              "StatusBar"
-#define WALLPAPER                   "ImageWallpaper"
-#define VIDEO_PLAY_ACTIVITY_LAYER_NAME "android.rk.RockVideoPlayer/android.rk.RockVideoPlayer.VideoP"
-#define RK_QUEDDR_FREQ              0x8000
-#define HAL_PIXEL_FORMAT_YCrCb_NV12_OLD  0x20
-#define ATRACE_TAG                  ATRACE_TAG_GRAPHICS
+#define MAX_DO_SPECIAL_COUNT            8
+#define RK_FBIOSET_ROTATE               0x5003
+#define FPS_NAME                        "com.aatt.fpsm"
+#define BOTTOM_LAYER_NAME               "NavigationBar"
+#define TOP_LAYER_NAME                  "StatusBar"
+#define WALLPAPER                       "ImageWallpaper"
+#define VIDEO_PLAY_ACTIVITY_LAYER_NAME  "android.rk.RockVideoPlayer/android.rk.RockVideoPlayer.VideoP"
+#define RK_QUEDDR_FREQ                  0x8000
+#define HAL_PIXEL_FORMAT_YCrCb_NV12_OLD 0x20
+#define ATRACE_TAG                      ATRACE_TAG_GRAPHICS
 
-#define GHWC_VERSION  "2.054"
-#define HWC_VERSION "HWC_VERSION Author:wzq Version:2.054"
+#define HWCP                            0           //HWC_DISPLAY_PRIMARY
+#define HWCE                            1           //HWC_DISPLAY_EXTERNAL
+#define HWCV                            2           //HWC_DISPLAY_VIRTUAL
+
+#define GHWC_VERSION                    "2.055"
+#define HWC_VERSION                     "HWC_VERSION Author:wzq Version:2.055"
 
 #ifdef GPU_G6110
 #if G6110_SUPPORT_FBDC
-#define FBDC_BGRA_8888 0x125 //HALPixelFormatSetCompression(HAL_PIXEL_FORMAT_BGRA_8888,HAL_FB_COMPRESSION_DIRECT_16x4)
-#define FBDC_RGBA_8888 0x121 //HALPixelFormatSetCompression(HAL_PIXEL_FORMAT_RGBA_8888,HAL_FB_COMPRESSION_DIRECT_16x4)
-
+#define FBDC_BGRA_8888                  0x125 //HALPixelFormatSetCompression(HAL_PIXEL_FORMAT_BGRA_8888,HAL_FB_COMPRESSION_DIRECT_16x4)
+#define FBDC_RGBA_8888                  0x121 //HALPixelFormatSetCompression(HAL_PIXEL_FORMAT_RGBA_8888,HAL_FB_COMPRESSION_DIRECT_16x4)
 
 //lcdc support fbdc format
 enum data_format {

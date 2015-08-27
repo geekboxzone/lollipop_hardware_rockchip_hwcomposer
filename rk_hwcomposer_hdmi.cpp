@@ -43,10 +43,13 @@ void rk_check_hdmi_state()
 #ifdef RK3288_MID
     int fd = open("/sys/devices/virtual/switch/hdmi/state", O_RDONLY);
 #else
+#ifdef RK3288_BOX_USE_TWO_VOP
+	int fd = open("/sys/devices/virtual/display/HDMI1/connect", O_RDONLY);
+#else
     int fd = open("/sys/devices/virtual/display/HDMI/connect", O_RDONLY);
+#endif 
 #endif
-	if (fd > 0)
-	{
+	if (fd > 0){
 		char statebuf[100];
 		memset(statebuf, 0, sizeof(statebuf));
 		int err = read(fd, statebuf, sizeof(statebuf));
@@ -89,7 +92,12 @@ void rk_check_hdmi_state()
 		}
     }
 #else
+#ifdef RK3288_BOX_USE_TWO_VOP
+	if(strstr(buf, "change@/devices/lcdc1") != NULL){
+		ALOGD("line %d,buf[%s]",__LINE__,buf);
+#else
     if(strstr(buf, "change@/devices/lcdc") != NULL){
+#endif
         int type=0;
         int flag=0;
         rk_check_hdmi_state();
@@ -105,7 +113,6 @@ void rk_handle_uevents(const char *buff,int len)
 	// uint64_t timestamp = 0;
     rk_check_hdmi_uevents(buff,len);
 }
-
 
 void  *rk_hwc_hdmi_thread(void *arg)
 {
