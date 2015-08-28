@@ -845,12 +845,16 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                     / (DstRect->bottom - DstRect->top);
         }
         if(hfactor >= 8.0 || vfactor >= 8.0 || hfactor <= 0.125 || vfactor <= 0.125  ){
-            ALOGI("stretch[%f,%f] not support!",hfactor,vfactor);
             Context->zone_manager.zone_info[j].scale_err = true;
+            ALOGD_IF(mLogL&HWC_LOG_LEVEL_SIX,"stretch[%f,%f]not support!",hfactor,vfactor);
         } 
-        ALOGV("name=%s,hfactor =%f,vfactor =%f",layer->LayerName,hfactor,vfactor );
-        is_stretch = (hfactor != 1.0) || (vfactor != 1.0) || 
-                (_contextAnchor->mHdmiSI.NeedReDst && Context == _contextAnchor1);
+        is_stretch = (hfactor != 1.0) || (vfactor != 1.0);
+        if(Context == _contextAnchor1){
+            is_stretch = is_stretch || _contextAnchor->mHdmiSI.NeedReDst;
+        }
+#if ONLY_USE_ONE_VOP
+        is_stretch = is_stretch || _contextAnchor->mHdmiSI.NeedReDst;
+#endif
         int left_min=0 ;
         int top_min=0;
         int right_max=0;
@@ -6277,7 +6281,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
              }
     	}
         for(unsigned int i=0;i< (list->numHwLayers);i++){
-            ALOGD_IF(mLogL&HWC_LOG_LEVEL_SIX,"list->hwLayers[%d].releaseFenceFd=%d",i,list->hwLayers[i].releaseFenceFd);
+            ALOGD_IF(mLogL&HWC_LOG_LEVEL_SIX,"Layer[%d].relFenceFd=%d",i,list->hwLayers[i].releaseFenceFd);
         }
 
         if(list->retireFenceFd > 0){
@@ -6929,6 +6933,9 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
 
     if(context->mHdmiSI.CvbsOn || context->mHdmiSI.HdmiOn){
         int count = 0;
+        if(context->mHdmiSI.NeedReDst){
+            context->mHdmiSI.NeedReDst = false;
+        }
         while(_contextAnchor1 && _contextAnchor1->fb_blanked){
             count++;
             usleep(10000);
@@ -7509,7 +7516,6 @@ hwc_device_open(
 #endif
 
     /* Get gco2D object pointer. */
-    
     context->engine_fd = open("/dev/rga",O_RDWR,0);
     if( context->engine_fd < 0)
     {
