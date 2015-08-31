@@ -1202,13 +1202,18 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                 Context->zone_manager.zone_info[j].src_rect.top;
         int bpp = android::bytesPerPixel(Context->zone_manager.zone_info[j].format);
         if(Context->zone_manager.zone_info[j].format == HAL_PIXEL_FORMAT_YCrCb_NV12
+            || Context->zone_manager.zone_info[j].format == HAL_PIXEL_FORMAT_YCrCb_NV12_10
+            || Context->zone_manager.zone_info[j].format == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO
             || haveStartwin)
             bpp = 2;
 #ifdef GPU_G6110
         else if(Context->zone_manager.zone_info[j].format == HAL_PIXEL_FORMAT_BGRX_8888)
             bpp = 4;
 #endif
-        // ALOGD("haveStartwin=%d,bpp=%d",haveStartwin,bpp);    
+        else
+            bpp = 4;
+
+        // ALOGD("haveStartwin=%d,bpp=%d",haveStartwin,bpp);
         Context->zone_manager.zone_info[j].size = srcw*srch*bpp;
         if(Context->zone_manager.zone_info[j].hfactor > 1.0 || Context->mIsMediaView)
             factor = 2;
@@ -1689,13 +1694,10 @@ int try_wins_dispatch_mix_up(void * ctx,hwc_display_contents_1_t * list)
             };
     hwcContext * contextAh = _contextAnchor;
     memset(&zone_info_ty,0,sizeof(zone_info_ty));
-    if(Context == _contextAnchor1)
-    {
+    if(Context == _contextAnchor1){
         mix_index = 1;
-    }else if(Context == _contextAnchor)
-    {
+    }else if(Context == _contextAnchor){
         mix_index = 0;
-        return -1;
     }
     if(list->numHwLayers - 1 < 3)
     {
@@ -2988,13 +2990,10 @@ int try_wins_dispatch_mix_vh (void * ctx,hwc_display_contents_1_t * list)
             };
     hwcContext * contextAh = _contextAnchor;
     memset(&zone_info_ty,0,sizeof(zone_info_ty));
-    if(Context == _contextAnchor1)
-    {
+    if(Context == _contextAnchor1){
         mix_index = 1;
-    }else if(Context == _contextAnchor)
-    {
+    }else if(Context == _contextAnchor){
         mix_index = 0;
-        return -1;
     }
     if(list->numHwLayers - 1 < 2)
     {
