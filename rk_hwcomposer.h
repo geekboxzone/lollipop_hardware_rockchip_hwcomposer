@@ -119,8 +119,8 @@
 #define HWCE                            1           //HWC_DISPLAY_EXTERNAL
 #define HWCV                            2           //HWC_DISPLAY_VIRTUAL
 
-#define GHWC_VERSION                    "2.055"
-#define HWC_VERSION                     "HWC_VERSION Author:wzq Version:2.055"
+#define GHWC_VERSION                    "2.056"
+#define HWC_VERSION                     "HWC_VERSION Author:wzq Version:2.056"
 
 #ifdef GPU_G6110
 #if G6110_SUPPORT_FBDC
@@ -533,6 +533,7 @@ typedef struct _hwcContext
     int       fbFd1;
     int       vsync_fd;
     int       ddrFd;
+    uint64_t  timestamp;
     videoCacheInfo video_info[MAX_VIDEO_SOURCE];
     int vui_fd;
     int vui_hide;

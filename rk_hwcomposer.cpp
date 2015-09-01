@@ -6857,7 +6857,15 @@ static int hwc_event_control(struct hwc_composer_device_1* dev,
 {
 
     hwcContext * context = _contextAnchor;
-
+    bool log = mLogL & HWC_LOG_LEVEL_FIV;
+    ALOGD_IF(log,"D_EN[%d,%d]",dpy,enabled);
+    if(dpy==1 && _contextAnchor1){
+        context = _contextAnchor1;
+        if(context->fbFd <= 0){
+            ALOGW("D_EN[%d,%d] ERROR",dpy,enabled);
+            return 0;
+        }
+    }
     switch (event) {
     case HWC_EVENT_VSYNC:
     {
@@ -6899,7 +6907,10 @@ static void handle_vsync_event(hwcContext * context )
 
     //errno = 0;
     uint64_t timestamp = strtoull(buf, NULL, 0) ;/*+ (uint64_t)(1e9 / context->fb_fps)  ;*/
-    context->procs->vsync(context->procs, 0, timestamp);
+    if(context->timestamp != timestamp){
+        context->timestamp = timestamp;
+        context->procs->vsync(context->procs, 0, timestamp);
+    }
 /*
     uint64_t mNextFakeVSync = timestamp + (uint64_t)(1e9 / context->fb_fps);
     struct timespec spec;
@@ -7073,7 +7084,6 @@ static void *hwc_thread(void *data)
 
     while (true) {
         int err = poll(fds, 1, -1);
-
         if (err > 0) {
             if (fds[0].revents & POLLPRI) {
                 handle_vsync_event(context);
