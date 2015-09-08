@@ -119,8 +119,8 @@
 #define HWCE                            1           //HWC_DISPLAY_EXTERNAL
 #define HWCV                            2           //HWC_DISPLAY_VIRTUAL
 
-#define GHWC_VERSION                    "2.056"
-#define HWC_VERSION                     "HWC_VERSION Author:wzq Version:2.056"
+#define GHWC_VERSION                    "2.057"
+#define HWC_VERSION                     "HWC_VERSION Author:wzq Version:2.057"
 
 #ifdef GPU_G6110
 #if G6110_SUPPORT_FBDC
@@ -475,9 +475,7 @@ typedef struct _hdmiStateInfo
      int hdmi_anm;
      bool anroidSt;
 #endif
-     int flag_blank;
      bool HdmiOn;
-     int flag_hwcup_external;
      bool mix_vh;
 	 bool mix_up;
      bool vh_flag;
@@ -533,6 +531,7 @@ typedef struct _hwcContext
     int       fbFd1;
     int       vsync_fd;
     int       ddrFd;
+    int       screenFd;
     uint64_t  timestamp;
     videoCacheInfo video_info[MAX_VIDEO_SOURCE];
     int vui_fd;
@@ -582,6 +581,8 @@ typedef struct _hwcContext
      int       mtrsformcnt;
 
      /*dual display */
+     bool      mIsFirstCallbackToHotplug;
+     bool      mIsBootanimExit;
      hdmiStateInfo mHdmiSI;
 
      /*policy */

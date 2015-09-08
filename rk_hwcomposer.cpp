@@ -128,12 +128,20 @@ hotplug_set_frame(
     hwcContext * context,
     int flag);
 
+bool
+hotplug_free_dimbuffer();
+
 int
 hwc_sprite_replace(
     hwcContext * Context,
     hwc_display_contents_1_t * list);
 
 int hwc_repet_last();
+
+bool hwcPrimaryToExternalCheckConfig(
+    hwcContext * ctx,
+    struct rk_fb_win_cfg_data fb_info);
+
 
 int hwChangeFormatandroidL(IN int fmt)
 {
@@ -5834,6 +5842,13 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
             goto GpuComP;
         }
     }
+#if (defined(RK3368_BOX) || defined(RK3288_BOX)) && !BOX_USE_TWO_VOP
+    if(!hwcPrimaryToExternalCheckConfig(context,fbinfo)){
+        ALOGD_IF(mLogL&HWC_LOG_LEVEL_ONE,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
+        goto GpuComP;
+    }
+    dump_config_info(fbinfo,context,3);
+#endif
     return 0;
 GpuComP   :
     for (i = 0; i < (list->numHwLayers - 1); i++)
@@ -5897,11 +5912,6 @@ hwc_prepare(
 #if hwcDumpSurface
     _DumpSurface(list);
 #endif
-
-	if(context->mHdmiSI.flag_hwcup_external < 5 && getHdmiMode() == 1 &&
-	    context->mHdmiSI.HdmiOn == 0 && context->mHdmiSI.flag_blank == 0){
-		context->mHdmiSI.flag_hwcup_external ++;
-	}
 
     void* zone_m = (void *)&context->zone_manager;
     memset(zone_m,0,sizeof(ZoneManager));
@@ -5992,7 +6002,6 @@ int hwc_blank(struct hwc_composer_device_1 *dev, int dpy, int blank)
 
     case HWC_DISPLAY_EXTERNAL:{
 #if HWC_EXTERNAL
-		_contextAnchor->mHdmiSI.flag_blank = 1;
 		if(blank == 0)
 		    hdmi_noready = false;
 		_contextAnchor1->fb_blanked = blank;
@@ -6143,13 +6152,13 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
                     ALOGW("reset_dst fail [%d]",__LINE__);
                 }
             }
-         }else if(_contextAnchor->mHdmiSI.CvbsOn || _contextAnchor->mHdmiSI.HdmiOn){
+         }else{
 #if (defined(GPU_G6110) || defined(RK3288_BOX)) && !BOX_USE_TWO_VOP
-            if(hotplug_reset_dstposition(&fb_info,1)){
-                ALOGW("reset_dst fail [%d]",__LINE__);
-            }
-            if(_contextAnchor->mHdmiSI.NeedReDst){
-                if(hotplug_reset_dstposition(&fb_info,0)){
+#if RK3368_MID
+            if(context->mHdmiSI.CvbsOn || context->mHdmiSI.HdmiOn)
+#endif
+            {
+                if(hotplug_reset_dstposition(&fb_info,1)){
                     ALOGW("reset_dst fail [%d]",__LINE__);
                 }
             }
@@ -6226,13 +6235,13 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
                     ALOGW("reset_dst fail [%d]",__LINE__);
                 }
             }
-         }else if(_contextAnchor->mHdmiSI.CvbsOn || _contextAnchor->mHdmiSI.HdmiOn){
+         }else{
 #if (defined(GPU_G6110) || defined(RK3288_BOX)) && !BOX_USE_TWO_VOP
-            if(hotplug_reset_dstposition(&fb_info,1)){
-                ALOGW("reset_dst fail [%d]",__LINE__);
-            }
-            if(_contextAnchor->mHdmiSI.NeedReDst){
-                if(hotplug_reset_dstposition(&fb_info,0)){
+#if RK3368_MID
+            if(context->mHdmiSI.CvbsOn || context->mHdmiSI.HdmiOn)
+#endif
+            {
+                if(hotplug_reset_dstposition(&fb_info,1)){
                     ALOGW("reset_dst fail [%d]",__LINE__);
                 }
             }
@@ -6664,7 +6673,6 @@ static int hwc_set_screen(hwc_composer_device_1 *dev, hwc_display_contents_1_t *
         _Dump(list);
     }
 #endif
-
 #if hwcUseTime
     gettimeofday(&tpend1,NULL);
 #endif
@@ -6940,8 +6948,29 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
     if (!context->procs){
         return;
     }
-
-    if(context->mHdmiSI.CvbsOn || context->mHdmiSI.HdmiOn){
+    bool isNeedRemove = true;
+#if (defined(GPU_G6110) || defined(RK3288_BOX)) && !BOX_USE_TWO_VOP
+    if(!context->mIsBootanimExit){
+        if(hdmi_mode){
+            if(6 == flag){
+                context->mHdmiSI.HdmiOn = true;
+                context->mHdmiSI.CvbsOn = false;
+            }else if(1 == flag){
+                context->mHdmiSI.CvbsOn = true;
+                context->mHdmiSI.HdmiOn = false;
+            }
+            hotplug_free_dimbuffer();
+            hotplug_get_config(1);
+            hotplug_set_config();
+        }
+        return;
+    }
+    if(context->mIsFirstCallbackToHotplug){
+        isNeedRemove = false;
+        context->mIsFirstCallbackToHotplug = false;
+    }
+#endif
+    if(isNeedRemove && (context->mHdmiSI.CvbsOn || context->mHdmiSI.HdmiOn)){
         int count = 0;
         if(context->mHdmiSI.NeedReDst){
             context->mHdmiSI.NeedReDst = false;
@@ -6954,14 +6983,7 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
                 break;
             }
         }
-#if OPTIMIZATION_FOR_DIMLAYER
-		if(_contextAnchor1 && _contextAnchor1->mDimHandle){
-		    buffer_handle_t mhandle = _contextAnchor1->mDimHandle;
-            int err = context->mAllocDev->free(context->mAllocDev, mhandle);
-            ALOGW_IF(err,"free mDimHandle failed %d (%s)", err, strerror(-err));
-            _contextAnchor1->mDimHandle = 0;
-		}
-#endif
+        hotplug_free_dimbuffer();
         if(context->mHdmiSI.CvbsOn){
             context->mHdmiSI.CvbsOn = false;
         }else{
@@ -6981,12 +7003,15 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
         ALOGI("remove hotplug device [%d,%d,%d]",__LINE__,hdmi_mode,flag);
     }
     if(hdmi_mode){
+        hotplug_free_dimbuffer();
         hotplug_get_config(1);
         hotplug_set_config();
         if(6 == flag){
             context->mHdmiSI.HdmiOn = true;
+            context->mHdmiSI.CvbsOn = false;
         }else if(1 == flag){
             context->mHdmiSI.CvbsOn = true;
+            context->mHdmiSI.HdmiOn = false;
         }
 #if (defined(RK3288_MID) || BOX_USE_TWO_VOP)
         hotplug_set_frame(context,0);
@@ -7399,6 +7424,11 @@ hwc_device_open(
     {
          hwcONERROR(hwcSTATUS_IO_ERR);
     }
+#if (defined(GPU_G6110) || defined(RK3288_BOX)) && !BOX_USE_TWO_VOP
+    context->screenFd = open("/sys/class/graphics/fb0/screen_info", O_RDONLY);
+#else
+    context->screenFd = -1;
+#endif
 #if USE_QUEUE_DDRFREQ
     context->ddrFd = open("/dev/ddr_freq", O_RDWR, 0);
     if(context->ddrFd < 0)
@@ -7410,7 +7440,7 @@ hwc_device_open(
     {
         ALOGD("context->ddrFd ok");
     }
-#endif    
+#endif
     rel = ioctl(context->fbFd, RK_FBIOGET_IOMMU_STA, &context->iommuEn);	    
     if (rel != 0)
     {
@@ -7594,11 +7624,11 @@ hwc_device_open(
     context->fbSize = info.xres*info.yres*4*3;
     context->lcdSize = info.xres*info.yres*4; 
 
-    context->mHdmiSI.flag_blank = 0;
     context->mHdmiSI.HdmiOn = false;
     context->mHdmiSI.NeedReDst = false;
     context->mHdmiSI.vh_flag = false;
-    context->mHdmiSI.flag_hwcup_external = 0;
+    context->mIsBootanimExit = false;
+    context->mIsFirstCallbackToHotplug = false;
 
     err = hw_get_module(GRALLOC_HARDWARE_MODULE_ID, &module_gr);
     ALOGE_IF(err, "FATAL: can't find the %s module", GRALLOC_HARDWARE_MODULE_ID);
@@ -7907,8 +7937,9 @@ void init_hdmi_mode()
     if(g_hdmi_mode == 1)
     {
 #ifdef GPU_G6110
+        //hotplug_free_dimbuffer();
         //hotplug_get_config(0);
-        //hotplug_set_config();  
+        //hotplug_set_config();
 #endif
     }
         
@@ -8365,6 +8396,7 @@ void *hotplug_try_register(void *arg)
     int count = 0;
 #if !(defined(RK3368_BOX) || defined(RK3288_BOX)) || BOX_USE_TWO_VOP
     if(getHdmiMode() == 1){
+        hotplug_free_dimbuffer();
         hotplug_get_config(0);
     }
 #endif
@@ -8385,6 +8417,27 @@ void *hotplug_try_register(void *arg)
         ALOGI("hotplug_try_register at line = %d",__LINE__);
 #endif
     }
+#if (defined(GPU_G6110) || defined(RK3288_BOX)) && !BOX_USE_TWO_VOP
+    while(!context->mIsBootanimExit){
+        int i = 0;
+        char value[PROPERTY_VALUE_MAX];
+        property_get("service.bootanim.exit",value,"0");
+        i = atoi(value);
+        if(1==i){
+            context->mIsBootanimExit = true;
+            context->mIsFirstCallbackToHotplug = true;
+        }else{
+            usleep(30000);
+        }
+    }
+    if(getHdmiMode() == 1){
+        handle_hotplug_event(1, 6);
+		ALOGI("hotplug_try_register at line = %d",__LINE__);
+    }else{
+        handle_hotplug_event(1, 1);
+		ALOGI("hotplug_try_register at line = %d",__LINE__);
+    }
+#endif
     pthread_exit(NULL);
     return NULL;
 }
@@ -8432,10 +8485,14 @@ int hotplug_reset_dstposition(struct rk_fb_win_cfg_data * fb_info,int flag)
     *0:mHdmiSI.NeedReDst case hotplug 1080p when 4k
     */
     hwcContext *context = _contextAnchor;
+    char buf[100];
+    int fd = context->screenFd;
     unsigned int w_source = 0;
     unsigned int h_source = 0;
     unsigned int w_dst = 0;
     unsigned int h_dst = 0;
+    unsigned int w_hotplug = 0;
+    unsigned int h_hotplug = 0;
     if(_contextAnchor1 == NULL || fb_info == NULL)
     {
         return -1;
@@ -8453,13 +8510,20 @@ int hotplug_reset_dstposition(struct rk_fb_win_cfg_data * fb_info,int flag)
     case 1:
         w_source = context->dpyAttr[HWC_DISPLAY_PRIMARY].xres;
         h_source = context->dpyAttr[HWC_DISPLAY_PRIMARY].yres;
-        w_dst    = context->dpyAttr[HWC_DISPLAY_EXTERNAL].xres;
-        h_dst    = context->dpyAttr[HWC_DISPLAY_EXTERNAL].yres;
+        w_hotplug = context->dpyAttr[HWC_DISPLAY_EXTERNAL].xres;
+        h_hotplug = context->dpyAttr[HWC_DISPLAY_EXTERNAL].yres;
+        lseek(fd,0,SEEK_SET);
+        if(read(fd,buf,sizeof(buf)) < 0){
+            ALOGE("error reading fb screen_info: %s", strerror(errno));
+            return -1;
+        }
+		sscanf(buf,"xres:%d yres:%d",&w_dst,&h_dst);
+        ALOGD_IF(mLogL&HWC_LOG_LEVEL_ONE,"width=%d,height=%d",w_dst,h_dst);
         break;
 
     default:
         break;
-    }        
+    }
     
     float w_scale = (float)w_dst / w_source; 
     float h_scale = (float)h_dst / h_source;
@@ -8723,6 +8787,21 @@ int hwc_sprite_replace(hwcContext * Context,hwc_display_contents_1_t * list)
 #endif
 }
 
+
+bool hotplug_free_dimbuffer()
+{
+#if OPTIMIZATION_FOR_DIMLAYER
+    hwcContext * context = _contextAnchor;
+	if(_contextAnchor1 && _contextAnchor1->mDimHandle){
+	    buffer_handle_t mhandle = _contextAnchor1->mDimHandle;
+        int err = context->mAllocDev->free(context->mAllocDev, mhandle);
+        ALOGW_IF(err,"free mDimHandle failed %d (%s)", err, strerror(-err));
+        _contextAnchor1->mDimHandle = 0;
+	}
+#endif
+    return true;
+}
+
 int hwc_repet_last()
 {
 #if ONLY_USE_ONE_VOP
@@ -8753,4 +8832,43 @@ int hwc_repet_last()
     return ret;
 #endif
     return 0;
+}
+
+bool hwcPrimaryToExternalCheckConfig(hwcContext * ctx,struct rk_fb_win_cfg_data fb_info)
+{
+    if(ctx != _contextAnchor){
+        return true;
+    }
+
+    int compostMode = ctx->zone_manager.composter_mode;
+    if(ctx->mHdmiSI.mix_vh){
+        return true;
+    }else if(compostMode != HWC_LCDC){
+        return false;
+    }
+
+    bool ret = true;
+    bool isSameResolution = false;
+    hwcContext * context = _contextAnchor;
+    bool isLargeHdmi = context->mHdmiSI.NeedReDst;
+    int widthPrimary  = context->dpyAttr[HWCP].xres;
+    int heightPrimary = context->dpyAttr[HWCP].yres;
+    int widthExternal  = context->dpyAttr[HWCE].xres;
+    int heightExternal = context->dpyAttr[HWCE].yres;
+
+    isSameResolution = (widthPrimary == widthExternal && heightPrimary == heightExternal);
+    for(int i = 0;i<4;i++){
+        for(int j=0;j<4;j++){
+            if(fb_info.win_par[i].area_par[j].ion_fd || fb_info.win_par[i].area_par[j].phy_addr){
+                int win_id = fb_info.win_par[i].win_id;
+                if(win_id >= 2){
+                    ret = ret && isSameResolution && !isLargeHdmi;
+                }
+            }
+        }
+        if(!ret){
+            break;
+        }
+    }
+    return ret;
 }
