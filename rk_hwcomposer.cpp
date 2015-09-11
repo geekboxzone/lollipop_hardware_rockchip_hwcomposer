@@ -1720,7 +1720,7 @@ int try_wins_dispatch_mix_up(void * ctx,hwc_display_contents_1_t * list)
 
     if(Context->Is3D && 
     ((!pzone_mag->zone_info[0].alreadyStereo && pzone_mag->zone_info[0].displayStereo)||
-    (!pzone_mag->zone_info[1].alreadyStereo && pzone_mag->zone_info[1].alreadyStereo))){
+    (!pzone_mag->zone_info[1].alreadyStereo && pzone_mag->zone_info[1].displayStereo))){
         return -1;
     }
 
