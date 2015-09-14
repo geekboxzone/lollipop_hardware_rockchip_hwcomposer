@@ -5847,7 +5847,6 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
         ALOGD_IF(mLogL&HWC_LOG_LEVEL_ONE,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
         goto GpuComP;
     }
-    dump_config_info(fbinfo,context,3);
 #endif
     return 0;
 GpuComP   :
@@ -8433,9 +8432,11 @@ void *hotplug_try_register(void *arg)
     if(getHdmiMode() == 1){
         handle_hotplug_event(1, 6);
 		ALOGI("hotplug_try_register at line = %d",__LINE__);
+#ifndef RK3368_MID
     }else{
         handle_hotplug_event(1, 1);
 		ALOGI("hotplug_try_register at line = %d",__LINE__);
+#endif
     }
 #endif
     pthread_exit(NULL);
