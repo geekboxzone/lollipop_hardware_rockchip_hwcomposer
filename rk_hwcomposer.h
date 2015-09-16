@@ -119,8 +119,8 @@
 #define HWCE                            1           //HWC_DISPLAY_EXTERNAL
 #define HWCV                            2           //HWC_DISPLAY_VIRTUAL
 
-#define GHWC_VERSION                    "2.057"
-#define HWC_VERSION                     "HWC_VERSION Author:wzq Version:2.057"
+#define GHWC_VERSION                    "2.058"
+#define HWC_VERSION                     "HWC_VERSION Author:wzq Version:2.058"
 
 #ifdef GPU_G6110
 #if G6110_SUPPORT_FBDC
@@ -429,6 +429,8 @@ struct DisplayAttributes {
     uint32_t vsync_period; //nanos
     uint32_t xres;
     uint32_t yres;
+    uint32_t relxres;
+    uint32_t relyres;
     uint32_t stride;
     float xdpi;
     float ydpi;
@@ -583,6 +585,7 @@ typedef struct _hwcContext
      /*dual display */
      bool      mIsFirstCallbackToHotplug;
      bool      mIsBootanimExit;
+     bool      mResolutionChanged;
      hdmiStateInfo mHdmiSI;
 
      /*policy */

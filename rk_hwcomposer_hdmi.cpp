@@ -43,11 +43,7 @@ void rk_check_hdmi_state()
 #ifdef RK3288_MID
     int fd = open("/sys/devices/virtual/switch/hdmi/state", O_RDONLY);
 #else
-#ifdef RK3288_BOX_USE_TWO_VOP
-	int fd = open("/sys/devices/virtual/display/HDMI1/connect", O_RDONLY);
-#else
     int fd = open("/sys/devices/virtual/display/HDMI/connect", O_RDONLY);
-#endif 
 #endif
 	if (fd > 0){
 		char statebuf[100];
@@ -69,7 +65,7 @@ void rk_check_hdmi_state()
 		else
 		{
 			property_set("sys.hdmi.mode", "1");
-		}*/    
+		}*/
 	}else{
 		ALOGD("err=%s",strerror(errno));
 	}
@@ -93,11 +89,27 @@ void rk_check_hdmi_state()
     }
 #else
 #ifdef RK3288_BOX_USE_TWO_VOP
-	if(strstr(buf, "change@/devices/lcdc1") != NULL){
-		ALOGD("line %d,buf[%s]",__LINE__,buf);
+    if(strstr(buf, "change@/devices/lcdc0") != NULL){
+        ALOGI("line %d,buf[%s]",__LINE__,buf);
+        int type=0;
+        int flag=0;
+        rk_parse_uevent_buf(buf,&type,&flag,len);
+        if(flag){
+            hwc_change_config();
+        }
+    }
+    if(strstr(buf, "change@/devices/lcdc1") != NULL){
+        ALOGI("line %d,buf[%s]",__LINE__,buf);
+        int type=0;
+        int flag=0;
+        hdmi_noready = true;
+        rk_parse_uevent_buf(buf,&type,&flag,len);
+        g_hdmi_mode = flag;
+        handle_hotplug_event(flag,type);
+        ALOGI("uevent receive!hdmistate=%d,type=%d,flag=%d,line=%d",g_hdmi_mode,type,flag,__LINE__);
+    }
 #else
     if(strstr(buf, "change@/devices/lcdc") != NULL){
-#endif
         int type=0;
         int flag=0;
         rk_check_hdmi_state();
@@ -105,6 +117,7 @@ void rk_check_hdmi_state()
         handle_hotplug_event(flag,type);
         ALOGI("uevent receive!hdmistate=%d,type=%d,flag=%d,line=%d",g_hdmi_mode,type,flag,__LINE__);
 	}
+#endif
 #endif
 }
 

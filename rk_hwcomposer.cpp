@@ -863,6 +863,11 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
 #if ONLY_USE_ONE_VOP
         is_stretch = is_stretch || _contextAnchor->mHdmiSI.NeedReDst;
 #endif
+#if BOX_USE_TWO_VOP
+        if(Context==_contextAnchor && Context->mResolutionChanged){
+            is_stretch = true;
+        }
+#endif
         int left_min=0 ;
         int top_min=0;
         int right_max=0;
@@ -1329,8 +1334,9 @@ int try_wins_dispatch_hor(void * ctx,hwc_display_contents_1_t * list)
         return -1;
     }
 
-    if(Context->mAlphaError)
+    if(Context->mAlphaError){
         return -1;
+    }
 
     for(int k=0;k<pzone_mag->zone_cnt;k++)
     {
@@ -1707,16 +1713,23 @@ int try_wins_dispatch_mix_up(void * ctx,hwc_display_contents_1_t * list)
     }else if(Context == _contextAnchor){
         mix_index = 0;
     }
-    if(list->numHwLayers - 1 < 3)
-    {
+    if(list->numHwLayers - 1 < 3){
     	return -1;
     }
 
-    if(Context->mAlphaError)
+    if(Context->mAlphaError){
         return -1;
+    }
 
-    if(contextAh->mHdmiSI.NeedReDst)
+    if(contextAh->mHdmiSI.NeedReDst){
         return -1;
+    }
+    
+#if BOX_USE_TWO_VOP
+    if(Context==_contextAnchor && Context->mResolutionChanged){
+        return -1;
+    }
+#endif
 
     if(Context->Is3D && 
     ((!pzone_mag->zone_info[0].alreadyStereo && pzone_mag->zone_info[0].displayStereo)||
@@ -2141,12 +2154,14 @@ int try_wins_dispatch_mix_down(void * ctx,hwc_display_contents_1_t * list)
             return -1;
     }
 #endif
-
-    if(Context->Is3D)
+    
+    if(Context->Is3D){
         return -1;
+    }
 
-    if(contextAh->mHdmiSI.NeedReDst)
+    if(contextAh->mHdmiSI.NeedReDst){
         return -1;
+    }
 
     for(int k=2;k<pzone_mag->zone_cnt;k++)
     {
@@ -2574,14 +2589,23 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
         }
     }
 
-    if(Context->mAlphaError)
+    if(Context->mAlphaError){
         return -1;
+    }
 
-    if(contextAh->mHdmiSI.NeedReDst)
+    if(contextAh->mHdmiSI.NeedReDst){
         return -1;
+    }
 
-    if(Context->Is3D)
+    if(Context->Is3D){
         return -1;
+    }
+
+#if BOX_USE_TWO_VOP
+    if(Context==_contextAnchor && Context->mResolutionChanged){
+        return -1;
+    }
+#endif
 
     for(int k=0;k<mFtrfl;k++)
     {
@@ -3012,17 +3036,16 @@ int try_wins_dispatch_mix_vh (void * ctx,hwc_display_contents_1_t * list)
         return -1;
     }
 
-    if(Context->Is3D && (!pzone_mag->zone_info[0].alreadyStereo && pzone_mag->zone_info[0].displayStereo))
-    {
-        return -1;
-    }
-
     for(int k=0;k<1;k++)
     {
         if(pzone_mag->zone_info[k].scale_err || pzone_mag->zone_info[k].toosmall
             || pzone_mag->zone_info[k].zone_err || (pzone_mag->zone_info[k].transform
                 && (pzone_mag->zone_info[k].format != HAL_PIXEL_FORMAT_YCrCb_NV12)))
             return -1;
+    }
+
+    if(Context->Is3D && (!pzone_mag->zone_info[0].alreadyStereo && pzone_mag->zone_info[0].displayStereo)){
+        return -1;
     }
 
     for(i=0,j=0;i<pzone_mag->zone_cnt;i++)
@@ -5257,7 +5280,17 @@ int hwc_pre_prepare(hwc_display_contents_1_t** displays, int flag)
     if(contexte!=NULL){
         contexte->Is3D = false;
     }
-
+#if BOX_USE_TWO_VOP
+    int xres = contextp->dpyAttr[HWC_DISPLAY_PRIMARY].xres;
+    int yres = contextp->dpyAttr[HWC_DISPLAY_PRIMARY].yres;
+    int relxres = contextp->dpyAttr[HWC_DISPLAY_PRIMARY].relxres;
+    int relyres = contextp->dpyAttr[HWC_DISPLAY_PRIMARY].relyres;
+    if(xres != relxres || yres != relyres){
+        contextp->mResolutionChanged = true;
+    }else{
+        contextp->mResolutionChanged = false;
+    }
+#endif
 #ifdef SUPPORT_STEREO
 #if SUPPORTFORCE3D
     char pro_valuep[PROPERTY_VALUE_MAX];
@@ -6050,8 +6083,9 @@ static int hwc_fbPost(hwc_composer_device_1_t * dev, size_t numDisplays, hwc_dis
 
 static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
 {
-    if(mLogL&HWC_LOG_LEVEL_ONE)
+    if(mLogL&HWC_LOG_LEVEL_ONE){
         ATRACE_CALL();
+    }
 
     if (list == NULL){
         return -1;
@@ -6065,7 +6099,11 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
         return -1;
     }
     //if (context->fbFd>0 && !context->fb_blanked)
+#if defined(RK3288_MID) || BOX_USE_TWO_VOP
+    if(dpyID == 0 || (dpyID == 1 && !context->fb_blanked)){
+#else
     if(true){
+#endif
         struct fb_var_screeninfo info;
         struct rk_fb_win_cfg_data fb_info;
         memset(&fb_info,0,sizeof(fb_info));
@@ -6163,7 +6201,11 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
             }
 #endif
         }
-
+#if BOX_USE_TWO_VOP
+        if(context==_contextAnchor && context->mResolutionChanged){
+            hotplug_reset_dstposition(&fb_info,2);
+        }
+#endif
         if(ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info)==-1){
             ALOGE("ID=%d:ioctl fail",context!=_contextAnchor);
         }else{
@@ -6246,6 +6288,12 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
             }
 #endif
         }
+
+#if BOX_USE_TWO_VOP
+        if(context==_contextAnchor && context->mResolutionChanged){
+            hotplug_reset_dstposition(&fb_info,2);
+        }
+#endif
 
         if(ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info)==-1){
             ALOGE("ID=%d:ioctl fail",dpyID);
@@ -6941,6 +6989,33 @@ static void handle_vsync_event(hwcContext * context )
 */
 }
 
+void hwc_change_config(){
+#if BOX_USE_TWO_VOP
+    hwcContext * context = _contextAnchor;
+    char buf[100];
+    int width = 0;
+    int height = 0;
+    int fd = -1;
+    fd = open("/sys/class/graphics/fb0/screen_info", O_RDONLY);
+    if(fd < 0)
+	{
+	    ALOGE("hwc_change_config:open fb0 screen_info error,fd=%d",fd);
+        return;
+	}
+	if(read(fd,buf,sizeof(buf)) < 0)
+    {
+        ALOGE("error reading fb0 screen_info: %s", strerror(errno));
+        return;
+    }
+    close(fd);
+	sscanf(buf,"xres:%d yres:%d",&width,&height);
+    ALOGD("hwc_change_config:width=%d,height=%d",width,height);
+	context->dpyAttr[HWC_DISPLAY_PRIMARY].relxres = width;
+    context->dpyAttr[HWC_DISPLAY_PRIMARY].relyres = height;
+#endif
+    return;
+}
+
 void handle_hotplug_event(int hdmi_mode ,int flag )
 {
     hwcContext * context = _contextAnchor;
@@ -7490,6 +7565,8 @@ hwc_device_open(
     context->dpyAttr[HWC_DISPLAY_PRIMARY].stride = fixInfo.line_length /(info.xres/8);
     context->dpyAttr[HWC_DISPLAY_PRIMARY].xres = info.xres;
     context->dpyAttr[HWC_DISPLAY_PRIMARY].yres = info.yres;
+    context->dpyAttr[HWC_DISPLAY_PRIMARY].relxres = info.xres;
+    context->dpyAttr[HWC_DISPLAY_PRIMARY].relyres = info.yres;
     context->dpyAttr[HWC_DISPLAY_PRIMARY].xdpi = xdpi;
     context->dpyAttr[HWC_DISPLAY_PRIMARY].ydpi = ydpi;
     context->dpyAttr[HWC_DISPLAY_PRIMARY].vsync_period = vsync_period;
@@ -7833,6 +7910,9 @@ hwc_device_open(
         LOGD("Create hotplug_try_register thread error .");
     }
 #endif
+#ifdef BOX_USE_TWO_VOP
+    hwc_change_config();
+#endif
     return 0;
 
 OnError:
@@ -7901,11 +7981,59 @@ int  getHdmiMode()
     return g_hdmi_mode;
 }
 
+int hwc_read_node(const char *intValue,char *outValue,int flag)
+{
+    int fd = -1;
+    int ret = -1;
+    fd = open(intValue, O_RDONLY);
+    memset(outValue, 0, sizeof(outValue));
+    int err = read(fd, outValue, sizeof(outValue));
+    if (err < 0){
+        ALOGE("error reading vsync timestamp: %s", strerror(errno));
+        return ret;
+    }
+    ret = atoi(outValue);
+    close(fd);
+    return ret;
+}
+
 void init_hdmi_mode()
 {
-
-    int fd = open("/sys/devices/virtual/switch/hdmi/state", O_RDONLY);
-	
+#if BOX_USE_TWO_VOP
+    int index = -1;
+    int connect = -1;
+    char outputValue[100];
+    char inputValue[100] = "/sys/devices/virtual/display/HDMI/connect";
+    connect = hwc_read_node(inputValue,outputValue,0);
+    if(connect >= 0){
+        memset(inputValue, 0, sizeof(inputValue));
+        strcpy(inputValue,"/sys/devices/virtual/display/HDMI/property");
+        index = hwc_read_node(inputValue,outputValue,0);
+        ALOGD("%d,index=%d,connect=%d,hdmi=%d",__LINE__,index,connect,g_hdmi_mode);
+        if(index == 1 && connect == 1){
+            g_hdmi_mode = 1;
+        }else if(index == 1){
+            g_hdmi_mode = 0;
+        }
+    }
+    index = -1;
+    connect = -1;
+    memset(inputValue, 0, sizeof(inputValue));
+    strcpy(inputValue,"/sys/devices/virtual/display/HDMI1/connect");
+    connect = hwc_read_node(inputValue,outputValue,0);
+    if(connect >= 0){
+        memset(inputValue, 0, sizeof(inputValue));
+        strcpy(inputValue,"/sys/devices/virtual/display/HDMI1/property");
+        index = hwc_read_node(inputValue,outputValue,0);
+        ALOGD("%d,index=%d,connect=%d,hdmi=%d",__LINE__,index,connect,g_hdmi_mode);
+        if(index == 1 && connect == 1){
+            g_hdmi_mode = 1;
+        }else if(index == 1){
+            g_hdmi_mode = 0;
+        }
+    }
+#else
+    int fd = open("/sys/devices/virtual/switch/hdmi/state", O_RDONLY);	
     if (fd > 0)
     {
         char statebuf[100];
@@ -7941,7 +8069,7 @@ void init_hdmi_mode()
         //hotplug_set_config();
 #endif
     }
-        
+#endif 
 }
 int closeFb(int fd)
 {
@@ -8041,7 +8169,7 @@ int hotplug_get_config(int flag){
         }
         close(fdExternal);
 		sscanf(buf,"xres:%d yres:%d",&width,&height);
-        ALOGD("width=%d,height=%d",width,height);
+        ALOGD("hotplug_get_config:width=%d,height=%d",width,height);
     	info.xres = width;
     	info.yres = height;
     }
@@ -8411,7 +8539,7 @@ void *hotplug_try_register(void *arg)
         handle_hotplug_event(1, 6);
 		ALOGI("hotplug_try_register at line = %d",__LINE__);
     }else{
-#if (defined(RK3368_BOX) || defined(RK3288_BOX))
+#if (defined(RK3368_BOX) || defined(RK3288_BOX)) && !BOX_USE_TWO_VOP
         handle_hotplug_event(1, 1);
         ALOGI("hotplug_try_register at line = %d",__LINE__);
 #endif
@@ -8494,8 +8622,11 @@ int hotplug_reset_dstposition(struct rk_fb_win_cfg_data * fb_info,int flag)
     unsigned int h_dst = 0;
     unsigned int w_hotplug = 0;
     unsigned int h_hotplug = 0;
-    if(_contextAnchor1 == NULL || fb_info == NULL)
-    {
+    if(fb_info == NULL){
+        return -1;
+    }
+
+    if(flag != 2 && _contextAnchor1 == NULL){
         return -1;
     }
 
@@ -8520,6 +8651,13 @@ int hotplug_reset_dstposition(struct rk_fb_win_cfg_data * fb_info,int flag)
         }
 		sscanf(buf,"xres:%d yres:%d",&w_dst,&h_dst);
         ALOGD_IF(mLogL&HWC_LOG_LEVEL_ONE,"width=%d,height=%d",w_dst,h_dst);
+        break;
+
+    case 2:
+        w_source = context->dpyAttr[HWC_DISPLAY_PRIMARY].xres;
+        h_source = context->dpyAttr[HWC_DISPLAY_PRIMARY].yres;
+        w_dst    = context->dpyAttr[HWC_DISPLAY_PRIMARY].relxres;
+        h_dst    = context->dpyAttr[HWC_DISPLAY_PRIMARY].relyres;
         break;
 
     default:
