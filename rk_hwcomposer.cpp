@@ -7985,8 +7985,9 @@ int hwc_read_node(const char *intValue,char *outValue,int flag)
 {
     int fd = -1;
     int ret = -1;
+    size_t size = sizeof(outValue);
     fd = open(intValue, O_RDONLY);
-    memset(outValue, 0, sizeof(outValue));
+    memset(outValue, 0, size);
     int err = read(fd, outValue, sizeof(outValue));
     if (err < 0){
         ALOGE("error reading vsync timestamp: %s", strerror(errno));
