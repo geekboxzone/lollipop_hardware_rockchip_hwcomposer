@@ -129,7 +129,7 @@ void rk_handle_uevents(const char *buff,int len)
 
 void  *rk_hwc_hdmi_thread(void *arg)
 {
-    prctl(PR_SET_NAME,"hwc_uevent");
+    prctl(PR_SET_NAME,"HWC_Uevent");
     static char uevent_desc[4096];
     struct pollfd fds[1];
     int timeout;

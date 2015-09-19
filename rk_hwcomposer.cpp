@@ -7116,6 +7116,7 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
 
 static void *hwc_thread(void *data)
 {
+    prctl(PR_SET_NAME,"HWC_Vsync");
     hwcContext * context = _contextAnchor;
 
 #if 0
