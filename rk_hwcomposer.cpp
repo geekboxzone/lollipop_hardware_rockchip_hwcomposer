@@ -701,7 +701,12 @@ bool is_same_rect(hwc_rect_t rect1,hwc_rect_t rect2)
 
 bool is_need_post(hwc_display_contents_1_t *list,int dpyID,int flag)
 {
-#if !BOX_USE_TWO_VOP
+#ifdef RK3288_BOX
+    hwcContext * context = _contextAnchor;
+    if(context->mLcdcNum == 2){
+        return true;
+    }
+#endif
     switch(flag){
         case 0://hotplug device not realdy,so we not post:from set_screen
 #if (defined(GPU_G6110) || defined(RK3288_BOX))
@@ -733,13 +738,17 @@ bool is_need_post(hwc_display_contents_1_t *list,int dpyID,int flag)
         default:
             break;
     }
-#endif
     return true;
 }
 
 bool is_gpu_or_nodraw(hwc_display_contents_1_t *list,int dpyID)
 {
-#if !BOX_USE_TWO_VOP
+#ifdef RK3288_BOX
+    hwcContext * context = _contextAnchor;
+    if(context->mLcdcNum == 2){
+        return false;
+    }
+#endif
 #if (defined(GPU_G6110) || defined(RK3288_BOX))
     if((!hdmi_noready  && dpyID == HWCP
         && (getHdmiMode() == 1 || _contextAnchor->mHdmiSI.CvbsOn))){
@@ -754,7 +763,6 @@ bool is_gpu_or_nodraw(hwc_display_contents_1_t *list,int dpyID)
         ALOGD_IF(mLogL&HWC_LOG_LEVEL_SIX,"Hotplug nodraw %s,%d",__FUNCTION__,__LINE__);
         return true;
     }
-#endif
 #endif
     return false;
 }
@@ -861,10 +869,15 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
             is_stretch = is_stretch || _contextAnchor->mHdmiSI.NeedReDst;
         }
 #if ONLY_USE_ONE_VOP
-        is_stretch = is_stretch || _contextAnchor->mHdmiSI.NeedReDst;
+#ifdef RK3288_BOX
+        if(_contextAnchor->mLcdcNum == 1)
 #endif
-#if BOX_USE_TWO_VOP
-        if(Context==_contextAnchor && Context->mResolutionChanged){
+        {
+            is_stretch = is_stretch || _contextAnchor->mHdmiSI.NeedReDst;
+        }
+#endif
+#ifdef RK3288_BOX
+        if(Context==_contextAnchor && Context->mResolutionChanged && Context->mLcdcNum == 2){
             is_stretch = true;
         }
 #endif
@@ -1725,8 +1738,8 @@ int try_wins_dispatch_mix_up(void * ctx,hwc_display_contents_1_t * list)
         return -1;
     }
     
-#if BOX_USE_TWO_VOP
-    if(Context==_contextAnchor && Context->mResolutionChanged){
+#ifdef RK3288_BOX
+    if(Context==_contextAnchor && Context->mResolutionChanged && Context->mLcdcNum==2){
         return -1;
     }
 #endif
@@ -2601,8 +2614,8 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
         return -1;
     }
 
-#if BOX_USE_TWO_VOP
-    if(Context==_contextAnchor && Context->mResolutionChanged){
+#ifdef RK3288_BOX
+    if(Context==_contextAnchor && Context->mResolutionChanged && Context->mLcdcNum==2){
         return -1;
     }
 #endif
@@ -4788,7 +4801,10 @@ int dump_config_info(struct rk_fb_win_cfg_data fb_info ,hwcContext * context, in
 {
     char poutbuf[20];
     char eoutbuf[20];
-    if(!(mLogL&HWC_LOG_LEVEL_ONE)){
+    bool isLogOut = flag == 3;
+    isLogOut = isLogOut || (mLogL&HWC_LOG_LEVEL_ONE);
+
+    if(!isLogOut){
         return 0;
     }
 
@@ -5280,15 +5296,17 @@ int hwc_pre_prepare(hwc_display_contents_1_t** displays, int flag)
     if(contexte!=NULL){
         contexte->Is3D = false;
     }
-#if BOX_USE_TWO_VOP
-    int xres = contextp->dpyAttr[HWC_DISPLAY_PRIMARY].xres;
-    int yres = contextp->dpyAttr[HWC_DISPLAY_PRIMARY].yres;
-    int relxres = contextp->dpyAttr[HWC_DISPLAY_PRIMARY].relxres;
-    int relyres = contextp->dpyAttr[HWC_DISPLAY_PRIMARY].relyres;
-    if(xres != relxres || yres != relyres){
-        contextp->mResolutionChanged = true;
-    }else{
-        contextp->mResolutionChanged = false;
+#ifdef RK3288_BOX
+    if(contextp->mLcdcNum == 2){
+        int xres = contextp->dpyAttr[HWC_DISPLAY_PRIMARY].xres;
+        int yres = contextp->dpyAttr[HWC_DISPLAY_PRIMARY].yres;
+        int relxres = contextp->dpyAttr[HWC_DISPLAY_PRIMARY].relxres;
+        int relyres = contextp->dpyAttr[HWC_DISPLAY_PRIMARY].relyres;
+        if(xres != relxres || yres != relyres){
+            contextp->mResolutionChanged = true;
+        }else{
+            contextp->mResolutionChanged = false;
+        }
     }
 #endif
 #ifdef SUPPORT_STEREO
@@ -5350,7 +5368,12 @@ int hwc_pre_prepare(hwc_display_contents_1_t** displays, int flag)
 #endif
 
 #if (defined(GPU_G6110) || defined(RK3288_BOX))
-#if USE_WM_SIZE && !BOX_USE_TWO_VOP
+#ifdef RK3288_BOX
+    if(contextp->mLcdcNum == 2){
+        return 0;
+    }
+#endif
+#if USE_WM_SIZE
     contextp->mHdmiSI.hdmi_anm = 0;
     contextp->mHdmiSI.anroidSt = false;
 
@@ -5506,7 +5529,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
         return 0;
     }
 #if (defined(GPU_G6110) || defined(RK3288_BOX))
-#if USE_WM_SIZE && !BOX_USE_TWO_VOP
+#if USE_WM_SIZE
     if(_contextAnchor->mHdmiSI.anroidSt){
         goto GpuComP;
     }
@@ -5875,10 +5898,15 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
             goto GpuComP;
         }
     }
-#if (defined(RK3368_BOX) || defined(RK3288_BOX)) && !BOX_USE_TWO_VOP
-    if(!hwcPrimaryToExternalCheckConfig(context,fbinfo)){
-        ALOGD_IF(mLogL&HWC_LOG_LEVEL_ONE,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
-        goto GpuComP;
+#if (defined(RK3368_BOX) || defined(RK3288_BOX))
+#ifdef RK3288_BOX
+	if(_contextAnchor->mLcdcNum == 1)
+#endif
+    {
+        if(!hwcPrimaryToExternalCheckConfig(context,fbinfo)){
+            ALOGD_IF(mLogL&HWC_LOG_LEVEL_ONE,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
+            goto GpuComP;
+        }
     }
 #endif
     return 0;
@@ -5966,7 +5994,12 @@ hwc_prepare(
                 list_e->hwLayers[i].compositionType = HWC_FRAMEBUFFER;
             }
         }    
-#if (defined(GPU_G6110) || defined(RK3288_BOX)) && !BOX_USE_TWO_VOP
+#if (defined(GPU_G6110) || defined(RK3288_BOX))
+#ifdef RK3288_BOX
+        if(context->mLcdcNum == 2){
+            return 0;
+        }
+#endif
         if(!hdmi_noready && getHdmiMode() == 1){
             for (unsigned int i = 0; i < (list->numHwLayers - 1); i++){
                 hwc_layer_1_t * layer = &list->hwLayers[i];
@@ -5979,8 +6012,7 @@ hwc_prepare(
     }
 
 #if hwcDEBUG
-    if(mLogL&HWC_LOG_LEVEL_EIG)
-    {
+    if(mLogL&HWC_LOG_LEVEL_EIG){
         LOGD("%s(%d):Layers to set:", __FUNCTION__, __LINE__);
         _Dump(list);
     }
@@ -6099,10 +6131,16 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
         return -1;
     }
     //if (context->fbFd>0 && !context->fb_blanked)
-#if defined(RK3288_MID) || BOX_USE_TWO_VOP
+#if defined(RK3288_MID)
     if(dpyID == 0 || (dpyID == 1 && !context->fb_blanked)){
 #else
+#ifdef RK3288_BOX
+    int lcdcNum = _contextAnchor->mLcdcNum;
+    bool isPost = dpyID == 0 || (dpyID == 1 && !context->fb_blanked);
+    if(lcdcNum==1 || (lcdcNum==2 && isPost)){
+#else
     if(true){
+#endif
 #endif
         struct fb_var_screeninfo info;
         struct rk_fb_win_cfg_data fb_info;
@@ -6190,8 +6228,11 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
                 }
             }
          }else{
-#if (defined(GPU_G6110) || defined(RK3288_BOX)) && !BOX_USE_TWO_VOP
-#if RK3368_MID
+#if (defined(GPU_G6110) || defined(RK3288_BOX))
+#ifdef RK3288_BOX
+            if(_contextAnchor->mLcdcNum==1)
+#endif
+#ifdef RK3368_MID
             if(context->mHdmiSI.CvbsOn || context->mHdmiSI.HdmiOn)
 #endif
             {
@@ -6201,16 +6242,22 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
             }
 #endif
         }
-#if BOX_USE_TWO_VOP
-        if(context==_contextAnchor && context->mResolutionChanged){
+#ifdef RK3288_BOX
+        if(context==_contextAnchor && context->mResolutionChanged && context->mLcdcNum==2){
             hotplug_reset_dstposition(&fb_info,2);
         }
 #endif
-        if(ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info)==-1){
-            ALOGE("ID=%d:ioctl fail",context!=_contextAnchor);
+        if(ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info)){
+            ALOGE("ID=%d:ioctl fail:%s",context!=_contextAnchor,strerror(errno));
+            dump_config_info(fb_info,context,3);
         }else{
 #if ONLY_USE_ONE_VOP
-            memcpy(&_contextAnchor->fb_info,&fb_info,sizeof(rk_fb_win_cfg_data));
+#ifdef RK3288_BOX
+            if(_contextAnchor->mLcdcNum == 1)
+#endif
+            {
+                memcpy(&_contextAnchor->fb_info,&fb_info,sizeof(rk_fb_win_cfg_data));
+            }
 #endif
             ALOGD_IF(mLogL&HWC_LOG_LEVEL_ONE,"ID=%d:",context!=_contextAnchor);
         }
@@ -6277,7 +6324,10 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
                 }
             }
          }else{
-#if (defined(GPU_G6110) || defined(RK3288_BOX)) && !BOX_USE_TWO_VOP
+#if (defined(GPU_G6110) || defined(RK3288_BOX))
+#ifdef RK3288_BOX
+            if(_contextAnchor->mLcdcNum==1)
+#endif
 #if RK3368_MID
             if(context->mHdmiSI.CvbsOn || context->mHdmiSI.HdmiOn)
 #endif
@@ -6289,17 +6339,23 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
 #endif
         }
 
-#if BOX_USE_TWO_VOP
-        if(context==_contextAnchor && context->mResolutionChanged){
+#ifdef RK3288_BOX
+        if(context==_contextAnchor && context->mResolutionChanged && context->mLcdcNum==2){
             hotplug_reset_dstposition(&fb_info,2);
         }
 #endif
 
-        if(ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info)==-1){
-            ALOGE("ID=%d:ioctl fail",dpyID);
+        if(ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info)){
+            ALOGE("ID=%d:ioctl fail:%s",dpyID,strerror(errno));
+            dump_config_info(fb_info,context,3);
         }else{
 #if ONLY_USE_ONE_VOP
-            memcpy(&_contextAnchor->fb_info,&fb_info,sizeof(rk_fb_win_cfg_data));
+#ifdef RK3288_BOX
+            if(_contextAnchor->mLcdcNum == 1)
+#endif
+            {
+                memcpy(&_contextAnchor->fb_info,&fb_info,sizeof(rk_fb_win_cfg_data));
+            }
 #endif
             ALOGD_IF(mLogL&HWC_LOG_LEVEL_ONE,"ID=%d:",dpyID);
         }
@@ -6860,9 +6916,19 @@ hwc_set(
 
     int ret[4] = {0,0,0,0};
 #if (defined(GPU_G6110) || defined(RK3288_BOX))
+#ifdef RK3288_BOX
+    if(_contextAnchor->mLcdcNum==1){
+        if(getHdmiMode() == 1 || _contextAnchor->mHdmiSI.CvbsOn){
+            hotplug_set_overscan(0);
+        }
+    }else{
+        hotplug_set_overscan(0);
+    }
+#else
     if(getHdmiMode() == 1 || _contextAnchor->mHdmiSI.CvbsOn){
         hotplug_set_overscan(0);
     }
+#endif
 #endif
     for (uint32_t i = 0; i < numDisplays; i++) {
         hwc_display_contents_1_t* list = displays[i];
@@ -6888,13 +6954,13 @@ hwc_set(
             hwc_sync_release(list);
         }
     }
+    hwc_check_fencefd(numDisplays,displays);
 #if ONLY_USE_ONE_VOP
     if(ret[0] && ret[1]){
         hwc_repet_last();
     }
     ALOGD_IF(mLogL&HWC_LOG_LEVEL_ONE,"%d,ret[%d,%d]",numDisplays,ret[0],ret[1]);
 #endif
-    hwc_check_fencefd(numDisplays,displays);
     return 0;
 }
 
@@ -6990,28 +7056,30 @@ static void handle_vsync_event(hwcContext * context )
 }
 
 void hwc_change_config(){
-#if BOX_USE_TWO_VOP
+#ifdef RK3288_BOX
     hwcContext * context = _contextAnchor;
-    char buf[100];
-    int width = 0;
-    int height = 0;
-    int fd = -1;
-    fd = open("/sys/class/graphics/fb0/screen_info", O_RDONLY);
-    if(fd < 0)
-	{
-	    ALOGE("hwc_change_config:open fb0 screen_info error,fd=%d",fd);
-        return;
-	}
-	if(read(fd,buf,sizeof(buf)) < 0)
-    {
-        ALOGE("error reading fb0 screen_info: %s", strerror(errno));
-        return;
+    if(context->mLcdcNum == 2){
+        char buf[100];
+        int width = 0;
+        int height = 0;
+        int fd = -1;
+        fd = open("/sys/class/graphics/fb0/screen_info", O_RDONLY);
+        if(fd < 0)
+    	{
+    	    ALOGE("hwc_change_config:open fb0 screen_info error,fd=%d",fd);
+            return;
+    	}
+    	if(read(fd,buf,sizeof(buf)) < 0)
+        {
+            ALOGE("error reading fb0 screen_info: %s", strerror(errno));
+            return;
+        }
+        close(fd);
+    	sscanf(buf,"xres:%d yres:%d",&width,&height);
+        ALOGD("hwc_change_config:width=%d,height=%d",width,height);
+    	context->dpyAttr[HWC_DISPLAY_PRIMARY].relxres = width;
+        context->dpyAttr[HWC_DISPLAY_PRIMARY].relyres = height;
     }
-    close(fd);
-	sscanf(buf,"xres:%d yres:%d",&width,&height);
-    ALOGD("hwc_change_config:width=%d,height=%d",width,height);
-	context->dpyAttr[HWC_DISPLAY_PRIMARY].relxres = width;
-    context->dpyAttr[HWC_DISPLAY_PRIMARY].relyres = height;
 #endif
     return;
 }
@@ -7023,26 +7091,32 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
         return;
     }
     bool isNeedRemove = true;
-#if (defined(GPU_G6110) || defined(RK3288_BOX)) && !BOX_USE_TWO_VOP
-    if(!context->mIsBootanimExit){
-        if(hdmi_mode){
-            if(6 == flag){
-                context->mHdmiSI.HdmiOn = true;
-                context->mHdmiSI.CvbsOn = false;
-            }else if(1 == flag){
-                context->mHdmiSI.CvbsOn = true;
-                context->mHdmiSI.HdmiOn = false;
+#if (defined(GPU_G6110) || defined(RK3288_BOX))
+#ifdef RK3288_BOX
+    if(context->mLcdcNum == 1){
+#endif
+        if(!context->mIsBootanimExit){
+            if(hdmi_mode){
+                if(6 == flag){
+                    context->mHdmiSI.HdmiOn = true;
+                    context->mHdmiSI.CvbsOn = false;
+                }else if(1 == flag){
+                    context->mHdmiSI.CvbsOn = true;
+                    context->mHdmiSI.HdmiOn = false;
+                }
+                hotplug_free_dimbuffer();
+                hotplug_get_config(1);
+                hotplug_set_config();
             }
-            hotplug_free_dimbuffer();
-            hotplug_get_config(1);
-            hotplug_set_config();
+            return;
         }
-        return;
+        if(context->mIsFirstCallbackToHotplug){
+            isNeedRemove = false;
+            context->mIsFirstCallbackToHotplug = false;
+        }
+#ifdef RK3288_BOX
     }
-    if(context->mIsFirstCallbackToHotplug){
-        isNeedRemove = false;
-        context->mIsFirstCallbackToHotplug = false;
-    }
+#endif
 #endif
     if(isNeedRemove && (context->mHdmiSI.CvbsOn || context->mHdmiSI.HdmiOn)){
         int count = 0;
@@ -7066,13 +7140,17 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
         if(_contextAnchor1){
             _contextAnchor1->fb_blanked = 1;
         }
-#if (defined(RK3288_MID) || BOX_USE_TWO_VOP)
-        hotplug_set_frame(context,0);
+#if (defined(RK3288_MID) || defined(RK3288_BOX))
+        if(context->mLcdcNum == 2){
+            hotplug_set_frame(context,0);
+        }
 #endif
         context->dpyAttr[HWC_DISPLAY_EXTERNAL].connected = false;
         context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 0);
 #if (defined(GPU_G6110) || defined(RK3288_BOX))
+    if(context->mLcdcNum == 1){
         hotplug_set_overscan(1);
+    }
 #endif
         ALOGI("remove hotplug device [%d,%d,%d]",__LINE__,hdmi_mode,flag);
     }
@@ -7087,8 +7165,10 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
             context->mHdmiSI.CvbsOn = true;
             context->mHdmiSI.HdmiOn = false;
         }
-#if (defined(RK3288_MID) || BOX_USE_TWO_VOP)
-        hotplug_set_frame(context,0);
+#if (defined(RK3288_MID) || defined(RK3288_BOX))
+        if(context->mLcdcNum == 2){
+            hotplug_set_frame(context,0);
+        }
 #endif
         char value[PROPERTY_VALUE_MAX];
         property_set("sys.hwc.htg","hotplug");
@@ -7106,7 +7186,9 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
         }
         ALOGI("connet to hotplug device [%d,%d,%d]",__LINE__,hdmi_mode,flag);
 #if (defined(GPU_G6110) || defined(RK3288_BOX))
+    if(context->mLcdcNum == 1){
         hotplug_set_overscan(0);
+    }
 #endif
     }
 
@@ -7499,8 +7581,12 @@ hwc_device_open(
     {
          hwcONERROR(hwcSTATUS_IO_ERR);
     }
-#if (defined(GPU_G6110) || defined(RK3288_BOX)) && !BOX_USE_TWO_VOP
-    context->screenFd = open("/sys/class/graphics/fb0/screen_info", O_RDONLY);
+#if (defined(GPU_G6110) || defined(RK3288_BOX))
+    if(context->mLcdcNum == 1){
+        context->screenFd = open("/sys/class/graphics/fb0/screen_info", O_RDONLY);
+    }else{
+        context->screenFd = -1;
+    }
 #else
     context->screenFd = -1;
 #endif
@@ -7701,11 +7787,44 @@ hwc_device_open(
     context->fbSize = info.xres*info.yres*4*3;
     context->lcdSize = info.xres*info.yres*4; 
 
+    mUsedVopNum = 1;
+    context->mLcdcNum = 1;
     context->mHdmiSI.HdmiOn = false;
     context->mHdmiSI.NeedReDst = false;
     context->mHdmiSI.vh_flag = false;
     context->mIsBootanimExit = false;
     context->mIsFirstCallbackToHotplug = false;
+
+#ifdef RK3288_BOX
+    {
+        int fd = -1;
+        int ret = -1;
+        char name[64];
+        char value[10];
+        const char node[] = "/sys/class/graphics/fb%u/lcdcid";
+        for(unsigned int i = 0;i < 8 && context->mLcdcNum == 1;i++){
+            snprintf(name, 64, node, i);
+            fd = open(name,O_RDONLY,0);
+            if(fd > 0){
+                ret = read(fd,value,sizeof(value));
+                if(ret < 0){
+                    ALOGW("Get fb%d lcdcid fail:%s",i,strerror(errno));
+                }else{
+                    if(atoi(value)==1){
+                        context->mLcdcNum = 2;
+                        ALOGI("Get fb%d lcdcid=%d",i,atoi(value));
+                    }
+                }
+                close(fd);
+            }else{
+                ALOGW("Open fb%d lcdcid fail:%s",i,strerror(errno));
+            }
+        }
+    }
+    if(context->mLcdcNum == 2){
+        mUsedVopNum = 2;
+    }
+#endif
 
     err = hw_get_module(GRALLOC_HARDWARE_MODULE_ID, &module_gr);
     ALOGE_IF(err, "FATAL: can't find the %s module", GRALLOC_HARDWARE_MODULE_ID);
@@ -7911,8 +8030,10 @@ hwc_device_open(
         LOGD("Create hotplug_try_register thread error .");
     }
 #endif
-#ifdef BOX_USE_TWO_VOP
-    hwc_change_config();
+#ifdef RK3288_BOX
+    if(context->mLcdcNum == 2){
+        hwc_change_config();
+    }
 #endif
     return 0;
 
@@ -8001,37 +8122,54 @@ int hwc_read_node(const char *intValue,char *outValue,int flag)
 
 void init_hdmi_mode()
 {
-#if BOX_USE_TWO_VOP
-    int index = -1;
-    int connect = -1;
-    char outputValue[100];
-    char inputValue[100] = "/sys/devices/virtual/display/HDMI/connect";
-    connect = hwc_read_node(inputValue,outputValue,0);
-    if(connect >= 0){
-        memset(inputValue, 0, sizeof(inputValue));
-        strcpy(inputValue,"/sys/devices/virtual/display/HDMI/property");
-        index = hwc_read_node(inputValue,outputValue,0);
-        ALOGD("%d,index=%d,connect=%d,hdmi=%d",__LINE__,index,connect,g_hdmi_mode);
-        if(index == 1 && connect == 1){
-            g_hdmi_mode = 1;
-        }else if(index == 1){
-            g_hdmi_mode = 0;
+#ifdef RK3288_BOX
+    if(_contextAnchor->mLcdcNum == 2){
+        int index = -1;
+        int connect = -1;
+        char outputValue[100];
+        char inputValue[100] = "/sys/devices/virtual/display/HDMI/connect";
+        connect = hwc_read_node(inputValue,outputValue,0);
+        if(connect >= 0){
+            memset(inputValue, 0, sizeof(inputValue));
+            strcpy(inputValue,"/sys/devices/virtual/display/HDMI/property");
+            index = hwc_read_node(inputValue,outputValue,0);
+            ALOGD("%d,index=%d,connect=%d,hdmi=%d",__LINE__,index,connect,g_hdmi_mode);
+            if(index == 1 && connect == 1){
+                g_hdmi_mode = 1;
+            }else if(index == 1){
+                g_hdmi_mode = 0;
+            }
         }
-    }
-    index = -1;
-    connect = -1;
-    memset(inputValue, 0, sizeof(inputValue));
-    strcpy(inputValue,"/sys/devices/virtual/display/HDMI1/connect");
-    connect = hwc_read_node(inputValue,outputValue,0);
-    if(connect >= 0){
+        index = -1;
+        connect = -1;
         memset(inputValue, 0, sizeof(inputValue));
-        strcpy(inputValue,"/sys/devices/virtual/display/HDMI1/property");
-        index = hwc_read_node(inputValue,outputValue,0);
-        ALOGD("%d,index=%d,connect=%d,hdmi=%d",__LINE__,index,connect,g_hdmi_mode);
-        if(index == 1 && connect == 1){
-            g_hdmi_mode = 1;
-        }else if(index == 1){
-            g_hdmi_mode = 0;
+        strcpy(inputValue,"/sys/devices/virtual/display/HDMI1/connect");
+        connect = hwc_read_node(inputValue,outputValue,0);
+        if(connect >= 0){
+            memset(inputValue, 0, sizeof(inputValue));
+            strcpy(inputValue,"/sys/devices/virtual/display/HDMI1/property");
+            index = hwc_read_node(inputValue,outputValue,0);
+            ALOGD("%d,index=%d,connect=%d,hdmi=%d",__LINE__,index,connect,g_hdmi_mode);
+            if(index == 1 && connect == 1){
+                g_hdmi_mode = 1;
+            }else if(index == 1){
+                g_hdmi_mode = 0;
+            }
+        }
+    }else {
+        int fd = open("/sys/devices/virtual/switch/hdmi/state", O_RDONLY);	
+        if (fd > 0){
+            char statebuf[100];
+            memset(statebuf, 0, sizeof(statebuf));
+            int err = read(fd, statebuf, sizeof(statebuf));
+            if (err < 0){
+                ALOGE("error reading vsync timestamp: %s", strerror(errno));
+                return;
+            }
+            close(fd);
+            g_hdmi_mode = atoi(statebuf);
+        }else{
+            LOGE("Open hdmi mode error.");
         }
     }
 #else
@@ -8117,12 +8255,28 @@ int hotplug_get_config(int flag){
 	info.grayscale = 0;
 	info.grayscale |= info.xres<< 8;
 	info.grayscale |= info.yres<<20;
-#if (defined(GPU_G6110) || defined(RK3288_BOX)) && !BOX_USE_TWO_VOP
+#if (defined(GPU_G6110) || defined(RK3288_BOX))
+#ifdef RK3288_BOX
+    if(_contextAnchor->mLcdcNum == 1){
+        if(_contextAnchor->fbFd > 0){
+            fd  =  _contextAnchor->fbFd;
+        }else{
+            fd  =  open("/dev/graphics/fb0", O_RDWR, 0);
+        }
+    }else{
+    	if(context->fbFd > 0){
+    	    fd  =  context->fbFd;
+        }else{
+            fd  =  open("/dev/graphics/fb4", O_RDWR, 0);
+        }
+    }
+#else
     if(_contextAnchor->fbFd > 0){
         fd  =  _contextAnchor->fbFd;
     }else{
         fd  =  open("/dev/graphics/fb0", O_RDWR, 0);
     }
+#endif
 #else
 	if(context->fbFd > 0){
 	    fd  =  context->fbFd;
@@ -8134,13 +8288,19 @@ int hotplug_get_config(int flag){
 	    ALOGE("hotplug_get_config:open /dev/graphics/fb4 fail");
         return -errno;
 	}
-#if !(defined(GPU_G6110) || defined(RK3288_BOX)) || BOX_USE_TWO_VOP
-	if (ioctl(fd, FBIOPUT_VSCREENINFO, &info) == -1){
-	    ALOGE("hotplug_get_config:FBIOPUT_VSCREENINFO error,hdmifd=%d",fd);
-        return -errno;
-	}
+#ifndef GPU_G6110
+#ifdef RK3288_BOX
+    if(_contextAnchor->mLcdcNum == 2){
+        info.reserved[3] |= 1;
 #endif
-
+    	if (ioctl(fd, FBIOPUT_VSCREENINFO, &info)){
+    	    ALOGE("hotplug_get_config:FBIOPUT_VSCREENINFO error,hdmifd=%d",fd);
+            return -errno;
+    	}
+#ifdef RK3288_BOX
+    }
+#endif
+#endif
     context->fd_3d = _contextAnchor->fd_3d;
     if(context->fd_3d<=0){
         context->fd_3d = open("/sys/class/display/HDMI/3dmode", O_RDWR, 0);
@@ -8156,8 +8316,12 @@ int hotplug_get_config(int flag){
         int width = 0;
         int height = 0;
         int fdExternal = -1;
-#if BOX_USE_TWO_VOP
-        fdExternal = open("/sys/class/graphics/fb4/screen_info", O_RDONLY);
+#ifdef RK3288_BOX
+        if(_contextAnchor->mLcdcNum == 2){
+            fdExternal = open("/sys/class/graphics/fb4/screen_info", O_RDONLY);
+        }else{
+            fdExternal = open("/sys/class/graphics/fb0/screen_info", O_RDONLY);
+        }
 #else
         fdExternal = open("/sys/class/graphics/fb0/screen_info", O_RDONLY);
 #endif
@@ -8321,8 +8485,13 @@ int hotplug_get_config(int flag){
     context->fun_policy[HWC_RGA_TRSM_VOP] = try_wins_dispatch_mix_down;
     context->fun_policy[HWC_RGA_TRSM_GPU_VOP] = try_wins_dispatch_mix_vh;
     _contextAnchor1 = context;
-#if (defined(RK3288_MID) || BOX_USE_TWO_VOP)
-    hotplug_set_frame(_contextAnchor,0);
+#ifndef GPU_G6110
+#ifdef RK3288_BOX
+    if(_contextAnchor->mLcdcNum == 2)
+#endif
+    {
+        hotplug_set_frame(_contextAnchor,0);
+    }
 #endif
 
     return 1;
@@ -8523,10 +8692,15 @@ void *hotplug_try_register(void *arg)
     HWC_UNREFERENCED_PARAMETER(arg);
     hwcContext * context = _contextAnchor;
     int count = 0;
-#if !(defined(RK3368_BOX) || defined(RK3288_BOX)) || BOX_USE_TWO_VOP
-    if(getHdmiMode() == 1){
-        hotplug_free_dimbuffer();
-        hotplug_get_config(0);
+#ifndef RK3368_BOX
+#if RK3288_BOX
+    if(context->mLcdcNum == 2)
+#endif
+    {
+        if(getHdmiMode() == 1){
+            hotplug_free_dimbuffer();
+            hotplug_get_config(0);
+        }
     }
 #endif
     while(context->fb_blanked){
@@ -8541,12 +8715,24 @@ void *hotplug_try_register(void *arg)
         handle_hotplug_event(1, 6);
 		ALOGI("hotplug_try_register at line = %d",__LINE__);
     }else{
-#if (defined(RK3368_BOX) || defined(RK3288_BOX)) && !BOX_USE_TWO_VOP
+#if (defined(RK3368_BOX) || defined(RK3288_BOX))
+#if RK3288_BOX
+        if(context->mLcdcNum == 1){
+            handle_hotplug_event(1, 1);
+            ALOGI("hotplug_try_register at line = %d",__LINE__);
+        }
+#else
         handle_hotplug_event(1, 1);
         ALOGI("hotplug_try_register at line = %d",__LINE__);
 #endif
+#endif
     }
-#if (defined(GPU_G6110) || defined(RK3288_BOX)) && !BOX_USE_TWO_VOP
+#if (defined(GPU_G6110) || defined(RK3288_BOX))
+#if RK3288_BOX
+    if(context->mLcdcNum == 2){
+        goto READY;
+    }
+#endif
     while(!context->mIsBootanimExit){
         int i = 0;
         char value[PROPERTY_VALUE_MAX];
@@ -8569,43 +8755,58 @@ void *hotplug_try_register(void *arg)
 #endif
     }
 #endif
+
+READY:
     pthread_exit(NULL);
     return NULL;
 }
 
 int hotplug_set_overscan(int flag)
 {
-    char new_value[PROPERTY_VALUE_MAX];
-    
+    char new_valuep[PROPERTY_VALUE_MAX];
+    char new_valuee[PROPERTY_VALUE_MAX];
+
     switch(flag){
     case 0:
-        property_get("persist.sys.overscan.main", new_value, "false");
+        property_get("persist.sys.overscan.main", new_valuep, "false");
+        property_get("persist.sys.overscan.aux",  new_valuee, "false");
         break;
-        
+
     case 1:
-        strcpy(new_value,"overscan 100,100,100,100");
+        strcpy(new_valuep,"overscan 100,100,100,100");
+        strcpy(new_valuee,"overscan 100,100,100,100");
         break;
 
     default:
         break;
     }
-        
-    int fd = open("/sys/class/graphics/fb0/scale",O_RDWR);
-    if(fd == -1)
-    {
-        //ALOGE("open /sys/class/graphics/fb0/scale fail");
-        return -1;
+
+    int fdp = open("/sys/class/graphics/fb0/scale",O_RDWR);
+    if(fdp > 0){
+        int ret = write(fdp,new_valuep,sizeof(new_valuep));
+        if(ret != sizeof(new_valuep)){
+            ALOGE("write /sys/class/graphics/fb0/scale fail");
+            close(fdp);
+            return -1;
+        }
+        ALOGV("new_valuep=[%s]",new_valuep);
+        close(fdp);
     }
-    
-    int ret = write(fd,new_value,sizeof(new_value));
-    if(ret != sizeof(new_value))
-    {
-        ALOGE("write /sys/class/graphics/fb0/scale fail");
-        close(fd);
-        return -1;
+#ifdef RK3288_BOX
+    if(_contextAnchor->mLcdcNum == 2){
+        int fde = open("/sys/class/graphics/fb4/scale",O_RDWR);
+        if(fde > 0){
+            int ret = write(fde,new_valuee,sizeof(new_valuee));
+            if(ret != sizeof(new_valuee)){
+                ALOGE("write /sys/class/graphics/fb4/scale fail");
+                close(fde);
+                return -1;
+            }
+            ALOGV("new_valuep=[%s]",new_valuee);
+            close(fde);
+        }
     }
-    ALOGV("new_value=[%s]",new_value);     
-    close(fd);
+#endif
     return 0;
 }
 
@@ -8948,6 +9149,11 @@ int hwc_repet_last()
 #if ONLY_USE_ONE_VOP
     int ret = 0;
     hwcContext * context = _contextAnchor;
+#ifdef RK3288_BOX
+    if(context->mLcdcNum == 2){
+        return 0;
+    }
+#endif
     struct rk_fb_win_cfg_data fb_info;
     memcpy(&fb_info,&context->fb_info,sizeof(rk_fb_win_cfg_data));
     fb_info.ret_fence_fd = -1;
@@ -8977,6 +9183,12 @@ int hwc_repet_last()
 
 bool hwcPrimaryToExternalCheckConfig(hwcContext * ctx,struct rk_fb_win_cfg_data fb_info)
 {
+    hwcContext * context = _contextAnchor;
+#ifdef RK3288_BOX
+    if(context->mLcdcNum == 2){
+        return true;
+    }
+#endif
     if(ctx != _contextAnchor){
         return true;
     }
@@ -8990,7 +9202,6 @@ bool hwcPrimaryToExternalCheckConfig(hwcContext * ctx,struct rk_fb_win_cfg_data 
 
     bool ret = true;
     bool isSameResolution = false;
-    hwcContext * context = _contextAnchor;
     bool isLargeHdmi = context->mHdmiSI.NeedReDst;
     int widthPrimary  = context->dpyAttr[HWCP].xres;
     int heightPrimary = context->dpyAttr[HWCP].yres;

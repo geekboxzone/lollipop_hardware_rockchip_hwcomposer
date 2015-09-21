@@ -69,12 +69,7 @@
 #ifdef RK3288_MID
 #define ONLY_USE_ONE_VOP                0
 #else
-#ifdef RK3288_BOX_USE_TWO_VOP
-#define BOX_USE_TWO_VOP                 1           //1:3288 BOX use two vop,
-#define ONLY_USE_ONE_VOP                0           //1:use one vop,rk3288 box depend on BOX_USE_TWO_VOP
-#else
 #define ONLY_USE_ONE_VOP                1           //1:use one vop,rk3288 box depend on BOX_USE_TWO_VOP
-#endif
 #endif
 //Command macro
 #define FB1_IOCTL_SET_YUV_ADDR	        0x5002
@@ -119,8 +114,8 @@
 #define HWCE                            1           //HWC_DISPLAY_EXTERNAL
 #define HWCV                            2           //HWC_DISPLAY_VIRTUAL
 
-#define GHWC_VERSION                    "2.058"
-#define HWC_VERSION                     "HWC_VERSION Author:wzq Version:2.058"
+#define GHWC_VERSION                    "2.059"
+#define HWC_VERSION                     "HWC_VERSION Author:wzq Version:2.059"
 
 #ifdef GPU_G6110
 #if G6110_SUPPORT_FBDC
@@ -583,6 +578,7 @@ typedef struct _hwcContext
      int       mtrsformcnt;
 
      /*dual display */
+     int       mLcdcNum;
      bool      mIsFirstCallbackToHotplug;
      bool      mIsBootanimExit;
      bool      mResolutionChanged;
@@ -598,7 +594,7 @@ typedef struct _hwcContext
      /*rrg tramsform*/
      RgaTBI   mRgaTBI;
      bool     mNeedRgaTransform;
-     
+
 #if SPRITEOPTIMATION
      /*sprite*/
      bufferInfo mSrBI;

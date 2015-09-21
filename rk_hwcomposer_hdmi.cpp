@@ -24,16 +24,18 @@
 #include <hardware_legacy/uevent.h>
 
 int         g_hdmi_mode;
-void rk_parse_uevent_buf(const char *buf,int* type,int* flag,int len)
+int         mUsedVopNum;
+void rk_parse_uevent_buf(const char *buf,int* type,int* flag,int* fbx, int len)
 {
 	const char *str = buf;
-	while(*str)
-	{
+	while(*str){
 		sscanf(str,"SCREEN=%d,ENABLE=%d",type,flag);
+		sscanf(str,"FBDEV=%d",fbx);
 		//ALOGI("SCREEN=%d ENABLE=%d,",*type,*flag);
         str += strlen(str) + 1;
-        if (str - buf >= len)
+        if (str - buf >= len){
             break;
+        }
 	    //ALOGI("line %d,buf[%s]",__LINE__,str);
     }
 }
@@ -88,32 +90,44 @@ void rk_check_hdmi_state()
 		}
     }
 #else
-#ifdef RK3288_BOX_USE_TWO_VOP
-    if(strstr(buf, "change@/devices/lcdc0") != NULL){
-        ALOGI("line %d,buf[%s]",__LINE__,buf);
-        int type=0;
-        int flag=0;
-        rk_parse_uevent_buf(buf,&type,&flag,len);
-        if(flag){
-            hwc_change_config();
+#ifdef RK3288_BOX
+    if(mUsedVopNum == 1){
+        if(strstr(buf, "change@/devices/lcdc") != NULL){
+            int fbx  = 0;
+            int type = 0;
+            int flag = 0;
+            rk_check_hdmi_state();
+            rk_parse_uevent_buf(buf,&type,&flag,&fbx,len);
+            handle_hotplug_event(flag,type);
+            ALOGI("uevent receive!hdmistate=%d,type=%d,flag=%d,line=%d",g_hdmi_mode,type,flag,__LINE__);
         }
-    }
-    if(strstr(buf, "change@/devices/lcdc1") != NULL){
-        ALOGI("line %d,buf[%s]",__LINE__,buf);
-        int type=0;
-        int flag=0;
-        hdmi_noready = true;
-        rk_parse_uevent_buf(buf,&type,&flag,len);
-        g_hdmi_mode = flag;
-        handle_hotplug_event(flag,type);
-        ALOGI("uevent receive!hdmistate=%d,type=%d,flag=%d,line=%d",g_hdmi_mode,type,flag,__LINE__);
+    }else{
+        if(strstr(buf, "change@/devices/lcdc") != NULL){
+            ALOGI("line %d,buf[%s]",__LINE__,buf);
+            int fbx  = 0;
+            int type = 0;
+            int flag = 0;
+            hdmi_noready = true;
+            rk_parse_uevent_buf(buf,&type,&flag,&fbx,len);
+            if(fbx == 0){
+                if(flag){
+                    hwc_change_config();
+                }
+            }else{
+                g_hdmi_mode = flag;
+                handle_hotplug_event(flag,type);
+            }
+            ALOGI("fbx=%d",fbx);
+            ALOGI("uevent receive!hdmistate=%d,type=%d,flag=%d,line=%d",g_hdmi_mode,type,flag,__LINE__);
+        }
     }
 #else
     if(strstr(buf, "change@/devices/lcdc") != NULL){
-        int type=0;
-        int flag=0;
+        int fbx  = 0;
+        int type = 0;
+        int flag = 0;
         rk_check_hdmi_state();
-        rk_parse_uevent_buf(buf,&type,&flag,len);
+        rk_parse_uevent_buf(buf,&type,&flag,&fbx,len);
         handle_hotplug_event(flag,type);
         ALOGI("uevent receive!hdmistate=%d,type=%d,flag=%d,line=%d",g_hdmi_mode,type,flag,__LINE__);
 	}
