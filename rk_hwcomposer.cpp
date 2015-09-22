@@ -523,12 +523,12 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
     }
     int size = hwcGetBufferSizeForRga(DstActW,DstActH,Dstfmt) ;
     if(size > RLAGESIZE){
-        ALOGD_IF(mLogL&HWC_LOG_LEVEL_SEV,"now size=%d,largesize=%d,w_h_f[%d,%d,%d]",size,RLAGESIZE,DstActW,DstActH,Dstfmt);
+        ALOGD_IF(mLogL&HLLSEV,"now size=%d,largesize=%d,w_h_f[%d,%d,%d]",size,RLAGESIZE,DstActW,DstActH,Dstfmt);
         return -1;
     }
-    ALOGD_IF(mLogL&HWC_LOG_LEVEL_SEV,"src addr=[%x],w-h[%d,%d],act[%d,%d][f=%d]",
+    ALOGD_IF(mLogL&HLLSEV,"src addr=[%x],w-h[%d,%d],act[%d,%d][f=%d]",
         specialwin ? handle->share_fd:handle->video_addr, SrcVirW, SrcVirH,SrcActW,SrcActH,specialwin ?  hwChangeRgaFormat(handle->format):RK_FORMAT_YCbCr_420_SP);
-    ALOGD_IF(mLogL&HWC_LOG_LEVEL_SEV,"dst fd=[%x],w-h[%d,%d],act[%d,%d][f=%d],rot=%d,rot_mod=%d",
+    ALOGD_IF(mLogL&HLLSEV,"dst fd=[%x],w-h[%d,%d],act[%d,%d][f=%d],rot=%d,rot_mod=%d",
         fd_dst, DstVirW, DstVirH,DstActW,DstActH,Dstfmt,Rotation,RotateMode);
     if(specialwin)  
         RGA_set_src_vir_info(&Rga_Request, handle->share_fd, 0, 0,SrcVirW, SrcVirH, hwChangeRgaFormat(handle->format), 0);    
@@ -558,7 +558,7 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
         else
         {
             RGA_set_dst_vir_info(&Rga_Request, fd_dst,context->base_video_bk[index_v], 0,DstVirW,DstVirH,&clip, Dstfmt, 0);
-            ALOGD_IF(mLogL&HWC_LOG_LEVEL_SEV,"rga_video_copybit fd_dst=%d,base=%x,index_v=%d",fd_dst,context->base_video_bk[index_v],index_v);
+            ALOGD_IF(mLogL&HLLSEV,"rga_video_copybit fd_dst=%d,base=%x,index_v=%d",fd_dst,context->base_video_bk[index_v],index_v);
         }
         RGA_set_mmu_info(&Rga_Request, 1, 0, 0, 0, 0, 2);
         Rga_Request.mmu_info.mmu_flag |= (1<<31) | (1<<10) | (1<<8);
@@ -756,11 +756,11 @@ bool is_gpu_or_nodraw(hwc_display_contents_1_t *list,int dpyID)
             hwc_layer_1_t * layer = &list->hwLayers[i];
             layer->compositionType = HWC_NODRAW;
         }
-        ALOGD_IF(mLogL&HWC_LOG_LEVEL_SIX,"Primary nodraw %s,%d",__FUNCTION__,__LINE__);
+        ALOGD_IF(mLogL&HLLSIX,"Primary nodraw %s,%d",__FUNCTION__,__LINE__);
         return true;
     }
     if(hdmi_noready && dpyID == HWCE){
-        ALOGD_IF(mLogL&HWC_LOG_LEVEL_SIX,"Hotplug nodraw %s,%d",__FUNCTION__,__LINE__);
+        ALOGD_IF(mLogL&HLLSIX,"Hotplug nodraw %s,%d",__FUNCTION__,__LINE__);
         return true;
     }
 #endif
@@ -862,7 +862,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
         }
         if(hfactor >= 8.0 || vfactor >= 8.0 || hfactor <= 0.125 || vfactor <= 0.125  ){
             Context->zone_manager.zone_info[j].scale_err = true;
-            ALOGD_IF(mLogL&HWC_LOG_LEVEL_SIX,"stretch[%f,%f]not support!",hfactor,vfactor);
+            ALOGD_IF(mLogL&HLLSIX,"stretch[%f,%f]not support!",hfactor,vfactor);
         } 
         is_stretch = (hfactor != 1.0) || (vfactor != 1.0);
         if(Context == _contextAnchor1){
@@ -1267,7 +1267,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
     // query ddr is enough ,if dont enough back to gpu composer
     ALOGV("tsize=%dMB,Context->ddrFd=%d,RK_QUEDDR_FREQ",tsize,Context->ddrFd);
     for(i=0;i<j;i++){
-        ALOGD_IF(mLogL&HWC_LOG_LEVEL_ONE,"Zone[%d]->layer[%d],"
+        ALOGD_IF(mLogL&HLLONE,"Zone[%d]->layer[%d],"
             "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
             "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],acq_fence_fd=%d,"
             "layname=%s",
@@ -1422,7 +1422,7 @@ int try_wins_dispatch_hor(void * ctx,hwc_display_contents_1_t * list)
     }
     if(sort >4)  // lcdc dont support 5 wins
     {
-        ALOGD_IF(mLogL&HWC_LOG_LEVEL_THR,"try %s lcdc<5wins sort=%d,%d",__FUNCTION__,sort,__LINE__);
+        ALOGD_IF(mLogL&HLLTHR,"try %s lcdc<5wins sort=%d,%d",__FUNCTION__,sort,__LINE__);
         return -1;
     }    
 	//pzone_mag->zone_info[i].sort: win type
@@ -1487,7 +1487,7 @@ int try_wins_dispatch_hor(void * ctx,hwc_display_contents_1_t * list)
             j++;
             if(j > 2)  // lcdc only has win2 and win3 supprot more zones
             {
-                ALOGD_IF(mLogL&HWC_LOG_LEVEL_FOU,"lcdc only has win2 and win3 supprot more zones");
+                ALOGD_IF(mLogL&HLLFOU,"lcdc only has win2 and win3 supprot more zones");
                 return -1;  
             }
         }
@@ -1504,7 +1504,7 @@ int try_wins_dispatch_hor(void * ctx,hwc_display_contents_1_t * list)
             j++;
             if(j > 2)  // lcdc only has win2 and win3 supprot more zones
             {
-                ALOGD_IF(mLogL&HWC_LOG_LEVEL_FOU,"lcdc only has win0 and win1 supprot stretch");
+                ALOGD_IF(mLogL&HLLFOU,"lcdc only has win0 and win1 supprot stretch");
                 return -1;  
             }
         }
@@ -1549,7 +1549,7 @@ int try_wins_dispatch_hor(void * ctx,hwc_display_contents_1_t * list)
                 ALOGE("try_wins_dispatch_hor sort err!");
                 return -1;
         }
-        ALOGD_IF(mLogL&HWC_LOG_LEVEL_FIV,"zone[%d].dispatched[%d]=%s,sort=%d", \
+        ALOGD_IF(mLogL&HLLFIV,"zone[%d].dispatched[%d]=%s,sort=%d", \
         i,pzone_mag->zone_info[i].dispatched,
         compositionTypeName[pzone_mag->zone_info[i].dispatched -1],
         pzone_mag->zone_info[i].sort);
@@ -1576,7 +1576,7 @@ int try_wins_dispatch_hor(void * ctx,hwc_display_contents_1_t * list)
         {
             int area_no = 0;
             int win_id = 0;
-            ALOGD_IF(mLogL&HWC_LOG_LEVEL_FIV,"Zone[%d]->layer[%d],dispatched=%d,"
+            ALOGD_IF(mLogL&HLLFIV,"Zone[%d]->layer[%d],dispatched=%d,"
             "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
             "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],"
             "layer_fd[%d],addr=%x,acq_fence_fd=%d"
@@ -1649,12 +1649,12 @@ int try_wins_dispatch_hor(void * ctx,hwc_display_contents_1_t * list)
         bpvinfo.bp_vop_size = Context->zone_manager.bp_size;    
         for(i= 0;i<4;i++)
         {
-            ALOGD_IF(mLogL&HWC_LOG_LEVEL_FIV,"RK_QUEDDR_FREQ info win[%d] bo_size=%dMB,bp_vop_size=%dMB,state=%d,num=%d",
+            ALOGD_IF(mLogL&HLLFIV,"RK_QUEDDR_FREQ info win[%d] bo_size=%dMB,bp_vop_size=%dMB,state=%d,num=%d",
                 i,bpvinfo.bp_size,bpvinfo.bp_vop_size,bpvinfo.vopinfo[i].state,bpvinfo.vopinfo[i].zone_num);
         }    
         if(ioctl(Context->ddrFd, RK_QUEDDR_FREQ, &bpvinfo))
         {
-            if(mLogL&HWC_LOG_LEVEL_THR)
+            if(mLogL&HLLTHR)
             {
                 for(i= 0;i<4;i++)
                 {
@@ -1668,7 +1668,7 @@ int try_wins_dispatch_hor(void * ctx,hwc_display_contents_1_t * list)
 #endif    
     if((large_cnt + bw ) > 5 )
     {
-        ALOGD_IF(mLogL&HWC_LOG_LEVEL_THR,"data too large ,lcdc not support");
+        ALOGD_IF(mLogL&HLLTHR,"data too large ,lcdc not support");
         return -1;
     }
     memcpy(&Context->zone_manager,&zone_m,sizeof(ZoneManager));
@@ -1802,7 +1802,7 @@ int try_wins_dispatch_mix_up(void * ctx,hwc_display_contents_1_t * list)
     pzone_mag->zone_cnt -= cntfb;
     for(i=0;i< pzone_mag->zone_cnt;i++)
     {
-        ALOGD_IF(mLogL&HWC_LOG_LEVEL_FIV,"Zone[%d]->layer[%d],"
+        ALOGD_IF(mLogL&HLLFIV,"Zone[%d]->layer[%d],"
             "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
             "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],acq_fence_fd=%d,"
             "layname=%s",                        
@@ -1869,7 +1869,7 @@ int try_wins_dispatch_mix_up(void * ctx,hwc_display_contents_1_t * list)
     }
     if(sort >3)  // lcdc dont support 5 wins
     {
-        ALOGD_IF(mLogL&HWC_LOG_LEVEL_THR,"lcdc dont support 5 wins sort=%d",sort);
+        ALOGD_IF(mLogL&HLLTHR,"lcdc dont support 5 wins sort=%d",sort);
         return -1;
     }    
     for(i=0;i<pzone_mag->zone_cnt;i++)
@@ -1936,7 +1936,7 @@ int try_wins_dispatch_mix_up(void * ctx,hwc_display_contents_1_t * list)
             j++;
             if(j > 2)  // lcdc only has win0 and win1 supprot stretch
             {
-                ALOGD_IF(mLogL&HWC_LOG_LEVEL_FIV,"lcdc only has win0 and win1 supprot stretch");
+                ALOGD_IF(mLogL&HLLFIV,"lcdc only has win0 and win1 supprot stretch");
                 return -1;  
             }
         }
@@ -2011,7 +2011,7 @@ int try_wins_dispatch_mix_up(void * ctx,hwc_display_contents_1_t * list)
         {
             int area_no = 0;
             int win_id = 0;
-            ALOGD_IF(mLogL&HWC_LOG_LEVEL_FIV,"Zone[%d]->layer[%d],dispatched=%d,"
+            ALOGD_IF(mLogL&HLLFIV,"Zone[%d]->layer[%d],dispatched=%d,"
             "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
             "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],"
             "layer_fd[%d],addr=%x,acq_fence_fd=%d"
@@ -2074,12 +2074,12 @@ int try_wins_dispatch_mix_up(void * ctx,hwc_display_contents_1_t * list)
         bpvinfo.bp_vop_size = tsize ;  
         for(i= 0;i<4;i++)
         {
-            ALOGD_IF(mLogL&HWC_LOG_LEVEL_THR,"RK_QUEDDR_FREQ mixinfo win[%d] bo_size=%dMB,bp_vop_size=%dMB,state=%d,num=%d",
+            ALOGD_IF(mLogL&HLLTHR,"RK_QUEDDR_FREQ mixinfo win[%d] bo_size=%dMB,bp_vop_size=%dMB,state=%d,num=%d",
                 i,bpvinfo.bp_size,bpvinfo.bp_vop_size,bpvinfo.vopinfo[i].state,bpvinfo.vopinfo[i].zone_num);
         }    
         if(ioctl(Context->ddrFd, RK_QUEDDR_FREQ, &bpvinfo))
         {
-            if(mLogL&HWC_LOG_LEVEL_THR)
+            if(mLogL&HLLTHR)
             {
                 for(i= 0;i<4;i++)
                 {
@@ -2193,7 +2193,7 @@ int try_wins_dispatch_mix_down(void * ctx,hwc_display_contents_1_t * list)
             if(pzone_mag->zone_info[i].format == HAL_PIXEL_FORMAT_YCrCb_NV12)
             {
 
-                ALOGD_IF(mLogL&HWC_LOG_LEVEL_THR,"Donot support video ");
+                ALOGD_IF(mLogL&HLLTHR,"Donot support video ");
                 return -1;
             }    
             if((
@@ -2237,7 +2237,7 @@ int try_wins_dispatch_mix_down(void * ctx,hwc_display_contents_1_t * list)
     pzone_mag->zone_cnt -= cntfb;
     for(i=0;i< pzone_mag->zone_cnt;i++)
     {
-        ALOGD_IF(mLogL&HWC_LOG_LEVEL_FIV,"Zone[%d]->layer[%d],"
+        ALOGD_IF(mLogL&HLLFIV,"Zone[%d]->layer[%d],"
             "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
             "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],acq_fence_fd=%d,"
             "layname=%s",                        
@@ -2304,7 +2304,7 @@ int try_wins_dispatch_mix_down(void * ctx,hwc_display_contents_1_t * list)
     }
     if(sort >3)  // lcdc dont support 5 wins
     {
-        ALOGD_IF(mLogL&HWC_LOG_LEVEL_THR,"lcdc dont support 5 wins sort=%d",sort);
+        ALOGD_IF(mLogL&HLLTHR,"lcdc dont support 5 wins sort=%d",sort);
         return -1;
     }    
     for(i=0;i<pzone_mag->zone_cnt;i++)
@@ -2442,7 +2442,7 @@ int try_wins_dispatch_mix_down(void * ctx,hwc_display_contents_1_t * list)
         {
             int area_no = 0;
             int win_id = 0;
-            ALOGD_IF(mLogL&HWC_LOG_LEVEL_FIV,"Zone[%d]->layer[%d],dispatched=%d,"
+            ALOGD_IF(mLogL&HLLFIV,"Zone[%d]->layer[%d],dispatched=%d,"
             "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
             "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],"
             "layer_fd[%d],addr=%x,acq_fence_fd=%d"
@@ -2505,12 +2505,12 @@ int try_wins_dispatch_mix_down(void * ctx,hwc_display_contents_1_t * list)
         bpvinfo.bp_vop_size = tsize ;  
         for(i= 0;i<4;i++)
         {
-            ALOGD_IF(mLogL&HWC_LOG_LEVEL_FIV,"RK_QUEDDR_FREQ mixinfo win[%d] bo_size=%dMB,bp_vop_size=%dMB,state=%d,num=%d",
+            ALOGD_IF(mLogL&HLLFIV,"RK_QUEDDR_FREQ mixinfo win[%d] bo_size=%dMB,bp_vop_size=%dMB,state=%d,num=%d",
                 i,bpvinfo.bp_size,bpvinfo.bp_vop_size,bpvinfo.vopinfo[i].state,bpvinfo.vopinfo[i].zone_num);
         }    
         if(ioctl(Context->ddrFd, RK_QUEDDR_FREQ, &bpvinfo))
         {
-            if(mLogL&HWC_LOG_LEVEL_THR)
+            if(mLogL&HLLTHR)
             {
                 for(i= 0;i<4;i++)
                 {
@@ -2524,7 +2524,7 @@ int try_wins_dispatch_mix_down(void * ctx,hwc_display_contents_1_t * list)
 #endif   
     if((large_cnt + bw) >= 5)    
     {       
-        ALOGD_IF(mLogL&HWC_LOG_LEVEL_THR,"lagre win > 2,and Scale-down 1.5 multiple,lcdc no support");
+        ALOGD_IF(mLogL&HLLTHR,"lagre win > 2,and Scale-down 1.5 multiple,lcdc no support");
         return -1;
     }
     memcpy(&Context->zone_manager,&zone_m,sizeof(ZoneManager));
@@ -2587,7 +2587,7 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
     }
     if(pzone_mag->zone_cnt < 5)
     {
-		ALOGD_IF(mLogL&HWC_LOG_LEVEL_FOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
+		ALOGD_IF(mLogL&HLLFOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
     	return -1;
     }
     //Find out which layer start transform.
@@ -2630,7 +2630,7 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
     //If not exist transform layers,then return.
     if(!bTransform)
 	{
-		ALOGD_IF(mLogL&HWC_LOG_LEVEL_FOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
+		ALOGD_IF(mLogL&HLLFOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
 		return -1;
 	}
 
@@ -2642,7 +2642,7 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
             hwc_layer_1_t * layer = &list->hwLayers[pzone_mag->zone_info[i].layer_index];
             if(pzone_mag->zone_info[i].format == HAL_PIXEL_FORMAT_YCrCb_NV12)
             {
-                ALOGD_IF(mLogL&HWC_LOG_LEVEL_THR,"Donot support video[%d][%s]",__LINE__,__FUNCTION__);
+                ALOGD_IF(mLogL&HLLTHR,"Donot support video[%d][%s]",__LINE__,__FUNCTION__);
                 return -1;
             }
             //Judge the current layer whether backup in gmixinfo[mix_index] or not.
@@ -2682,7 +2682,7 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
     pzone_mag->zone_cnt -= cntfb;
     for(i=0;i< pzone_mag->zone_cnt;i++)
     {
-        ALOGD_IF(mLogL&HWC_LOG_LEVEL_FIV,"Zone[%d]->layer[%d],"
+        ALOGD_IF(mLogL&HLLFIV,"Zone[%d]->layer[%d],"
             "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
             "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],acq_fence_fd=%d,"
             "layname=%s",                        
@@ -2749,7 +2749,7 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
     }
     if(sort >3)  // lcdc dont support 5 wins
     {
-        ALOGD_IF(mLogL&HWC_LOG_LEVEL_THR,"lcdc dont support 5 wins");
+        ALOGD_IF(mLogL&HLLTHR,"lcdc dont support 5 wins");
         return -1;
     }    
     for(i=0;i<pzone_mag->zone_cnt;i++)
@@ -2893,7 +2893,7 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
         {
             int area_no = 0;
             int win_id = 0;
-            ALOGD_IF(mLogL&HWC_LOG_LEVEL_FIV,"Zone[%d]->layer[%d],dispatched=%d,"
+            ALOGD_IF(mLogL&HLLFIV,"Zone[%d]->layer[%d],dispatched=%d,"
             "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
             "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],"
             "layer_fd[%d],addr=%x,acq_fence_fd=%d"
@@ -2956,12 +2956,12 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
         bpvinfo.bp_vop_size = tsize ;  
         for(i= 0;i<4;i++)
         {
-            ALOGD_IF(mLogL&HWC_LOG_LEVEL_FIV,"RK_QUEDDR_FREQ mixinfo win[%d] bo_size=%dMB,bp_vop_size=%dMB,state=%d,num=%d",
+            ALOGD_IF(mLogL&HLLFIV,"RK_QUEDDR_FREQ mixinfo win[%d] bo_size=%dMB,bp_vop_size=%dMB,state=%d,num=%d",
                 i,bpvinfo.bp_size,bpvinfo.bp_vop_size,bpvinfo.vopinfo[i].state,bpvinfo.vopinfo[i].zone_num);
         }    
         if(ioctl(Context->ddrFd, RK_QUEDDR_FREQ, &bpvinfo))
         {
-            if(mLogL&HWC_LOG_LEVEL_THR)
+            if(mLogL&HLLTHR)
             {
                 for(i= 0;i<4;i++)
                 {
@@ -2975,7 +2975,7 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
 #endif   
     if((large_cnt + bw) >= 5)    
     {       
-        ALOGD_IF(mLogL&HWC_LOG_LEVEL_THR,"lagre win > 2,and Scale-down 1.5 multiple,lcdc no support");
+        ALOGD_IF(mLogL&HLLTHR,"lagre win > 2,and Scale-down 1.5 multiple,lcdc no support");
         return -1;
     }
     if(list){
@@ -3102,7 +3102,7 @@ int try_wins_dispatch_mix_vh (void * ctx,hwc_display_contents_1_t * list)
     pzone_mag->zone_cnt -= cntfb;
     for(i=0;i< pzone_mag->zone_cnt;i++)
     {
-        ALOGD_IF(mLogL&HWC_LOG_LEVEL_FIV,"Zone[%d]->layer[%d],"
+        ALOGD_IF(mLogL&HLLFIV,"Zone[%d]->layer[%d],"
             "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
             "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],acq_fence_fd=%d,"
             "layname=%s",                        
@@ -3169,7 +3169,7 @@ int try_wins_dispatch_mix_vh (void * ctx,hwc_display_contents_1_t * list)
     }
     if(sort >3)  // lcdc dont support 5 wins
     {
-        ALOGD_IF(mLogL&HWC_LOG_LEVEL_THR,"lcdc dont support 5 wins [%d]",__LINE__);
+        ALOGD_IF(mLogL&HLLTHR,"lcdc dont support 5 wins [%d]",__LINE__);
         return -1;
     }    
     for(i=0;i<pzone_mag->zone_cnt;i++)
@@ -3311,7 +3311,7 @@ int try_wins_dispatch_mix_vh (void * ctx,hwc_display_contents_1_t * list)
         {
             int area_no = 0;
             int win_id = 0;
-            ALOGD_IF(mLogL&HWC_LOG_LEVEL_FIV,"Zone[%d]->layer[%d],dispatched=%d,"
+            ALOGD_IF(mLogL&HLLFIV,"Zone[%d]->layer[%d],dispatched=%d,"
             "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
             "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],"
             "layer_fd[%d],addr=%x,acq_fence_fd=%d"
@@ -3374,12 +3374,12 @@ int try_wins_dispatch_mix_vh (void * ctx,hwc_display_contents_1_t * list)
         bpvinfo.bp_vop_size = tsize ;  
         for(i= 0;i<4;i++)
         {
-            ALOGD_IF(mLogL&HWC_LOG_LEVEL_FIV,"RK_QUEDDR_FREQ mixinfo win[%d] bo_size=%dMB,bp_vop_size=%dMB,state=%d,num=%d",
+            ALOGD_IF(mLogL&HLLFIV,"RK_QUEDDR_FREQ mixinfo win[%d] bo_size=%dMB,bp_vop_size=%dMB,state=%d,num=%d",
                 i,bpvinfo.bp_size,bpvinfo.bp_vop_size,bpvinfo.vopinfo[i].state,bpvinfo.vopinfo[i].zone_num);
         }    
         if(ioctl(Context->ddrFd, RK_QUEDDR_FREQ, &bpvinfo))
         {
-            if(mLogL&HWC_LOG_LEVEL_THR)
+            if(mLogL&HLLTHR)
             {
                 for(i= 0;i<4;i++)
                 {
@@ -3666,7 +3666,7 @@ check_layer(
     )
     {
         /* We are forbidden to handle this layer. */
-        if(mLogL&HWC_LOG_LEVEL_THR)
+        if(mLogL&HLLTHR)
         {
             LOGD("%s(%d):Will not handle layer %s: SKIP_LAYER,Layer->transform=%d,Layer->flags=%d",
                 __FUNCTION__, __LINE__, Layer->LayerName,Layer->transform,Layer->flags);
@@ -3680,7 +3680,7 @@ check_layer(
         {
         	skip_count++;
         }
-		ALOGD_IF(mLogL&HWC_LOG_LEVEL_FOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
+		ALOGD_IF(mLogL&HLLFOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
         return HWC_FRAMEBUFFER;
     }
     // Force 4K transform video go into GPU
@@ -4772,7 +4772,7 @@ int hwc_control_3dmode(int num,int flag)
 
 int dump_prepare_info(hwc_display_contents_1_t** displays, int flag)
 {
-    if(!(mLogL&HWC_LOG_LEVEL_ONE))
+    if(!(mLogL&HLLONE))
         return 0;
 
     for(int i=0;i<2;i++)
@@ -4802,7 +4802,7 @@ int dump_config_info(struct rk_fb_win_cfg_data fb_info ,hwcContext * context, in
     char poutbuf[20];
     char eoutbuf[20];
     bool isLogOut = flag == 3;
-    isLogOut = isLogOut || (mLogL&HWC_LOG_LEVEL_ONE);
+    isLogOut = isLogOut || (mLogL&HLLONE);
 
     if(!isLogOut){
         return 0;
@@ -5234,7 +5234,7 @@ int hwc_collect_cfg(hwcContext * context, hwc_display_contents_1_t *list,struct 
         }
         struct private_handle_t*  handle = (struct private_handle_t*)fbLayer->handle;
         if (!handle){
-            ALOGD_IF(mLogL&HWC_LOG_LEVEL_FOU,"hanndle=NULL at line %d",__LINE__);
+            ALOGD_IF(mLogL&HLLFOU,"hanndle=NULL at line %d",__LINE__);
             return -1;
         }
 
@@ -5493,7 +5493,7 @@ int hwc_prepare_virtual(hwc_composer_device_1_t * dev, hwc_display_contents_1_t 
 
 static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1_t *list, int dpyID) 
 {
-    if(mLogL&HWC_LOG_LEVEL_ONE){
+    if(mLogL&HLLONE){
         ATRACE_CALL();
     }
 
@@ -5522,7 +5522,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
 
     /* Check layer list. */
     if (list == NULL || (list->numHwLayers  == 0)/*||!(list->flags & HWC_GEOMETRY_CHANGED)*/){
-        ALOGD_IF(mLogL&HWC_LOG_LEVEL_TWO,"dpyID=%d list null",dpyID);
+        ALOGD_IF(mLogL&HLLTWO,"dpyID=%d list null",dpyID);
         return 0;
     }
     if(is_gpu_or_nodraw(list,dpyID)){
@@ -5556,7 +5556,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
             video_cnt ++;
         }
         if(handle && GPU_FORMAT == HAL_PIXEL_FORMAT_YV12){
-            ALOGD_IF(mLogL&HWC_LOG_LEVEL_FOU,"HAL_PIXEL_FORMAT_YV12 out");
+            ALOGD_IF(mLogL&HLLFOU,"HAL_PIXEL_FORMAT_YV12 out");
             goto GpuComP;
         }
     }
@@ -5703,7 +5703,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
     if(video_cnt >1){
         // more videos goto gpu cmp
         ALOGW("more2 video=%d goto GpuComP",video_cnt);
-		ALOGD_IF(mLogL&HWC_LOG_LEVEL_FOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
+		ALOGD_IF(mLogL&HLLFOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
         goto GpuComP;
     }          
     //Get gts staus,save in context->mGtsStatus
@@ -5730,12 +5730,12 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
     }
 
     if(hwc_get_int_property("sys.hwc.disable","0")== 1){
-		ALOGD_IF(mLogL&HWC_LOG_LEVEL_FOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
+		ALOGD_IF(mLogL&HLLFOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
         goto GpuComP;
 	}
     /* Roll back to FRAMEBUFFER if any layer can not be handled. */
     if (i != (list->numHwLayers - 1) || (list->numHwLayers==1) /*|| context->mtrsformcnt > 1*/){
-		ALOGD_IF(mLogL&HWC_LOG_LEVEL_FOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
+		ALOGD_IF(mLogL&HLLFOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
         goto GpuComP;
     }
 
@@ -5743,7 +5743,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
     if(!context->mGtsStatus){
         if(context->mVideoMode &&  !context->mNV12_VIDEO_VideoMode && context->mtrsformcnt>0){
             ALOGV("Go into GLES,in nv12 transform case");
-			ALOGD_IF(mLogL&HWC_LOG_LEVEL_FOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
+			ALOGD_IF(mLogL&HLLFOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
             goto GpuComP;
         }
     }
@@ -5764,7 +5764,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
 
         //alloc video gralloc buffer in video mode
         if(context->fd_video_bk[0] == -1 && context->mTrsfrmbyrga){
-            ALOGD_IF(mLogL&HWC_LOG_LEVEL_FOU,"mNV12_VIDEO_VideoMode=%d,mTrsfrmbyrga=%d,w=%d,h=%d",
+            ALOGD_IF(mLogL&HLLFOU,"mNV12_VIDEO_VideoMode=%d,mTrsfrmbyrga=%d,w=%d,h=%d",
                 context->mNV12_VIDEO_VideoMode,context->mTrsfrmbyrga,video_w,video_h);
             for(j=0;j<MaxVideoBackBuffers;j++){
                 err = context->mAllocDev->alloc(context->mAllocDev, RWIDTH,RHEIGHT,HAL_PIXEL_FORMAT_YCrCb_NV12, \
@@ -5778,13 +5778,13 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
 #else
                     context->base_video_bk[j]= (int)(GPU_BASE);
 #endif
-                    ALOGD_IF(mLogL&HWC_LOG_LEVEL_TWO,"video alloc fd [%dx%d,f=%d],fd=%d",
+                    ALOGD_IF(mLogL&HLLTWO,"video alloc fd [%dx%d,f=%d],fd=%d",
                         handle->width,handle->height,handle->format,handle->share_fd);
 
                 }else {
                     ALOGE("video alloc faild video(w=%d,h=%d,format=0x%x,error=%s)",handle->video_width,
                         handle->video_height,context->fbhandle.format,strerror(errno));
-					ALOGD_IF(mLogL&HWC_LOG_LEVEL_FOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
+					ALOGD_IF(mLogL&HLLFOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
 					for(size_t k=0;k<j;k++){
 					    if(context->fd_video_bk[k] != -1){
                             err = context->mAllocDev->free(context->mAllocDev,context->pbvideo_bk[k]);
@@ -5811,7 +5811,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
         !context->mTrsfrmbyrga) || (video_cnt >1))){
         err = 0;
         for(i=0;i<MaxVideoBackBuffers;i++){
-            ALOGD_IF(mLogL&HWC_LOG_LEVEL_TWO,"dpyID=%d,free video fd=%d,base=%p,%p",
+            ALOGD_IF(mLogL&HLLTWO,"dpyID=%d,free video fd=%d,base=%p,%p",
                 dpyID,context->fd_video_bk[i],context->base_video_bk[i],context->pbvideo_bk[i]);
             if(context->pbvideo_bk[i] != NULL)
                 err = context->mAllocDev->free(context->mAllocDev, context->pbvideo_bk[i]);
@@ -5834,7 +5834,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
     ret = collect_all_zones(context,list);
     hwc_sprite_replace(context,list);
     if(ret !=0 ){
-		ALOGD_IF(mLogL&HWC_LOG_LEVEL_FOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
+		ALOGD_IF(mLogL&HLLFOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
         goto GpuComP;
     }
    
@@ -5852,7 +5852,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
         struct private_handle_t* hdl = context->mRgaTBI.hdl;
         int Dstfmt = trsfrmbyrga ? hwChangeRgaFormat(hdl->format) : RK_FORMAT_YCbCr_420_SP;
         if(rga_video_copybit(hdl,transform,w_valid,h_valid,layer_fd,Dstfmt,trsfrmbyrga,dpyID)){
-            ALOGD_IF(mLogL&HWC_LOG_LEVEL_ONE,"T:RGA copyblit fail");
+            ALOGD_IF(mLogL&HLLONE,"T:RGA copyblit fail");
             context->mRgaTBI.lastfd = 0;
             goto GpuComP;
         }
@@ -5865,7 +5865,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
     }
 
     if(ret !=0 ){
-		ALOGD_IF(mLogL&HWC_LOG_LEVEL_FOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
+		ALOGD_IF(mLogL&HLLFOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
         goto GpuComP;
     }
 
@@ -5876,7 +5876,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
     }  
 
     if(check_zone(context) && dpyID == 0){
-        ALOGD_IF(mLogL&HWC_LOG_LEVEL_FOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
+        ALOGD_IF(mLogL&HLLFOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
         goto GpuComP;
     }
     //before composition:do overlay no error???
@@ -5889,11 +5889,11 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
         err = hwc_collect_cfg(context,list,&fbinfo,2,true);
     }
     if(err){
-        ALOGD_IF(mLogL&HWC_LOG_LEVEL_FOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
+        ALOGD_IF(mLogL&HLLFOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
         goto GpuComP;
     }else{
         if(!hwc_check_cfg(context,fbinfo)){
-            ALOGD_IF(mLogL&HWC_LOG_LEVEL_FOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
+            ALOGD_IF(mLogL&HLLFOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
             dump_config_info(fbinfo,context,3);
             goto GpuComP;
         }
@@ -5904,7 +5904,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
 #endif
     {
         if(!hwcPrimaryToExternalCheckConfig(context,fbinfo)){
-            ALOGD_IF(mLogL&HWC_LOG_LEVEL_ONE,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
+            ALOGD_IF(mLogL&HLLONE,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
             goto GpuComP;
         }
     }
@@ -5953,7 +5953,7 @@ hwc_prepare(
     hwc_display_contents_1_t** displays
     )
 {
-    if(mLogL&HWC_LOG_LEVEL_ONE)
+    if(mLogL&HLLONE)
         ATRACE_CALL();
     hwcContext * context = _contextAnchor;
     int ret = 0;
@@ -6007,12 +6007,12 @@ hwc_prepare(
             }
         }
 #endif
-        ALOGD_IF(mLogL&HWC_LOG_LEVEL_FOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
+        ALOGD_IF(mLogL&HLLFOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
         return 0;
     }
 
 #if hwcDEBUG
-    if(mLogL&HWC_LOG_LEVEL_EIG){
+    if(mLogL&HLLEIG){
         LOGD("%s(%d):Layers to set:", __FUNCTION__, __LINE__);
         _Dump(list);
     }
@@ -6115,7 +6115,7 @@ static int hwc_fbPost(hwc_composer_device_1_t * dev, size_t numDisplays, hwc_dis
 
 static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
 {
-    if(mLogL&HWC_LOG_LEVEL_ONE){
+    if(mLogL&HLLONE){
         ATRACE_CALL();
     }
 
@@ -6259,7 +6259,7 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
                 memcpy(&_contextAnchor->fb_info,&fb_info,sizeof(rk_fb_win_cfg_data));
             }
 #endif
-            ALOGD_IF(mLogL&HWC_LOG_LEVEL_ONE,"ID=%d:",context!=_contextAnchor);
+            ALOGD_IF(mLogL&HLLONE,"ID=%d:",context!=_contextAnchor);
         }
         dump_config_info(fb_info,context,2);
 #if USE_HWC_FENCE
@@ -6292,7 +6292,7 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
 
 static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int mix_flag) 
 {
-    if(mLogL&HWC_LOG_LEVEL_ONE){
+    if(mLogL&HLLONE){
         ATRACE_CALL();
     }
 
@@ -6357,7 +6357,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
                 memcpy(&_contextAnchor->fb_info,&fb_info,sizeof(rk_fb_win_cfg_data));
             }
 #endif
-            ALOGD_IF(mLogL&HWC_LOG_LEVEL_ONE,"ID=%d:",dpyID);
+            ALOGD_IF(mLogL&HLLONE,"ID=%d:",dpyID);
         }
         if(mix_flag){
             dump_config_info(fb_info,context,1);
@@ -6366,7 +6366,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
         }
 #if USE_HWC_FENCE
         for(unsigned int i=0;i<RK_MAX_BUF_NUM;i++){
-            ALOGD_IF(mLogL&HWC_LOG_LEVEL_SIX,"rel_fence_fd[%d] = %d", i, fb_info.rel_fence_fd[i]);
+            ALOGD_IF(mLogL&HLLSIX,"rel_fence_fd[%d] = %d", i, fb_info.rel_fence_fd[i]);
             if(fb_info.rel_fence_fd[i] >= 0){
                 if(i< list->numHwLayers){
                     if(fb_info.win_par[0].area_par[0].data_format == HAL_PIXEL_FORMAT_YCrCb_NV12_OLD
@@ -6392,7 +6392,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
              }
     	}
         for(unsigned int i=0;i< (list->numHwLayers);i++){
-            ALOGD_IF(mLogL&HWC_LOG_LEVEL_SIX,"Layer[%d].relFenceFd=%d",i,list->hwLayers[i].releaseFenceFd);
+            ALOGD_IF(mLogL&HLLSIX,"Layer[%d].relFenceFd=%d",i,list->hwLayers[i].releaseFenceFd);
         }
 
         if(list->retireFenceFd > 0){
@@ -6716,7 +6716,7 @@ int hwc_check_fencefd(size_t numDisplays,hwc_display_contents_1_t  ** displays)
                     layer->acquireFenceFd = -1;
                 }
                 if(layer){
-                    ALOGD_IF(mLogL&HWC_LOG_LEVEL_SIX,"%d,%d,%d",i,j,layer->releaseFenceFd);
+                    ALOGD_IF(mLogL&HLLSIX,"%d,%d,%d",i,j,layer->releaseFenceFd);
                 }
             }
         }
@@ -6726,7 +6726,7 @@ int hwc_check_fencefd(size_t numDisplays,hwc_display_contents_1_t  ** displays)
 
 static int hwc_set_screen(hwc_composer_device_1 *dev, hwc_display_contents_1_t *list,int dpyID) 
 {
-    if(mLogL&HWC_LOG_LEVEL_ONE){
+    if(mLogL&HLLONE){
         ATRACE_CALL();
     }
     if(!is_need_post(list,dpyID,0)){
@@ -6771,7 +6771,7 @@ static int hwc_set_screen(hwc_composer_device_1 *dev, hwc_display_contents_1_t *
          list->numHwLayers,context->zone_manager.composter_mode);
 
 #if hwcDEBUG
-    if(mLogL&HWC_LOG_LEVEL_EIG){
+    if(mLogL&HLLEIG){
         LOGD("%s(%d):Layers to set:", __FUNCTION__, __LINE__);
         _Dump(list);
     }
@@ -6846,7 +6846,7 @@ static int hwc_set_screen(hwc_composer_device_1 *dev, hwc_display_contents_1_t *
 
 int hwc_set_virtual(hwc_composer_device_1_t * dev, hwc_display_contents_1_t  **contents, unsigned int rga_fb_addr)
 {
-    if(mLogL&HWC_LOG_LEVEL_ONE)
+    if(mLogL&HLLONE)
         ATRACE_CALL();
 
 	hwc_display_contents_1_t* list_pri = contents[0];
@@ -6910,7 +6910,7 @@ hwc_set(
     hwc_display_contents_1_t  ** displays
     )
 {
-    if(mLogL&HWC_LOG_LEVEL_ONE){
+    if(mLogL&HLLONE){
         ATRACE_CALL();
     }
 
@@ -6959,7 +6959,7 @@ hwc_set(
     if(ret[0] && ret[1]){
         hwc_repet_last();
     }
-    ALOGD_IF(mLogL&HWC_LOG_LEVEL_ONE,"%d,ret[%d,%d]",numDisplays,ret[0],ret[1]);
+    ALOGD_IF(mLogL&HLLONE,"%d,ret[%d,%d]",numDisplays,ret[0],ret[1]);
 #endif
     return 0;
 }
@@ -6978,7 +6978,7 @@ static int hwc_event_control(struct hwc_composer_device_1* dev,
 {
 
     hwcContext * context = _contextAnchor;
-    bool log = mLogL & HWC_LOG_LEVEL_FIV;
+    bool log = mLogL & HLLFIV;
     ALOGD_IF(log,"D_EN[%d,%d]",dpy,enabled);
     if(dpy==1 && _contextAnchor1){
         context = _contextAnchor1;
@@ -8853,7 +8853,7 @@ int hotplug_reset_dstposition(struct rk_fb_win_cfg_data * fb_info,int flag)
             return -1;
         }
 		sscanf(buf,"xres:%d yres:%d",&w_dst,&h_dst);
-        ALOGD_IF(mLogL&HWC_LOG_LEVEL_ONE,"width=%d,height=%d",w_dst,h_dst);
+        ALOGD_IF(mLogL&HLLONE,"width=%d,height=%d",w_dst,h_dst);
         break;
 
     case 2:
@@ -8886,7 +8886,7 @@ int hotplug_reset_dstposition(struct rk_fb_win_cfg_data * fb_info,int flag)
                         (unsigned short)(fb_info->win_par[i].area_par[j].xsize * w_scale);
                     fb_info->win_par[i].area_par[j].ysize =
                         (unsigned short)(fb_info->win_par[i].area_par[j].ysize * h_scale);
-                    ALOGD_IF(mLogL&HWC_LOG_LEVEL_ONE,"Adjust dst to => [%d,%d,%d,%d]",
+                    ALOGD_IF(mLogL&HLLONE,"Adjust dst to => [%d,%d,%d,%d]",
                         fb_info->win_par[i].area_par[j].xpos,fb_info->win_par[i].area_par[j].ypos,
                         fb_info->win_par[i].area_par[j].xsize,fb_info->win_par[i].area_par[j].ysize);
                 }
@@ -8926,7 +8926,7 @@ int hotplug_set_frame(hwcContext* context,int flag)
     if(ioctl(_contextAnchor1->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info) == -1){
         ALOGE("%s,%d,RK_FBIOSET_CONFIG_DONE fail",__FUNCTION__,__LINE__);
     }else{
-        ALOGD_IF(mLogL&HWC_LOG_LEVEL_ONE,"hotplug_set_frame");
+        ALOGD_IF(mLogL&HLLONE,"hotplug_set_frame");
     }
 
     for(int k=0;k<RK_MAX_BUF_NUM;k++){
@@ -8949,7 +8949,7 @@ int hwc_sprite_replace(hwcContext * Context,hwc_display_contents_1_t * list)
 {
 #if SPRITEOPTIMATION
 #if (defined(RK3368_BOX))// || defined(RK3288_BOX))
-    if(mLogL&HWC_LOG_LEVEL_ONE)
+    if(mLogL&HLLONE)
         ATRACE_CALL();
 
     if(Context == _contextAnchor)
@@ -9062,7 +9062,7 @@ int hwc_sprite_replace(hwcContext * Context,hwc_display_contents_1_t * list)
         return -1;
     memcpy(&pzone_mag->zone_info[i],&mZoneInfo,sizeof(ZoneInfo));
     memset((void*)(Context->mSrBI.hd_base[Context->mSrBI.mCurIndex]),0x0,mSize*mSize*4);
-    ALOGD_IF(mLogL&HWC_LOG_LEVEL_TWO,"Sprite Zone[%d]->layer[%d],"
+    ALOGD_IF(mLogL&HLLTWO,"Sprite Zone[%d]->layer[%d],"
         "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
         "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],acq_fence_fd=%d,"
         "layname=%s",
@@ -9093,9 +9093,9 @@ int hwc_sprite_replace(hwcContext * Context,hwc_display_contents_1_t * list)
     clip.ymin = 0;
     clip.ymax = mSize-1;
 
-    ALOGD_IF(mLogL&HWC_LOG_LEVEL_TWO,"src addr=[%x],handle type=[%d],w-h[%d,%d],act[%d,%d],off[%d,%d][f=%d]",
+    ALOGD_IF(mLogL&HLLTWO,"src addr=[%x],handle type=[%d],w-h[%d,%d],act[%d,%d],off[%d,%d][f=%d]",
         handle->share_fd,handle->type,SrcVirW, SrcVirH,SrcActW,SrcActH,x_offset,y_offset,hwChangeRgaFormat(handle->format));
-    ALOGD_IF(mLogL&HWC_LOG_LEVEL_TWO,"dst fd=[%x],w-h[%d,%d],act[%d,%d],off[%d,%d][f=%d],rot=%d,rot_mod=%d",
+    ALOGD_IF(mLogL&HLLTWO,"dst fd=[%x],w-h[%d,%d],act[%d,%d],off[%d,%d][f=%d],rot=%d,rot_mod=%d",
         fd_dst, DstVirW, DstVirH,DstActW,DstActH,xoffset,yoffset,Dstfmt,Rotation,RotateMode);
 
     RGA_set_src_vir_info(&Rga_Request, handle->share_fd, 0, 0,SrcVirW, SrcVirH, hwChangeRgaFormat(handle->format), 0);    
@@ -9163,7 +9163,7 @@ int hwc_repet_last()
     if(ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info) == -1){
         ALOGE("%s,%d,RK_FBIOSET_CONFIG_DONE fail",__FUNCTION__,__LINE__);
     }else{
-        ALOGD_IF(mLogL&HWC_LOG_LEVEL_ONE,"hwc_repet_last");
+        ALOGD_IF(mLogL&HLLONE,"hwc_repet_last");
     }
     dump_config_info(fb_info,context,4);
     for(int k=0;k<RK_MAX_BUF_NUM;k++){

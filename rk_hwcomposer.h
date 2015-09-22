@@ -210,15 +210,15 @@ enum
 enum
 {
     //Log level flag
-    HWC_LOG_LEVEL_ONE = 1 << 0,
-    HWC_LOG_LEVEL_TWO = 1 << 1,
-    HWC_LOG_LEVEL_THR = 1 << 2,
-    HWC_LOG_LEVEL_FOU = 1 << 3,
-    HWC_LOG_LEVEL_FIV = 1 << 4,
-    HWC_LOG_LEVEL_SIX = 1 << 5,
-    HWC_LOG_LEVEL_SEV = 1 << 6,
-    HWC_LOG_LEVEL_EIG = 1 << 7,
-    HWC_LOG_LEVEL_NIE = 1 << 8,
+    HLLONE = 1 << 0,     //HWC_LOG_LEVEL_ONE
+    HLLTWO = 1 << 1,     //HWC_LOG_LEVEL_TWO
+    HLLTHR = 1 << 2,     //HWC_LOG_LEVEL_THR
+    HLLFOU = 1 << 3,     //HWC_LOG_LEVEL_FOU
+    HLLFIV = 1 << 4,     //HWC_LOG_LEVEL_FIV
+    HLLSIX = 1 << 5,     //HWC_LOG_LEVEL_SIX
+    HLLSEV = 1 << 6,     //HWC_LOG_LEVEL_SEV
+    HLLEIG = 1 << 7,     //HWC_LOG_LEVEL_EIG
+    HLLNIE = 1 << 8,     //HWC_LOG_LEVEL_NIE
 };
 
 typedef struct _mix_info
