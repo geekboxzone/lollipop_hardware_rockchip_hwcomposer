@@ -114,8 +114,8 @@
 #define HWCE                            1           //HWC_DISPLAY_EXTERNAL
 #define HWCV                            2           //HWC_DISPLAY_VIRTUAL
 
-#define GHWC_VERSION                    "2.059"
-#define HWC_VERSION                     "HWC_VERSION Author:wzq Version:2.059"
+#define GHWC_VERSION                    "2.060"
+#define HWC_VERSION                     "HWC_VERSION Author:wzq Version:2.060"
 
 #ifdef GPU_G6110
 #if G6110_SUPPORT_FBDC
@@ -308,6 +308,8 @@ typedef struct _ZoneInfo
 	int         sort;
 	int         alreadyStereo;
 	int         displayStereo;
+	int         glesPixels;
+	int         overlayPixels;
 	char        LayerName[LayerNameLength + 1];   
 #ifdef USE_HWC_FENCE
     int         acq_fence_fd;
@@ -333,6 +335,7 @@ typedef struct _ZoneManager
     ZoneInfo    zone_info[MaxZones];
     int         bp_size;
     int         zone_cnt;
+    int         mCmpType;
     int         composter_mode;
 }
 ZoneManager;
@@ -485,11 +488,12 @@ typedef struct _hdmiStateInfo
 
 typedef enum _cmpType
 {
-    HWC_VOP = 0,
-    HWC_RGA,   
-    HWC_VOP_RGA,
-    HWC_RGA_TRSM_VOP,
-    HWC_RGA_TRSM_GPU_VOP,
+    HWC_HOR = 0,
+    HWC_MIX_DOWN,
+    HWC_MIX_CROSS,
+    HWC_MIX_VTWO,
+    HWC_MIX_UP,
+    HWC_MIX_VH,
     HWC_POLICY_NUM
 }cmpType;
 
