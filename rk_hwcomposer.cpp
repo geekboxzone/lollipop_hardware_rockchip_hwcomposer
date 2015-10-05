@@ -5919,9 +5919,7 @@ int hwc_prepare_virtual(hwc_composer_device_1_t * dev, hwc_display_contents_1_t 
 
 static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1_t *list, int dpyID) 
 {
-    if(mLogL&HLLONE){
-        ATRACE_CALL();
-    }
+    ATRACE_CALL();
 
 	size_t i;
     size_t j;
@@ -6379,8 +6377,7 @@ hwc_prepare(
     hwc_display_contents_1_t** displays
     )
 {
-    if(mLogL&HLLONE)
-        ATRACE_CALL();
+    ATRACE_CALL();
     hwcContext * context = _contextAnchor;
     int ret = 0;
     size_t i;
@@ -6541,10 +6538,7 @@ static int hwc_fbPost(hwc_composer_device_1_t * dev, size_t numDisplays, hwc_dis
 
 static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
 {
-    if(mLogL&HLLONE){
-        ATRACE_CALL();
-    }
-
+    ATRACE_CALL();
     if (list == NULL){
         return -1;
     }
@@ -6718,10 +6712,7 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
 
 static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int mix_flag) 
 {
-    if(mLogL&HLLONE){
-        ATRACE_CALL();
-    }
-
+    ATRACE_CALL();
     int dpyID = 0;
     if(context==_contextAnchor1){
         dpyID = 1;
@@ -7152,9 +7143,7 @@ int hwc_check_fencefd(size_t numDisplays,hwc_display_contents_1_t  ** displays)
 
 static int hwc_set_screen(hwc_composer_device_1 *dev, hwc_display_contents_1_t *list,int dpyID) 
 {
-    if(mLogL&HLLONE){
-        ATRACE_CALL();
-    }
+    ATRACE_CALL();
     if(!is_need_post(list,dpyID,0)){
         return -1;
     }
@@ -7274,9 +7263,7 @@ static int hwc_set_screen(hwc_composer_device_1 *dev, hwc_display_contents_1_t *
 
 int hwc_set_virtual(hwc_composer_device_1_t * dev, hwc_display_contents_1_t  **contents, unsigned int rga_fb_addr)
 {
-    if(mLogL&HLLONE)
-        ATRACE_CALL();
-
+    ATRACE_CALL();
 	hwc_display_contents_1_t* list_pri = contents[0];
 	hwc_display_contents_1_t* list_wfd = contents[2];
 	hwc_layer_1_t *  fbLayer = &list_pri->hwLayers[list_pri->numHwLayers - 1];
@@ -7338,10 +7325,7 @@ hwc_set(
     hwc_display_contents_1_t  ** displays
     )
 {
-    if(mLogL&HLLONE){
-        ATRACE_CALL();
-    }
-
+    ATRACE_CALL();
     int ret[4] = {0,0,0,0};
 #if (defined(GPU_G6110) || defined(RK3288_BOX))
 #ifdef RK3288_BOX
@@ -9381,9 +9365,7 @@ int hwc_sprite_replace(hwcContext * Context,hwc_display_contents_1_t * list)
 {
 #if SPRITEOPTIMATION
 #if (defined(RK3368_BOX))// || defined(RK3288_BOX))
-    if(mLogL&HLLONE)
-        ATRACE_CALL();
-
+    ATRACE_CALL();
     if(Context == _contextAnchor)
         return 0;
 
