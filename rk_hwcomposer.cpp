@@ -8009,15 +8009,6 @@ hwc_device_open(
     {
          hwcONERROR(hwcSTATUS_IO_ERR);
     }
-#if (defined(GPU_G6110) || defined(RK3288_BOX))
-    if(context->mLcdcNum == 1){
-        context->screenFd = open("/sys/class/graphics/fb0/screen_info", O_RDONLY);
-    }else{
-        context->screenFd = -1;
-    }
-#else
-    context->screenFd = -1;
-#endif
 #if USE_QUEUE_DDRFREQ
     context->ddrFd = open("/dev/ddr_freq", O_RDWR, 0);
     if(context->ddrFd < 0)
@@ -8253,7 +8244,18 @@ hwc_device_open(
         mUsedVopNum = 2;
     }
 #endif
-
+#if (defined(GPU_G6110) || defined(RK3288_BOX))
+    if(context->mLcdcNum == 1){
+        context->screenFd = open("/sys/class/graphics/fb0/screen_info", O_RDONLY);
+        if(context->screenFd <= 0){
+            ALOGW("fb0 screen_info open fail for:%s",strerror(errno));
+        }
+    }else{
+        context->screenFd = -1;
+    }
+#else
+    context->screenFd = -1;
+#endif
     err = hw_get_module(GRALLOC_HARDWARE_MODULE_ID, &module_gr);
     ALOGE_IF(err, "FATAL: can't find the %s module", GRALLOC_HARDWARE_MODULE_ID);
     if (err == 0) {
@@ -9279,7 +9281,7 @@ int hotplug_reset_dstposition(struct rk_fb_win_cfg_data * fb_info,int flag)
         h_hotplug = context->dpyAttr[HWC_DISPLAY_EXTERNAL].yres;
         lseek(fd,0,SEEK_SET);
         if(read(fd,buf,sizeof(buf)) < 0){
-            ALOGE("error reading fb screen_info: %s", strerror(errno));
+            ALOGE("error reading fb screen_info:%d,%s",fd,strerror(errno));
             return -1;
         }
 		sscanf(buf,"xres:%d yres:%d",&w_dst,&h_dst);
