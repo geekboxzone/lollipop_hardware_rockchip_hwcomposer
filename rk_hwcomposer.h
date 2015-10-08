@@ -86,7 +86,7 @@
 #define bakupbufsize                    4
 #define MaxVideoBackBuffers             (3)
 #define MAX_VIDEO_SOURCE                (5)
-#define GPUDRAWCNT                      (10)
+#define GPUDRAWCNT                      (20)
 #define MaxSpriteBNUM                   (3)
 #define BufferSize                      (128)
 #define RWIDTH                          (4096)
@@ -114,8 +114,8 @@
 #define HWCE                            1           //HWC_DISPLAY_EXTERNAL
 #define HWCV                            2           //HWC_DISPLAY_VIRTUAL
 
-#define GHWC_VERSION                    "2.060"
-#define HWC_VERSION                     "HWC_VERSION Author:wzq Version:2.060"
+#define GHWC_VERSION                    "2.061"
+#define HWC_VERSION                     "HWC_VERSION Author:wzq Version:2.061"
 
 #ifdef GPU_G6110
 #if G6110_SUPPORT_FBDC
@@ -225,7 +225,7 @@ typedef struct _mix_info
 {
     int gpu_draw_fd[GPUDRAWCNT];
     int alpha[GPUDRAWCNT];
-    hwc_rect_t  disp_rect[GPUDRAWCNT];
+    unsigned int lastZoneCrc[GPUDRAWCNT];
 }
 mix_info;
 
@@ -310,6 +310,7 @@ typedef struct _ZoneInfo
 	int         displayStereo;
 	int         glesPixels;
 	int         overlayPixels;
+    unsigned int zoneCrc;
 	char        LayerName[LayerNameLength + 1];   
 #ifdef USE_HWC_FENCE
     int         acq_fence_fd;
@@ -589,6 +590,8 @@ typedef struct _hwcContext
      hdmiStateInfo mHdmiSI;
 
      /*policy */
+     bool      mMultiwindow;
+     int       mLastCompType;
      int (*fun_policy[HWC_POLICY_NUM])(void * ,hwc_display_contents_1_t*);
 
      /*hdmi 3d detech*/
