@@ -7423,9 +7423,8 @@ hwc_set(
     hwc_check_fencefd(numDisplays,displays);
 #if ONLY_USE_ONE_VOP
     if(ret[0] && ret[1]){
-        hwc_repet_last();
+        ALOGW_IF(mLogL&HLLONE,"%d,ret[%d,%d]",numDisplays,ret[0],ret[1]);
     }
-    ALOGD_IF(mLogL&HLLONE,"%d,ret[%d,%d]",numDisplays,ret[0],ret[1]);
 #endif
     return 0;
 }
@@ -7597,6 +7596,7 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
                 break;
             }
         }
+        hdmi_noready = true;
         hotplug_free_dimbuffer();
         if(context->mHdmiSI.CvbsOn){
             context->mHdmiSI.CvbsOn = false;
