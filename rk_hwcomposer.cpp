@@ -5190,22 +5190,26 @@ int hwc_control_3dmode(int num,int flag)
             ret = 1;
         else if(6==hdmi3dmode)
             ret = 2;
+        else if(0==hdmi3dmode)
+            ret = 8;
         else 
             ret = 0;
         break;
-        
+
     case 1:
         lseek(fd,0,SEEK_SET);
         if(1==num)
             ret = write(fd,"8",2);
         else if(2==num)
             ret = write(fd,"6",2);
-        else
+        else if(8==num)
+            ret = write(fd,"0",2);
+        else if(0==num)
             ret = write(fd,"-1",3);
         if(ret < 0)
             ALOGW("change 3dmode to %d err is %s",num,strerror(errno));
         break;
-        
+
     default:
         break;
     }
@@ -5809,7 +5813,7 @@ int hwc_pre_prepare(hwc_display_contents_1_t** displays, int flag)
                 }
             }
 
-            if(1==i && needStereo != hwc_control_3dmode(2,0)){
+            if(1==i && numlayer > 1 && needStereo != hwc_control_3dmode(2,0)){
                 hwc_control_3dmode(needStereo,1);
             }
         }
