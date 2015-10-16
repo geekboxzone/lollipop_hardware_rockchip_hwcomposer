@@ -5190,8 +5190,6 @@ int hwc_control_3dmode(int num,int flag)
             ret = 1;
         else if(6==hdmi3dmode)
             ret = 2;
-        else if(0==hdmi3dmode)
-            ret = 8;
         else 
             ret = 0;
         break;
@@ -5202,8 +5200,6 @@ int hwc_control_3dmode(int num,int flag)
             ret = write(fd,"8",2);
         else if(2==num)
             ret = write(fd,"6",2);
-        else if(8==num)
-            ret = write(fd,"0",2);
         else
             ret = write(fd,"-1",3);
         if(ret < 0)
