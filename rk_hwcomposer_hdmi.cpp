@@ -22,6 +22,7 @@
 #include <cutils/log.h>
 #include <cutils/properties.h>
 #include <hardware_legacy/uevent.h>
+#include <string.h>
 
 int         g_hdmi_mode;
 int         mUsedVopNum;
