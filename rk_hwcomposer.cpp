@@ -6493,7 +6493,7 @@ int hwc_blank(struct hwc_composer_device_1 *dev, int dpy, int blank)
 {
     // We're using an older method of screen blanking based on
     // early_suspend in the kernel.  No need to do anything here.
-
+    ATRACE_CALL();
     ALOGI("hwc_blank dpy[%d],blank[%d]",dpy,blank);
     // return 0;
     switch (dpy) {
@@ -7610,7 +7610,10 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
         if(_contextAnchor1){
             _contextAnchor1->fb_blanked = 1;
         }
-#if (defined(RK3288_MID) || defined(RK3288_BOX))
+#ifdef RK3288_MID
+        hotplug_set_frame(context,0);
+#endif
+#ifdef RK3288_BOX
         if(context->mLcdcNum == 2){
             hotplug_set_frame(context,0);
         }
@@ -7635,7 +7638,10 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
             context->mHdmiSI.CvbsOn = true;
             context->mHdmiSI.HdmiOn = false;
         }
-#if (defined(RK3288_MID) || defined(RK3288_BOX))
+#ifdef RK3288_MID
+        hotplug_set_frame(context,0);
+#endif
+#ifdef RK3288_BOX
         if(context->mLcdcNum == 2){
             hotplug_set_frame(context,0);
         }
