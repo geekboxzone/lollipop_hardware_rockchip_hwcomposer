@@ -796,6 +796,20 @@ static int ZoneDispatchedCheck(hwcContext* ctx,ZoneManager* pzone_mag,int flag)
     return ret;
 }
 
+int initLayerCompositionType(hwcContext * Context,hwc_display_contents_1_t * list)
+{
+    if(!list) {
+        ALOGW("List is null");
+        return -1;
+    }
+    for(unsigned int i=0;i < list->numHwLayers - 1;i++) {
+        hwc_layer_1_t * layer = &list->hwLayers[i];
+        layer->compositionType = HWC_LCDC;
+        ALOGD_IF(mLogL&HLLFOU,"layer[%d]=%d",i,layer->compositionType);
+    }
+    return 0;
+}
+
 int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
 {
     size_t i,j;
@@ -1353,6 +1367,7 @@ int try_wins_dispatch_hor(void * ctx,hwc_display_contents_1_t * list)
 
     hwcContext * Context = (hwcContext *)ctx;
     hwcContext * contextAh = _contextAnchor;
+    initLayerCompositionType(Context,list);
     memset(&bpvinfo,0,sizeof(BpVopInfo));
     ZoneManager zone_m;
     memcpy(&zone_m,&Context->zone_manager,sizeof(ZoneManager));
@@ -1375,25 +1390,31 @@ int try_wins_dispatch_hor(void * ctx,hwc_display_contents_1_t * list)
     //ignore transform ui layer case.
     for(i=0;i<pzone_mag->zone_cnt;i++)
     {
-        if((pzone_mag->zone_info[i].transform != 0)&&
-            (pzone_mag->zone_info[i].format != HAL_PIXEL_FORMAT_YCrCb_NV12))
+        if((pzone_mag->zone_info[i].transform != 0) && Context->mtrsformcnt > 1
+            && (pzone_mag->zone_info[i].format != HAL_PIXEL_FORMAT_YCrCb_NV12)) {
+            ALOGD_IF(mLogL&HLLFOU,"i = %d is transform");
             return -1;
+        }
     }
 #endif
 
     if(Context->Is3D){
+        ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
         return -1;
     }
 
     if(Context->mAlphaError){
+        ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
         return -1;
     }
 
     for(int k=0;k<pzone_mag->zone_cnt;k++)
     {
         if(pzone_mag->zone_info[k].scale_err || pzone_mag->zone_info[k].toosmall
-            || pzone_mag->zone_info[k].zone_err)
+            || pzone_mag->zone_info[k].zone_err) {
+            ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
             return -1;
+        }
     }
 
     pzone_mag->zone_info[0].sort = sort;
@@ -1723,6 +1744,7 @@ int try_wins_dispatch_mix_cross(void * ctx,hwc_display_contents_1_t * list)
     int cntfb = 0;
     hwcContext * Context = (hwcContext *)ctx;
     ZoneManager zone_m;
+    initLayerCompositionType(Context,list);
     memcpy(&zone_m,&Context->zone_manager,sizeof(ZoneManager));
     ZoneManager* pzone_mag = &zone_m;
     ZoneInfo    zone_info_ty[MaxZones];
@@ -1767,24 +1789,29 @@ int try_wins_dispatch_mix_cross(void * ctx,hwc_display_contents_1_t * list)
         mix_index = 0;
     }
     if(list->numHwLayers - 1 < 5){
+        ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
         return -1;
     }
 
     if(Context->mAlphaError){
+        ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
         return -1;
     }
 
     if(contextAh->mHdmiSI.NeedReDst){
+        ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
         return -1;
     }
 
 #ifdef RK3288_BOX
     if(Context==_contextAnchor && Context->mResolutionChanged && Context->mLcdcNum==2){
+        ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
         return -1;
     }
 #endif
 
     if(Context->Is3D){
+        ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
         return -1;
     }
 
@@ -1797,6 +1824,7 @@ int try_wins_dispatch_mix_cross(void * ctx,hwc_display_contents_1_t * list)
     for(int k=foundLayer+1;k<pzone_mag->zone_cnt;k++){
         if(is_x_intersect(&(pzone_mag->zone_info[foundLayer].disp_rect),&(pzone_mag->zone_info[k].disp_rect))){
             intersect = true;
+            ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
             return -1;
         }
     }
@@ -1823,10 +1851,10 @@ int try_wins_dispatch_mix_cross(void * ctx,hwc_display_contents_1_t * list)
     pzone_mag->zone_cnt -= cntfb;
     for(i=0;i< pzone_mag->zone_cnt;i++)
     {
-        ALOGD_IF(mLogL&HLLFIV,"Zone[%d]->layer[%d],"
+        ALOGD_IF(mLogL&HLLFIV,"%s,%d:Zone[%d]->layer[%d],"
             "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
             "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],acq_fence_fd=%d,"
-            "layname=%s",
+            "layname=%s",__FUNCTION__,__LINE__,
             Context->zone_manager.zone_info[i].zone_index,
             Context->zone_manager.zone_info[i].layer_index,
             Context->zone_manager.zone_info[i].src_rect.left,
@@ -2133,6 +2161,7 @@ int try_wins_dispatch_mix_up(void * ctx,hwc_display_contents_1_t * list)
     int cntfb = 0;
     hwcContext * Context = (hwcContext *)ctx;
     ZoneManager zone_m;
+    initLayerCompositionType(Context,list);
     memcpy(&zone_m,&Context->zone_manager,sizeof(ZoneManager));
     ZoneManager* pzone_mag = &zone_m;
     ZoneInfo    zone_info_ty[MaxZones];
@@ -2174,19 +2203,23 @@ int try_wins_dispatch_mix_up(void * ctx,hwc_display_contents_1_t * list)
         mix_index = 0;
     }
     if(list->numHwLayers - 1 < 3){
+        ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
     	return -1;
     }
 
     if(Context->mAlphaError){
+        ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
         return -1;
     }
 
     if(contextAh->mHdmiSI.NeedReDst){
+        ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
         return -1;
     }
     
 #ifdef RK3288_BOX
     if(Context==_contextAnchor && Context->mResolutionChanged && Context->mLcdcNum==2){
+        ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
         return -1;
     }
 #endif
@@ -2194,6 +2227,7 @@ int try_wins_dispatch_mix_up(void * ctx,hwc_display_contents_1_t * list)
     if(Context->Is3D && 
     ((!pzone_mag->zone_info[0].alreadyStereo && pzone_mag->zone_info[0].displayStereo)||
     (!pzone_mag->zone_info[1].alreadyStereo && pzone_mag->zone_info[1].displayStereo))){
+        ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
         return -1;
     }
 
@@ -2202,8 +2236,10 @@ int try_wins_dispatch_mix_up(void * ctx,hwc_display_contents_1_t * list)
         if(pzone_mag->zone_info[k].scale_err || pzone_mag->zone_info[k].toosmall
             || pzone_mag->zone_info[k].zone_err || (pzone_mag->zone_info[k].transform
                 && pzone_mag->zone_info[k].format != HAL_PIXEL_FORMAT_YCrCb_NV12 && 0==k)
-                    || (pzone_mag->zone_info[k].transform && 1 == k))
+                    || (pzone_mag->zone_info[k].transform && 1 == k)) {
+            ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
             return -1;
+        }
     }
 
     memcpy((void*)&gMixInfo,(void*)&gmixinfo[mix_index],sizeof(gMixInfo));
@@ -2250,10 +2286,10 @@ int try_wins_dispatch_mix_up(void * ctx,hwc_display_contents_1_t * list)
     pzone_mag->zone_cnt -= cntfb;
     for(i=0;i< pzone_mag->zone_cnt;i++)
     {
-        ALOGD_IF(mLogL&HLLFIV,"Zone[%d]->layer[%d],"
+        ALOGD_IF(mLogL&HLLFIV,"%s,%d:Zone[%d]->layer[%d],"
             "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
             "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],acq_fence_fd=%d,"
-            "layname=%s",                        
+            "layname=%s",__FUNCTION__,__LINE__,
             Context->zone_manager.zone_info[i].zone_index,
             Context->zone_manager.zone_info[i].layer_index,
             Context->zone_manager.zone_info[i].src_rect.left,
@@ -2561,6 +2597,7 @@ int try_wins_dispatch_mix_down(void * ctx,hwc_display_contents_1_t * list)
     int foundLayer = 1;
     hwcContext * Context = (hwcContext *)ctx;
     ZoneManager zone_m;
+    initLayerCompositionType(Context,list);
     memcpy(&zone_m,&Context->zone_manager,sizeof(ZoneManager));
     ZoneManager* pzone_mag = &zone_m;
 
@@ -2595,6 +2632,7 @@ int try_wins_dispatch_mix_down(void * ctx,hwc_display_contents_1_t * list)
     hwcContext * contextAh = _contextAnchor;
     memset(&zone_info_ty,0,sizeof(zone_info_ty));
     if(pzone_mag->zone_cnt < 5 && !Context->mMultiwindow) {
+        ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
         return -1;
     }
     if(Context == _contextAnchor1) {
@@ -2621,10 +2659,12 @@ int try_wins_dispatch_mix_down(void * ctx,hwc_display_contents_1_t * list)
 #endif
 
     if(Context->Is3D){
+        ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
         return -1;
     }
 
     if(contextAh->mHdmiSI.NeedReDst){
+        ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
         return -1;
     }
 
@@ -2699,10 +2739,10 @@ TryAgain:
     memcpy(pzone_mag, &zone_info_ty,sizeof(zone_info_ty));
     pzone_mag->zone_cnt -= cntfb;
     for(i=0;i< pzone_mag->zone_cnt;i++) {
-        ALOGD_IF(mLogL&HLLFIV,"Zone[%d]->layer[%d],"
+        ALOGD_IF(mLogL&HLLFIV,"%s,%d:Zone[%d]->layer[%d],"
             "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
             "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],acq_fence_fd=%d,"
-            "layname=%s",                        
+            "layname=%s",__FUNCTION__,__LINE__,
             pzone_mag->zone_info[i].zone_index,
             pzone_mag->zone_info[i].layer_index,
             pzone_mag->zone_info[i].src_rect.left,
@@ -2990,6 +3030,7 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
     int cntfb = 0;
     hwcContext * Context = (hwcContext *)ctx;
     ZoneManager zone_m;
+    initLayerCompositionType(Context,list);
     memcpy(&zone_m,&Context->zone_manager,sizeof(ZoneManager));
     ZoneManager* pzone_mag = &zone_m;
     ZoneInfo    zone_info_ty[MaxZones];
@@ -3046,27 +3087,33 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
     }
 
     if(Context->mAlphaError){
+        ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
         return -1;
     }
 
     if(contextAh->mHdmiSI.NeedReDst){
+        ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
         return -1;
     }
 
     if(Context->Is3D){
+        ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
         return -1;
     }
 
 #ifdef RK3288_BOX
     if(Context==_contextAnchor && Context->mResolutionChanged && Context->mLcdcNum==2){
+        ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
         return -1;
     }
 #endif
 
     for(int k=0;k<mFtrfl;k++) {
         if(pzone_mag->zone_info[k].scale_err || pzone_mag->zone_info[k].toosmall
-            || pzone_mag->zone_info[k].zone_err || pzone_mag->zone_info[k].transform)
+            || pzone_mag->zone_info[k].zone_err || pzone_mag->zone_info[k].transform) {
+            ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
             return -1;
+        }
     }
 
     //If not exist transform layers,then return.
@@ -3117,10 +3164,10 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
     pzone_mag->zone_cnt -= cntfb;
     for(i=0;i< pzone_mag->zone_cnt;i++)
     {
-        ALOGD_IF(mLogL&HLLFIV,"Zone[%d]->layer[%d],"
+        ALOGD_IF(mLogL&HLLFIV,"%s,%d:Zone[%d]->layer[%d],"
             "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
             "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],acq_fence_fd=%d,"
-            "layname=%s",                        
+            "layname=%s",__FUNCTION__,__LINE__,
             Context->zone_manager.zone_info[i].zone_index,
             Context->zone_manager.zone_info[i].layer_index,
             Context->zone_manager.zone_info[i].src_rect.left,
@@ -3437,6 +3484,7 @@ int try_wins_dispatch_mix_vh (void * ctx,hwc_display_contents_1_t * list)
     int cntfb = 0;
     hwcContext * Context = (hwcContext *)ctx;
     ZoneManager zone_m;
+    initLayerCompositionType(Context,list);
     memcpy(&zone_m,&Context->zone_manager,sizeof(ZoneManager));
     ZoneManager* pzone_mag = &zone_m;
     ZoneInfo    zone_info_ty[MaxZones];
@@ -3542,10 +3590,10 @@ int try_wins_dispatch_mix_vh (void * ctx,hwc_display_contents_1_t * list)
     pzone_mag->zone_cnt -= cntfb;
     for(i=0;i< pzone_mag->zone_cnt;i++)
     {
-        ALOGD_IF(mLogL&HLLFIV,"Zone[%d]->layer[%d],"
+        ALOGD_IF(mLogL&HLLFIV,"%s,%d:Zone[%d]->layer[%d],"
             "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
             "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],acq_fence_fd=%d,"
-            "layname=%s",                        
+            "layname=%s",__FUNCTION__,__LINE__,
             Context->zone_manager.zone_info[i].zone_index,
             Context->zone_manager.zone_info[i].layer_index,
             Context->zone_manager.zone_info[i].src_rect.left,
@@ -3853,6 +3901,7 @@ int try_wins_dispatch_ver(void * ctx,hwc_display_contents_1_t * list)
     int i,j;
     hwcContext * Context = (hwcContext *)ctx;
     ZoneManager zone_m;
+    initLayerCompositionType(Context,list);
     memcpy(&zone_m,&Context->zone_manager,sizeof(ZoneManager));
     ZoneManager* pzone_mag = &zone_m;
     // try dispatch stretch wins
@@ -5231,8 +5280,9 @@ int dump_prepare_info(hwc_display_contents_1_t** displays, int flag)
                 hwc_layer_1_t* layer = &displays[i]->hwLayers[j];
                 if (layer != NULL){
 #ifdef SUPPORT_STEREO
-                    ALOGD("dID=%d,num=%d,layername=%s,ardStereo=%d,dspStereo=%d,cmpType=%d",
-                        i,num,layer->LayerName,layer->alreadyStereo,layer->displayStereo,layer->compositionType);
+                    ALOGD("dID=%d,num=%d,ardStereo=%d,dspStereo=%d,cmpType=%3d,tr_ble[%d,%10d],layername:[%s]",
+                        i,num,layer->alreadyStereo,layer->displayStereo,layer->compositionType,
+                        layer->transform,layer->blending,layer->LayerName);
 #else
                     ALOGD("dID=%d,num=%d,layername=%s",i,num,layer->LayerName);
 #endif          
