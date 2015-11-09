@@ -54,105 +54,28 @@ static PFNEGLRENDERBUFFERMODIFYEDANDROIDPROC _eglRenderBufferModifiedANDROID;
 int gwin_tab[MaxZones] = {win0,win1,win2_0,win2_1,win2_2,win2_3,win3_0,win3_1,win3_2,win3_3};
 
 
-static int
-hwc_blank(
-            struct hwc_composer_device_1 *dev,
-            int dpy,
-            int blank);
-static int
-hwc_query(
-        struct hwc_composer_device_1* dev,
-        int what,
-        int* value);
+static int  hwc_blank(struct hwc_composer_device_1 *dev, int dpy,int blank);
+static int  hwc_query(struct hwc_composer_device_1* dev,int what,int* value);
+static int  hwc_event_control(struct hwc_composer_device_1* dev,int dpy,int event,int enabled);
+static int  hwc_prepare(hwc_composer_device_1_t * dev,size_t numDisplays,hwc_display_contents_1_t** displays);
+static int  hwc_set(hwc_composer_device_1_t * dev,size_t numDisplays,hwc_display_contents_1_t  ** displays);
+static int  hwc_device_close(struct hw_device_t * dev);
 
-static int hwc_event_control(
-                struct hwc_composer_device_1* dev,
-                int dpy,
-                int event,
-                int enabled);
+void*   hotplug_try_register(void *arg);
+void    hotplug_get_resolution(int* w,int* h);
+int     hotplug_set_config();
+int     hotplug_parse_mode(int *outX,int *outY);
+int     hotplug_get_config(int flag);
+int     hotplug_set_overscan(int flag);
+int     hotplug_reset_dstposition(struct rk_fb_win_cfg_data * fb_info,int flag);
+int     hotplug_set_frame(hwcContext * context,int flag);
+bool    hotplug_free_dimbuffer();
+int     hwc_sprite_replace(hwcContext * Context, hwc_display_contents_1_t * list);
+int     hwc_repet_last();
+bool    hwcPrimaryToExternalCheckConfig(hwcContext * ctx,struct rk_fb_win_cfg_data fb_info);
 
-static int
-hwc_prepare(
-    hwc_composer_device_1_t * dev,
-    size_t numDisplays,
-    hwc_display_contents_1_t** displays
-    );
-
-
-static int
-hwc_set(
-    hwc_composer_device_1_t * dev,
-    size_t numDisplays,
-    hwc_display_contents_1_t  ** displays
-    );
-
-static int
-hwc_device_close(
-    struct hw_device_t * dev
-    );
-
-void
-*hotplug_try_register(
-    void *arg
-    );
-
-void
-hotplug_get_resolution(
-    int* w,
-    int* h
-    );
-
-int 
-hotplug_set_config();
-
-int
-hotplug_parse_mode(
-    int *outX,
-    int *outY
-    );
-
-int
-hotplug_get_config(int flag);
-
-int
-hotplug_set_overscan(
-    int flag
-    );
-
-int
-hotplug_reset_dstposition(
-    struct rk_fb_win_cfg_data * fb_info,
-    int flag);
-
-int
-hotplug_set_frame(
-    hwcContext * context,
-    int flag);
-
-bool
-hotplug_free_dimbuffer();
-
-int
-hwc_sprite_replace(
-    hwcContext * Context,
-    hwc_display_contents_1_t * list);
-
-int
-hwc_repet_last();
-
-bool
-hwcPrimaryToExternalCheckConfig(
-    hwcContext * ctx,
-    struct rk_fb_win_cfg_data fb_info);
-
-static unsigned int 
-createCrc32(
-    unsigned int crc,
-    unsigned const char *buffer,
-    unsigned int size);
-
-static void 
-initCrcTable(void);
+static unsigned int     createCrc32(unsigned int crc,unsigned const char *buffer,unsigned int size);
+static void             initCrcTable(void);
 
 
 int hwChangeFormatandroidL(IN int fmt)
