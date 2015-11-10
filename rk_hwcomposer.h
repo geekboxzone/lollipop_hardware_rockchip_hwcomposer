@@ -114,8 +114,8 @@
 #define HWCE                            1           //HWC_DISPLAY_EXTERNAL
 #define HWCV                            2           //HWC_DISPLAY_VIRTUAL
 
-#define GHWC_VERSION                    "2.062"
-#define HWC_VERSION                     "HWC_VERSION Author:wzq Version:2.062"
+#define GHWC_VERSION                    "2.063"
+#define HWC_VERSION                     "HWC_VERSION Author:wzq Version:2.063"
 
 #ifdef GPU_G6110
 #if G6110_SUPPORT_FBDC
@@ -205,6 +205,11 @@ enum
     HWC_DIM,
     HWC_CLEAR_HOLE
     
+};
+
+enum
+{
+    HWCRFPS = 0x800,//frame package stereo
 };
 
 enum
@@ -494,6 +499,7 @@ typedef enum _cmpType
     HWC_MIX_CROSS,
     HWC_MIX_VTWO,
     HWC_MIX_UP,
+    HWC_MIX_FPS,
     HWC_MIX_VH,
     HWC_POLICY_NUM
 }cmpType;
