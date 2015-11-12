@@ -487,8 +487,13 @@ typedef struct _hdmiStateInfo
      bool vh_flag;
      bool NeedReDst;
      bool CvbsOn;
-     int FrameFd;
-     int FrameBase;
+#if defined(__arm64__) || defined(__aarch64__)
+     long FrameFd;
+     long FrameBase;
+#else
+     int  FrameFd;
+     int  FrameBase;
+#endif
      buffer_handle_t FrameHandle;
 }hdmiStateInfo;
 
