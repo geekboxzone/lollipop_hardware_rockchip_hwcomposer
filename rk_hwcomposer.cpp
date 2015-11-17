@@ -61,6 +61,10 @@ static int  hwc_prepare(hwc_composer_device_1_t * dev,size_t numDisplays,hwc_dis
 static int  hwc_set(hwc_composer_device_1_t * dev,size_t numDisplays,hwc_display_contents_1_t  ** displays);
 static int  hwc_device_close(struct hw_device_t * dev);
 
+int         hwc_repet_last();
+int         hwc_sprite_replace(hwcContext * Context, hwc_display_contents_1_t * list);
+void*       hwc_control_3dmode_thread(void *arg);
+
 void*   hotplug_try_register(void *arg);
 void    hotplug_get_resolution(int* w,int* h);
 int     hotplug_set_config();
@@ -70,8 +74,7 @@ int     hotplug_set_overscan(int flag);
 int     hotplug_reset_dstposition(struct rk_fb_win_cfg_data * fb_info,int flag);
 int     hotplug_set_frame(hwcContext * context,int flag);
 bool    hotplug_free_dimbuffer();
-int     hwc_sprite_replace(hwcContext * Context, hwc_display_contents_1_t * list);
-int     hwc_repet_last();
+void*   hotplug_invalidate_refresh(void *arg);
 bool    hwcPrimaryToExternalCheckConfig(hwcContext * ctx,struct rk_fb_win_cfg_data fb_info);
 
 static unsigned int     createCrc32(unsigned int crc,unsigned const char *buffer,unsigned int size);
@@ -123,6 +126,8 @@ hwc_module_t HAL_MODULE_INFO_SYM =
         reserved:      {0, }
     }
 };
+
+
 
 int
 _HasAlpha(RgaSURF_FORMAT Format)
@@ -3777,6 +3782,9 @@ int try_wins_mix_fp_stereo (void * ctx,hwc_display_contents_1_t * list)
     }
 #endif
     //Mark the composer mode to HWC_MIX_V2
+    if(list){
+        list->hwLayers[0].compositionType = HWC_MIX_V2;
+    }
     memcpy(&Context->zone_manager,&zone_m,sizeof(ZoneManager));
     Context->zone_manager.mCmpType = HWC_MIX_FPS;
     Context->zone_manager.composter_mode = HWC_MIX_V2;
@@ -5540,7 +5548,7 @@ int hwc_control_3dmode(int num,int flag)
         int mode,hdmi3dmode;
         //ALOGI("line %d,buf[%s]",__LINE__,buf);
         sscanf(buf,"3dmodes=%d cur3dmode=%d",&mode,&hdmi3dmode);
-        //ALOGI("hdmi3dmode=%d,mode=%d",hdmi3dmode,mode);
+        ALOGI_IF(mLogL&HLLTWO,"hdmi3dmode=%d,mode=%d",hdmi3dmode,mode);
 
         if(8==hdmi3dmode)
             ret = 1;
@@ -5570,6 +5578,27 @@ int hwc_control_3dmode(int num,int flag)
         break;
     }
     return ret;
+}
+
+void* hwc_control_3dmode_thread(void *arg)
+{
+    int needStereo = 0;
+    hwcContext *contextp = _contextAnchor;
+    ALOGD("hwc_control_3dmode_thread creat");
+    pthread_cond_wait(&contextp->mControlStereo.cond,&contextp->mControlStereo.mtx);
+    while(true) {
+        pthread_mutex_lock(&contextp->mControlStereo.mlk);
+        needStereo = contextp->mControlStereo.count;
+        pthread_mutex_unlock(&contextp->mControlStereo.mlk);
+        if(needStereo != hwc_control_3dmode(2,0)) {
+            hwc_control_3dmode(needStereo,1);
+        }
+        ALOGD_IF(mLogL&HLLTWO,"mControlStereo.count=%d",needStereo);
+        pthread_cond_wait(&contextp->mControlStereo.cond,&contextp->mControlStereo.mtx);
+    }
+    ALOGD("hwc_control_3dmode_thread exit");
+    pthread_exit(NULL);
+    return NULL;
 }
 
 int dump_prepare_info(hwc_display_contents_1_t** displays, int flag)
@@ -6240,22 +6269,26 @@ int hwc_pre_prepare(hwc_display_contents_1_t** displays, int flag)
             }
 
             if(needStereo) {
-                if(0==i){
+                if (0==i) {
                     contextp->Is3D = true;
-                }else if(1==i && contexte){
+                } else if (1==i && contexte){
                     contexte->Is3D = true;
                 }
                 for (unsigned int j = 0; j <(numlayer - 1); j++) {
                     displays[i]->hwLayers[j].displayStereo = needStereo;
                 }
-            }else{
+            } else {
                 for (unsigned int j = 0; j <(numlayer - 1); j++) {
                     displays[i]->hwLayers[j].displayStereo = needStereo;
                 }
             }
 
-            if(1==i && numlayer > 1 && needStereo != hwc_control_3dmode(2,0)){
-                hwc_control_3dmode(needStereo,1);
+            if(1==i && numlayer > 1) {
+                ALOGD_IF(mLogL&HLLTWO,"Wake up hwc control stereo");
+                pthread_mutex_lock(&contextp->mControlStereo.mlk);
+                contextp->mControlStereo.count = needStereo;
+                pthread_mutex_unlock(&contextp->mControlStereo.mlk);
+                pthread_cond_signal(&contextp->mControlStereo.cond);
             }
         }
     }
@@ -6801,6 +6834,12 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
         }
     }
 #endif
+    if(context->zone_manager.mCmpType == HWC_MIX_FPS) {
+        for (unsigned int i = 0; i <(list->numHwLayers - 1); i++) {
+            hwc_layer_1_t * layer = &list->hwLayers[i];
+            layer->displayStereo = 0;
+        }
+    }
     context->mLastCompType = context->zone_manager.mCmpType;
     return 0;
 GpuComP   :
@@ -8132,6 +8171,13 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
             ALOGI("Trying to hotplug device[%d,%d,%d]",__LINE__,hdmi_mode,flag);
         }
         ALOGI("connet to hotplug device [%d,%d,%d]",__LINE__,hdmi_mode,flag);
+#if HTGFORCEREFRESH
+        pthread_mutex_lock(&context->mRefresh.mlk);
+        context->mRefresh.count = 0;
+        ALOGD_IF(mLogL&HLLTWO,"Htg:mRefresh.count=%d",context->mRefresh.count);
+        pthread_mutex_unlock(&context->mRefresh.mlk);
+        pthread_cond_signal(&context->mRefresh.cond);
+#endif
 #if (defined(GPU_G6110) || defined(RK3288_BOX))
     if(context->mLcdcNum == 1){
         hotplug_set_overscan(0);
@@ -8733,6 +8779,17 @@ hwc_device_open(
     context->mIsBootanimExit = false;
     context->mIsFirstCallbackToHotplug = false;
 
+#if HTGFORCEREFRESH
+    context->mRefresh.count = 0;
+    pthread_mutex_init(&context->mRefresh.mtx, NULL);
+    pthread_mutex_init(&context->mRefresh.mlk, NULL);
+    pthread_cond_init(&context->mRefresh.cond, NULL);
+#endif
+    context->mControlStereo.count = 0;
+    pthread_mutex_init(&context->mControlStereo.mtx, NULL);
+    pthread_mutex_init(&context->mControlStereo.mlk, NULL);
+    pthread_cond_init(&context->mControlStereo.cond, NULL);
+
 #ifdef RK3288_BOX
     {
         int fd = -1;
@@ -8987,6 +9044,20 @@ hwc_device_open(
     }
 #endif
     initCrcTable();
+#if HTGFORCEREFRESH
+    pthread_t t1;
+    if (pthread_create(&t1, NULL, hotplug_invalidate_refresh, NULL))
+    {
+        LOGD("Create hotplug_invalidate_refresh thread error .");
+    }
+#endif
+#if SUPPORT_STEREO
+    pthread_t t2;
+    if (pthread_create(&t2, NULL, hwc_control_3dmode_thread, NULL))
+    {
+        LOGD("Create hwc_control_3dmode_thread thread error .");
+    }
+#endif
     return 0;
 
 OnError:
@@ -9022,7 +9093,14 @@ OnError:
     }      
 #endif
     pthread_mutex_destroy(&context->lock);
-
+#if HTGFORCEREFRESH
+    pthread_mutex_destroy(&context->mRefresh.mtx);
+    pthread_mutex_destroy(&context->mRefresh.mlk);
+    pthread_cond_destroy(&context->mRefresh.cond);
+#endif
+    pthread_mutex_destroy(&context->mControlStereo.mtx);
+    pthread_mutex_destroy(&context->mControlStereo.mlk);
+    pthread_cond_destroy(&context->mControlStereo.cond);
     /* Error roll back. */ 
     if (context != NULL)
     {
@@ -9898,6 +9976,35 @@ int hotplug_set_frame(hwcContext* context,int flag)
     }
     return ret;
 }
+
+void  *hotplug_invalidate_refresh(void *arg)
+{
+    int count = 0;
+    int nMaxCnt = 25;
+    unsigned int nSleepTime = 200;
+    hwcContext *contextp = _contextAnchor;
+    ALOGD("hotplug_invalidate_refresh creat");
+#if HTGFORCEREFRESH
+    pthread_cond_wait(&contextp->mRefresh.cond,&contextp->mRefresh.mtx);
+    while(true) {
+        for(count = 0; count < nMaxCnt; count++) {
+            usleep(nSleepTime*1000);
+            pthread_mutex_lock(&contextp->mRefresh.mlk);
+            count = contextp->mRefresh.count;
+            contextp->mRefresh.count ++;
+            ALOGD_IF(mLogL&HLLTWO,"mRefresh.count=%d",contextp->mRefresh.count);
+            pthread_mutex_unlock(&contextp->mRefresh.mlk);
+            contextp->procs->invalidate(contextp->procs);
+        }
+        pthread_cond_wait(&contextp->mRefresh.cond,&contextp->mRefresh.mtx);
+        count = 0;
+    }
+#endif
+    ALOGD("hotplug_invalidate_refresh exit");
+    pthread_exit(NULL);
+    return NULL;
+}
+
 int hwc_sprite_replace(hwcContext * Context,hwc_display_contents_1_t * list)
 {
 #if SPRITEOPTIMATION
