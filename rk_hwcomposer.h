@@ -56,6 +56,7 @@
 #define SUPPORTFORCE3D                  1           //1:can be force 3D,but android 4.4
 #define USE_WM_SIZE                     0           //1:use wm command,now bootanimation source error sometimes
 #define VIDEO_UI_OPTIMATION             1           //1:support,so we can reduce the bandwidth
+#define HTGFORCEREFRESH                 0           //1:some customer not use rk's setting apk,hwc need refesh 
 
 #ifdef GPU_G6110
 #define G6110_SUPPORT_FBDC              0
@@ -525,6 +526,14 @@ typedef struct _bufferInfo
 }bufferInfo;
 #endif
 
+typedef struct _threadLock
+{
+    int count;
+    pthread_mutex_t mlk;
+    pthread_mutex_t mtx;
+    pthread_cond_t cond;
+}threadLock;
+
 typedef struct _hwcContext
 {
     hwc_composer_device_1_t device;
@@ -617,7 +626,11 @@ typedef struct _hwcContext
      /*sprite*/
      bufferInfo mSrBI;
 #endif
- 
+
+#if HTGFORCEREFRESH
+     threadLock mRefresh;
+#endif
+     threadLock mControlStereo;
      /* The index of video buffer will be used */
      int      mCurVideoIndex;
      int      fd_video_bk[MaxVideoBackBuffers];
