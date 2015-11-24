@@ -6480,6 +6480,11 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
         if(handle && GPU_FORMAT == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO){
             video_cnt ++;
         }
+#ifdef GPU_G6110
+        if(handle && handle->share_fd != handle->fd[0]) {
+            handle->share_fd = handle->fd[0];
+        }
+#endif
         if(handle && GPU_FORMAT == HAL_PIXEL_FORMAT_YV12){
             ALOGD_IF(mLogL&HLLFOU,"HAL_PIXEL_FORMAT_YV12 out");
             goto GpuComP;
