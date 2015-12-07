@@ -224,6 +224,31 @@ int HALPixelFormatSetCompression(int iFormat, int iCompression)
 
 #endif
 
+int hwc_init_version()
+{
+    char acVersion[50];
+    memset(acVersion,0,sizeof(acVersion));
+    if(sizeof(GHWC_VERSION) > 12) {
+        strncpy(acVersion,GHWC_VERSION,12);
+    } else {
+        strcpy(acVersion,GHWC_VERSION);
+    }
+#ifdef RK3288_BOX
+    strcat(acVersion,"-3288BOX");
+#endif
+#ifdef RK3288_MID
+    strcat(acVersion,"-3288MID");
+#endif
+#ifdef RK3368_BOX
+    strcat(acVersion,"-3368BOX");
+#endif
+#ifdef RK3368_MID
+    strcat(acVersion,"-3368MID");
+#endif
+    property_set("sys.ghwc.version", acVersion);
+    LOGD(acVersion);
+    return 0;
+}
 
 //return property value of pcProperty
 static int hwc_get_int_property(const char* pcProperty,const char* default_value)
@@ -744,6 +769,15 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
     int tsize = 0;
     int factor =1;
     Context->mMultiwindow = false;
+#if (defined(RK3368_BOX) || defined(RK3288_BOX))
+    bool NeedScale = false;
+    bool NeedFullScreen = false;
+    char value[PROPERTY_VALUE_MAX];
+    property_get("persist.sys.video.cvrs", value, "false");
+    NeedScale = !strcmp(value,"true");
+    property_get("persist.sys.video.cvrs.fs", value, "false");
+    NeedFullScreen = !strcmp(value,"true");
+#endif
     for (i = 0,j=0; i < (list->numHwLayers - 1) ; i++,j++){
         hwc_layer_1_t * layer = &list->hwLayers[i];
         hwc_region_t * Region = &layer->visibleRegionScreen;
@@ -770,16 +804,15 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
         int s_h = 0;
         float v_scale = 0.0;  //source v_scale & h_scale
         float h_scale = 0.0;
-        bool NeedScale = false;
         hwcRECT DstRectScale;
-        char value[PROPERTY_VALUE_MAX];
-        property_get("persist.sys.video.cvrs", value, "false");
-        NeedScale = !strcmp(value,"true");
         hotplug_get_resolution(&d_w,&d_h);
         DstRectScale.left  = 0; 
         DstRectScale.top   = 0; 
-        DstRectScale.right = d_w; 
+        DstRectScale.right = d_w;
         DstRectScale.bottom= d_h;
+        if(NeedScale && Context == _contextAnchor1) {
+            layer->displayStereo = 64;
+        }
 #endif
 
         if(strstr(layer->LayerName,"Starting@# ")){
@@ -901,13 +934,18 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
             if(Context == _contextAnchor1 && NeedScale){
                 s_w = SrcRect->right - SrcRect->left;
                 s_h = SrcRect->bottom - SrcRect->top;
-                if(s_w*d_h-s_h*d_w > 0){ //d_w standard
+                if(NeedFullScreen) {
+                    DstRectScale.left   = 0;
+                    DstRectScale.top    = 0;
+                    DstRectScale.right  = d_w;
+                    DstRectScale.bottom = d_h;
+                } else if(s_w*d_h-s_h*d_w > 0) { //d_w standard
                     ALOGV("%s,%d,[%d,%d][%d,%d]",__FUNCTION__,__LINE__,d_w,d_h,s_w,s_h);
                     DstRectScale.left   = 0;
                     DstRectScale.top    = ((d_h-s_h*d_w/s_w)%2==0)?((d_h-s_h*d_w/s_w)/2):((d_h-s_h*d_w/s_w)/2);
                     DstRectScale.right  = d_w;
                     DstRectScale.bottom = d_h - DstRectScale.top;
-                }else{
+                } else {
                     ALOGV("%s,%d,[%d,%d][%d,%d]",__FUNCTION__,__LINE__,d_w,d_h,s_w,s_h);
                     DstRectScale.left   = ((d_w-s_w*d_h/s_h)%2==0)?((d_w-s_w*d_h/s_h)/2):((d_w-s_w*d_h/s_h+1)/2);;
                     DstRectScale.top    = 0;
@@ -916,7 +954,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                 }
             }
 #endif
-        }else{
+        }else {
             dstRects[0].left   = hwcMAX(DstRect->left,   rect_merge.left);
             dstRects[0].top    = hwcMAX(DstRect->top,    rect_merge.top);
             dstRects[0].right  = hwcMIN(DstRect->right,  rect_merge.right);
@@ -939,6 +977,14 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
 
         Context->zone_manager.zone_info[j].zone_alpha = (layer->blending) >> 16;
         Context->zone_manager.zone_info[j].is_stretch = is_stretch;
+        if(SrcHnd->format == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO
+            || SrcHnd->format == HAL_PIXEL_FORMAT_YCrCb_NV12){
+#if (defined(RK3368_BOX) || defined(RK3288_BOX))
+            if(Context == _contextAnchor1 && NeedScale){
+                Context->zone_manager.zone_info[j].is_stretch = true;
+            }
+#endif
+        }
     	Context->zone_manager.zone_info[j].hfactor = hfactor;;
         Context->zone_manager.zone_info[j].zone_index = j;
         Context->zone_manager.zone_info[j].layer_index = i;
@@ -3388,8 +3434,9 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
         return -1;
     }
     if(list) {
-        list->hwLayers[0].compositionType = HWC_MIX_V2;
-        list->hwLayers[1].compositionType = HWC_MIX_V2;
+        for(int i=0;i<iFirstTransformLayer;i++) {
+            list->hwLayers[i].compositionType = HWC_MIX_V2;
+        }
     }
     //Mark the composer mode to HWC_MIX_V2
     memcpy(&Context->zone_manager,&zone_m,sizeof(ZoneManager));
@@ -5578,6 +5625,31 @@ int hwc_control_3dmode(int num,int flag)
         break;
     }
     return ret;
+}
+
+int init_thread_pamaters(threadPamaters* mThreadPamaters)
+{
+    if(mThreadPamaters) {
+        mThreadPamaters->count = 0;
+        pthread_mutex_init(&mThreadPamaters->mtx, NULL);
+        pthread_mutex_init(&mThreadPamaters->mlk, NULL);
+        pthread_cond_init(&mThreadPamaters->cond, NULL);
+    } else {
+        ALOGE("{%s}%d,mThreadPamaters is NULL",__FUNCTION__,__LINE__);
+    }
+    return 0;
+}
+
+int free_thread_pamaters(threadPamaters* mThreadPamaters)
+{
+    if(mThreadPamaters) {
+        pthread_mutex_destroy(&mThreadPamaters->mtx);
+        pthread_mutex_destroy(&mThreadPamaters->mlk);
+        pthread_cond_destroy(&mThreadPamaters->cond);
+    } else {
+        ALOGE("{%s}%d,mThreadPamaters is NULL",__FUNCTION__,__LINE__);
+    }
+    return 0;
 }
 
 void* hwc_control_3dmode_thread(void *arg)
@@ -8058,6 +8130,13 @@ void hwc_change_config(){
         ALOGD("hwc_change_config:width=%d,height=%d",width,height);
     	context->dpyAttr[HWC_DISPLAY_PRIMARY].relxres = width;
         context->dpyAttr[HWC_DISPLAY_PRIMARY].relyres = height;
+#if HTGFORCEREFRESH
+        pthread_mutex_lock(&context->mRefresh.mlk);
+        context->mRefresh.count = 0;
+        ALOGD_IF(mLogL&HLLTWO,"Htg:mRefresh.count=%d",context->mRefresh.count);
+        pthread_mutex_unlock(&context->mRefresh.mlk);
+        pthread_cond_signal(&context->mRefresh.cond);
+#endif
     }
 #endif
     return;
@@ -8780,15 +8859,9 @@ hwc_device_open(
     context->mIsFirstCallbackToHotplug = false;
 
 #if HTGFORCEREFRESH
-    context->mRefresh.count = 0;
-    pthread_mutex_init(&context->mRefresh.mtx, NULL);
-    pthread_mutex_init(&context->mRefresh.mlk, NULL);
-    pthread_cond_init(&context->mRefresh.cond, NULL);
+    init_thread_pamaters(&context->mRefresh);
 #endif
-    context->mControlStereo.count = 0;
-    pthread_mutex_init(&context->mControlStereo.mtx, NULL);
-    pthread_mutex_init(&context->mControlStereo.mlk, NULL);
-    pthread_cond_init(&context->mControlStereo.cond, NULL);
+    init_thread_pamaters(&context->mControlStereo);
 
 #ifdef RK3288_BOX
     {
@@ -8999,8 +9072,7 @@ hwc_device_open(
          context,
          context->fb_fps);
 
-    property_set("sys.ghwc.version",GHWC_VERSION); 
-    LOGD(HWC_VERSION);
+    hwc_init_version();
 
     char Version[32];
 
@@ -9094,13 +9166,9 @@ OnError:
 #endif
     pthread_mutex_destroy(&context->lock);
 #if HTGFORCEREFRESH
-    pthread_mutex_destroy(&context->mRefresh.mtx);
-    pthread_mutex_destroy(&context->mRefresh.mlk);
-    pthread_cond_destroy(&context->mRefresh.cond);
+    free_thread_pamaters(&context->mRefresh);
 #endif
-    pthread_mutex_destroy(&context->mControlStereo.mtx);
-    pthread_mutex_destroy(&context->mControlStereo.mlk);
-    pthread_cond_destroy(&context->mControlStereo.cond);
+    free_thread_pamaters(&context->mControlStereo);
     /* Error roll back. */ 
     if (context != NULL)
     {
