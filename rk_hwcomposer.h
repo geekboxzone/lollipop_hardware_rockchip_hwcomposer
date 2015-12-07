@@ -115,7 +115,7 @@
 #define HWCE                            1           //HWC_DISPLAY_EXTERNAL
 #define HWCV                            2           //HWC_DISPLAY_VIRTUAL
 
-#define GHWC_VERSION                    "2.063"
+#define GHWC_VERSION                    "2.064"
 #define HWC_VERSION                     "HWC_VERSION Author:wzq Version:2.063"
 
 #ifdef GPU_G6110
@@ -526,13 +526,13 @@ typedef struct _bufferInfo
 }bufferInfo;
 #endif
 
-typedef struct _threadLock
+typedef struct _threadPamaters
 {
     int count;
     pthread_mutex_t mlk;
     pthread_mutex_t mtx;
     pthread_cond_t cond;
-}threadLock;
+}threadPamaters;
 
 typedef struct _hwcContext
 {
@@ -628,9 +628,9 @@ typedef struct _hwcContext
 #endif
 
 #if HTGFORCEREFRESH
-     threadLock mRefresh;
+     threadPamaters mRefresh;
 #endif
-     threadLock mControlStereo;
+     threadPamaters mControlStereo;
      /* The index of video buffer will be used */
      int      mCurVideoIndex;
      int      fd_video_bk[MaxVideoBackBuffers];
