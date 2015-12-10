@@ -905,6 +905,12 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
         rect_merge.bottom = bottom_max;
 
         if(Region->numRects > 1 && i == 0 && !(mLogL & 65536)) {
+            ALOGD_IF(mLogL&HLLTHR,"Is in multiwindow");
+            Context->mMultiwindow = true;
+        }
+
+        if(!strcmp(PEN_LAYER_NAME,layer->LayerName)) {
+            ALOGD_IF(mLogL&HLLTHR,"Is in pendraw opt");
             Context->mMultiwindow = true;
         }
         overlayPixels = (DstRect->right-DstRect->left)*(DstRect->bottom-DstRect->top);
