@@ -105,6 +105,7 @@
 #define FPS_NAME                        "com.aatt.fpsm"
 #define BOTTOM_LAYER_NAME               "NavigationBar"
 #define TOP_LAYER_NAME                  "StatusBar"
+#define PEN_LAYER_NAME                  "drawpath"
 #define WALLPAPER                       "ImageWallpaper"
 #define VIDEO_PLAY_ACTIVITY_LAYER_NAME  "android.rk.RockVideoPlayer/android.rk.RockVideoPlayer.VideoP"
 #define RK_QUEDDR_FREQ                  0x8000
