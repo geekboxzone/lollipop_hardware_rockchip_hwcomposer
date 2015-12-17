@@ -2674,7 +2674,7 @@ TryAgain:
         if(pzone_mag->zone_info[k].scale_err || pzone_mag->zone_info[k].toosmall
             || pzone_mag->zone_info[k].zone_err || pzone_mag->zone_info[k].transform) {
             ALOGD_IF(mLogL&HLLFOU,"Policy out %s,%d ",__FUNCTION__,__LINE__);
-            return -1;
+            goto TryAgain;
         }
     }
 
@@ -2685,7 +2685,7 @@ TryAgain:
             if(pzone_mag->zone_info[i].format == HAL_PIXEL_FORMAT_YCrCb_NV12) {
                 ALOGD_IF(mLogL&HLLFOU,"Policy out Donot support video ");
                 return -1;
-            }    
+            }
             if(Context->mLastCompType != HWC_MIX_DOWN
                 || gMixInfo.lastZoneCrc[pzone_mag->zone_info[i].layer_index] != pzone_mag->zone_info[i].zoneCrc
                 || gMixInfo.gpu_draw_fd[pzone_mag->zone_info[i].layer_index] != pzone_mag->zone_info[i].layer_fd
