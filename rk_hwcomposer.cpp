@@ -246,7 +246,9 @@ int hwc_init_version()
     strcat(acVersion,"-3368MID");
 #endif
     property_set("sys.ghwc.version", acVersion);
+#ifdef SUPPORT_STEREO
     LOGD(acVersion);
+#endif
     return 0;
 }
 
@@ -2204,12 +2206,14 @@ int try_wins_dispatch_mix_up(void * ctx,hwc_display_contents_1_t * list)
     }
 #endif
 
+#ifdef SUPPORT_STEREO
     if(Context->Is3D && 
     ((!pzone_mag->zone_info[0].alreadyStereo && pzone_mag->zone_info[0].displayStereo)||
     (!pzone_mag->zone_info[1].alreadyStereo && pzone_mag->zone_info[1].displayStereo))){
         ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
         return -1;
     }
+#endif
 
     for(int k=0;k<2;k++)
     {
@@ -6918,10 +6922,12 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
     }
 #endif
     if(context->zone_manager.mCmpType == HWC_MIX_FPS) {
+#ifdef SUPPORT_STEREO
         for (unsigned int i = 0; i <(list->numHwLayers - 1); i++) {
             hwc_layer_1_t * layer = &list->hwLayers[i];
             layer->displayStereo = 0;
         }
+#endif
     }
     context->mLastCompType = context->zone_manager.mCmpType;
     return 0;
