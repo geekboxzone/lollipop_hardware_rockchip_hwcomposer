@@ -4377,6 +4377,11 @@ int try_wins_dispatch_ver(void * ctx,hwc_display_contents_1_t * list)
     return 0;
 }
 
+int try_wins_dispatch_skip(void * ctx,hwc_display_contents_1_t * list)
+{
+    return -1;
+}
+
 static int check_zone(hwcContext * Context)
 {
     ZoneManager* pzone_mag = &(Context->zone_manager);
@@ -7312,7 +7317,9 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
     int comType = context->zone_manager.mCmpType;
     hwc_collect_cfg(context,list,&fb_info,mix_flag,false);
     if(comType == HWC_MIX_FPS) {
+#ifdef SUPPORT_STEREO
         hwc_add_fbinfo(context,list,&fb_info);
+#endif
     }
     //if(!context->fb_blanked)
     if(true){
@@ -7403,6 +7410,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
     	}
 #else
         if(HWC_MIX_FPS == comType) {
+#ifdef SUPPORT_STEREO
             bool isFirstFPS = true;
             for(unsigned int i=0;i<list->numHwLayers-1;i++) {
                 hwc_layer_1_t * layer = &list->hwLayers[i];
@@ -7427,6 +7435,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
                     break;
                 }
             }
+#endif
         } else {
             for(unsigned int i=0;i<list->numHwLayers-1;i++) {
                 hwc_layer_1_t * layer = &list->hwLayers[i];
@@ -9022,7 +9031,11 @@ hwc_device_open(
     context->fun_policy[HWC_MIX_UP] = try_wins_dispatch_mix_up;
     context->fun_policy[HWC_MIX_DOWN] = try_wins_dispatch_mix_down;
     context->fun_policy[HWC_MIX_CROSS] = try_wins_dispatch_mix_cross;
+#ifdef SUPPORT_STEREO
     context->fun_policy[HWC_MIX_FPS] = try_wins_mix_fp_stereo;
+#else
+    context->fun_policy[HWC_MIX_FPS] = try_wins_dispatch_skip;
+#endif
     context->fun_policy[HWC_MIX_VH] = try_wins_dispatch_mix_vh;
     _contextAnchor = context;
 #if VIRTUAL_RGA_BLIT
@@ -9587,7 +9600,11 @@ int hotplug_get_config(int flag){
     context->fun_policy[HWC_MIX_DOWN] = try_wins_dispatch_mix_down;
     context->fun_policy[HWC_MIX_CROSS] = try_wins_dispatch_mix_cross;
     context->fun_policy[HWC_MIX_VTWO] = try_wins_dispatch_mix_v2;
+#ifdef SUPPORT_STEREO
     context->fun_policy[HWC_MIX_FPS] = try_wins_mix_fp_stereo;
+#else
+    context->fun_policy[HWC_MIX_FPS] = try_wins_dispatch_skip;
+#endif
     context->fun_policy[HWC_MIX_UP] = try_wins_dispatch_mix_up;
     context->fun_policy[HWC_MIX_VH] = try_wins_dispatch_mix_vh;
     _contextAnchor1 = context;
