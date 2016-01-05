@@ -116,7 +116,7 @@
 #define HWCE                            1           //HWC_DISPLAY_EXTERNAL
 #define HWCV                            2           //HWC_DISPLAY_VIRTUAL
 
-#define GHWC_VERSION                    "2.064"
+#define GHWC_VERSION                    "2.065"
 #define HWC_VERSION                     "HWC_VERSION Author:wzq Version:2.063"
 
 #ifdef GPU_G6110
