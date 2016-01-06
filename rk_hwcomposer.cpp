@@ -38,7 +38,6 @@ static hwcContext * _contextAnchor2 = NULL;
 //#define ENABLE_HDMI_APP_LANDSCAP_TO_PORTRAIT
 #undef LOGV
 #define LOGV(...)
-static int mLogL = 0;
 static int crcTable[256];
 bool hdmi_noready = true;
 static mix_info gmixinfo[2];
@@ -61,7 +60,6 @@ static int  hwc_prepare(hwc_composer_device_1_t * dev,size_t numDisplays,hwc_dis
 static int  hwc_set(hwc_composer_device_1_t * dev,size_t numDisplays,hwc_display_contents_1_t  ** displays);
 static int  hwc_device_close(struct hw_device_t * dev);
 
-int         hwc_repet_last();
 int         hwc_sprite_replace(hwcContext * Context, hwc_display_contents_1_t * list);
 void*       hwc_control_3dmode_thread(void *arg);
 
@@ -79,6 +77,9 @@ bool    hwcPrimaryToExternalCheckConfig(hwcContext * ctx,struct rk_fb_win_cfg_da
 
 static unsigned int     createCrc32(unsigned int crc,unsigned const char *buffer,unsigned int size);
 static void             initCrcTable(void);
+static int              fence_merge(char * value, int fd1, int fd2);
+static int              dual_view_vop_config(struct rk_fb_win_cfg_data * fbinfo);
+
 
 
 int hwChangeFormatandroidL(IN int fmt)
@@ -127,10 +128,7 @@ hwc_module_t HAL_MODULE_INFO_SYM =
     }
 };
 
-
-
-int
-_HasAlpha(RgaSURF_FORMAT Format)
+int _HasAlpha(RgaSURF_FORMAT Format)
 {
     return (Format == RK_FORMAT_RGB_565) ? false
           : (
@@ -250,6 +248,21 @@ int hwc_init_version()
     return 0;
 }
 
+int init_log_level()
+{
+    hwcContext * ctxp = _contextAnchor;
+    char value[PROPERTY_VALUE_MAX];
+    property_get("sys.hwc.log", value, "0");
+    ctxp->mLogL = atoi(value);
+    return 0;
+}
+
+bool log(int in)
+{
+    hwcContext * ctxp = _contextAnchor;
+    return ctxp->mLogL & in;
+}
+
 //return property value of pcProperty
 static int hwc_get_int_property(const char* pcProperty,const char* default_value)
 {
@@ -309,8 +322,10 @@ static int LayerZoneCheck( hwc_layer_1_t * Layer , int disp)
            || rects[i].right > context->fbhandle.width
            || rects[i].bottom > context->fbhandle.height)
         {
-        	ALOGE("LayerZoneCheck ERROR line at %d",__LINE__);
-            return -1;
+            if(!(context == _contextAnchor1 && context->mIsDualViewMode)) {
+                ALOGW("LayerZoneCheck out line at %d",__LINE__);
+                return -1;
+            }
         }
     }
 
@@ -367,8 +382,10 @@ void hwc_sync_release(hwc_display_contents_1_t  *list)
 	}
    
 }
-int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,int h_valid,int fd_dst, int Dstfmt,int specialwin,int dpyID)
+
+int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,int h_valid,int fd_dst, int Dstfmt,int specialwin,int dpyID,bool isTry)
 {
+    ATRACE_CALL();
     struct rga_req  Rga_Request;
     RECT clip;
     unsigned char RotateMode = 0;
@@ -383,20 +400,20 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
         context = _contextAnchor1;
     }
     int index_v = context->mCurVideoIndex%MaxVideoBackBuffers;
-    if (!rga_fd || !handle){
+    if (!rga_fd || !handle) {
        return -1; 
     }
-    if(_contextAnchor->video_fmt != HAL_PIXEL_FORMAT_YCrCb_NV12 && !specialwin){
+    if(_contextAnchor->video_fmt != HAL_PIXEL_FORMAT_YCrCb_NV12 && !specialwin) {
         return -1;
     }
 
-    if(specialwin && context->base_video_bk[index_v]==0){
+    if(specialwin && context->base_video_bk[index_v]==0) {
         ALOGE("It hasn't direct_base for dst buffer");
         return -1;
     }
 
     if((handle->video_width <= 0 || handle->video_height <= 0 ||
-       handle->video_width >= 8192 || handle->video_height >= 4096 )&&!specialwin){
+       handle->video_width >= 8192 || handle->video_height >= 4096 )&&!specialwin) {
         ALOGE("rga invalid w_h[%d,%d]",handle->video_width , handle->video_height);
         return -1;
     }
@@ -488,13 +505,15 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
     }
     int size = hwcGetBufferSizeForRga(DstActW,DstActH,Dstfmt) ;
     if(size > RLAGESIZE){
-        ALOGD_IF(mLogL&HLLSEV,"now size=%d,largesize=%d,w_h_f[%d,%d,%d]",size,RLAGESIZE,DstActW,DstActH,Dstfmt);
+        ALOGD_IF(log(HLLSEV),"now size=%d,largesize=%d,w_h_f[%d,%d,%d]",size,RLAGESIZE,DstActW,DstActH,Dstfmt);
         return -1;
     }
-    ALOGD_IF(mLogL&HLLSEV,"src addr=[%x],w-h[%d,%d],act[%d,%d][f=%d]",
+    if(isTry)
+        return 0;
+    ALOGD_IF(log(HLLSIX),"src addr=[%x],w-h[%d,%d],act[%d,%d][f=%d]",
         specialwin ? handle->share_fd:handle->video_addr, SrcVirW, SrcVirH,SrcActW,SrcActH,specialwin ?  hwChangeRgaFormat(handle->format):RK_FORMAT_YCbCr_420_SP);
-    ALOGD_IF(mLogL&HLLSEV,"dst fd=[%x],w-h[%d,%d],act[%d,%d][f=%d],rot=%d,rot_mod=%d",
-        fd_dst, DstVirW, DstVirH,DstActW,DstActH,Dstfmt,Rotation,RotateMode);
+    ALOGD_IF(log(HLLSIX),"dst fd=[%x],Index=%d,w-h[%d,%d],act[%d,%d][f=%d],rot=%d,rot_mod=%d",
+        fd_dst, index_v, DstVirW, DstVirH,DstActW,DstActH,Dstfmt,Rotation,RotateMode);
     if(specialwin)  
         RGA_set_src_vir_info(&Rga_Request, handle->share_fd, 0, 0,SrcVirW, SrcVirH, hwChangeRgaFormat(handle->format), 0);    
     else
@@ -509,28 +528,30 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
     memset((void*)handle->base,0x0,SrcVirW*SrcVirH*3/2);
 #endif
 
-    if( handle->type == 1 )
-    {
-        if( !specialwin)
-        {
+    if(handle->type == 1) {
+        if( !specialwin) {
 #if defined(__arm64__) || defined(__aarch64__)
             RGA_set_dst_vir_info(&Rga_Request, fd_dst,(unsigned long)(GPU_BASE), 0,DstVirW,DstVirH,&clip, Dstfmt, 0);
 #else
             RGA_set_dst_vir_info(&Rga_Request, fd_dst,(unsigned int)(GPU_BASE), 0,DstVirW,DstVirH,&clip, Dstfmt, 0);
 #endif
             ALOGW("Debugmem mmu_en fd=%d in vmalloc ,base=%p,[%dX%d],fmt=%d,src_addr=%x", fd_dst,GPU_BASE,DstVirW,DstVirH,handle->video_addr);
-        }
-        else
-        {
+        } else {
             RGA_set_dst_vir_info(&Rga_Request, fd_dst,context->base_video_bk[index_v], 0,DstVirW,DstVirH,&clip, Dstfmt, 0);
-            ALOGD_IF(mLogL&HLLSEV,"rga_video_copybit fd_dst=%d,base=%x,index_v=%d",fd_dst,context->base_video_bk[index_v],index_v);
+            ALOGD_IF(log(HLLSEV),"rga_video_copybit fd_dst=%d,base=%x,index_v=%d",fd_dst,context->base_video_bk[index_v],index_v);
         }
         RGA_set_mmu_info(&Rga_Request, 1, 0, 0, 0, 0, 2);
         Rga_Request.mmu_info.mmu_flag |= (1<<31) | (1<<10) | (1<<8);
 
     }
 
-    if(ioctl(rga_fd, RGA_BLIT_SYNC, &Rga_Request) != 0) {
+    if(context->relFenceFd[index_v] > 0) {
+        ALOGD_IF(log(HLLSIX),"Goto dst sync wait %d",context->relFenceFd[index_v]);
+        sync_wait(context->relFenceFd[index_v],-1);
+        close(context->relFenceFd[index_v]);
+        context->relFenceFd[index_v] = -1;
+    }
+    if(ioctl(rga_fd, RGA_BLIT_SYNC, &Rga_Request)) {
         LOGE(" %s(%d) RGA_BLIT fail",__FUNCTION__, __LINE__);
         ALOGE("err src addr=[%x],w-h[%d,%d],act[%d,%d][f=%d],x_y_offset[%d,%d]",
             specialwin ? handle->share_fd:handle->video_addr, SrcVirW, SrcVirH,SrcActW,SrcActH,specialwin ?  hwChangeRgaFormat(handle->format):RK_FORMAT_YCbCr_420_SP,xoffset,yoffset);
@@ -538,8 +559,7 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
             fd_dst, DstVirW, DstVirH,DstActW,DstActH,Dstfmt,Rotation,RotateMode);
     }
 
-
-  //  pthread_mutex_unlock(&_contextAnchor->lock);
+    //  pthread_mutex_unlock(&_contextAnchor->lock);
 
 #if DUMP_AFTER_RGA_COPY_IN_GPU_CASE
     FILE * pfile = NULL;
@@ -561,15 +581,7 @@ int rga_video_copybit(struct private_handle_t *handle,int tranform,int w_valid,i
         }
     }
 #endif
-   
     return 0;
-}
-
-
-
-static int is_out_log( void )
-{
-    return hwc_get_int_property("sys.hwc.log","0");
 }
 
 int is_x_intersect(hwc_rect_t * rec,hwc_rect_t * rec2)
@@ -592,6 +604,7 @@ int is_x_intersect(hwc_rect_t * rec,hwc_rect_t * rec2)
     }
     return 0;
 }
+
 int is_zone_combine(ZoneInfo * zf,ZoneInfo * zf2)
 {
     if(zf->format != zf2->format)
@@ -664,20 +677,31 @@ bool is_same_rect(hwc_rect_t rect1,hwc_rect_t rect2)
         return false;
 }
 
+bool is_hotplug_connected()
+{
+    hwcContext * ctxp = _contextAnchor;
+    return (getHdmiMode() == 1 || _contextAnchor->mHdmiSI.CvbsOn);
+}
+
 bool is_need_post(hwc_display_contents_1_t *list,int dpyID,int flag)
 {
 #ifdef RK3288_BOX
     hwcContext * context = _contextAnchor;
-    if(context->mLcdcNum == 2){
+    if(context->mLcdcNum == 2) {
         return true;
     }
 #endif
-    switch(flag){
+#if DUAL_VIEW_MODE
+    if(!hdmi_noready && dpyID == HWCP) {
+        return false;
+    }
+#endif
+    switch(flag) {
         case 0://hotplug device not realdy,so we not post:from set_screen
 #if (defined(GPU_G6110) || defined(RK3288_BOX))
-            if(hdmi_noready && dpyID == HWCE){
+            if(hdmi_noready && dpyID == HWCE) {
 #if (defined(RK3368_BOX) || defined(RK3288_BOX))
-                if((!hdmi_noready && (getHdmiMode() == 1 || _contextAnchor->mHdmiSI.CvbsOn))){
+                if((!hdmi_noready && is_hotplug_connected())) {
                     hotplug_set_frame(_contextAnchor,0);
                 }
 #endif
@@ -688,14 +712,14 @@ bool is_need_post(hwc_display_contents_1_t *list,int dpyID,int flag)
 
         case 1://hotplug is realdy so primary not post:from fb_post
 #if (defined(GPU_G6110) || defined(RK3288_BOX))
-            if((!hdmi_noready && (getHdmiMode() == 1 || _contextAnchor->mHdmiSI.CvbsOn)) && dpyID==0){
+            if((!hdmi_noready && is_hotplug_connected()) && dpyID==0) {
                 return false;
             }
 #endif
             break;
         case 2://hotplug is realdy so primary not post:from set_lcdc
 #if (defined(GPU_G6110) || defined(RK3288_BOX))
-            if(!(hdmi_noready || dpyID == HWCE)){
+            if(!(hdmi_noready || dpyID == HWCE)) {
                 return false;
             }
 #endif
@@ -708,24 +732,55 @@ bool is_need_post(hwc_display_contents_1_t *list,int dpyID,int flag)
 
 bool is_gpu_or_nodraw(hwc_display_contents_1_t *list,int dpyID)
 {
+    hwcContext * ctxp = _contextAnchor;
 #ifdef RK3288_BOX
-    hwcContext * context = _contextAnchor;
-    if(context->mLcdcNum == 2){
+    if(ctxp->mLcdcNum == 2) {
+#if DUAL_VIEW_MODE
+        if(ctxp->mIsDualViewMode) {
+            if(!hdmi_noready  && dpyID == HWCP && is_hotplug_connected()) {
+                for (unsigned int i = 0; i < (list->numHwLayers - 1); i++) {
+                    hwc_layer_1_t * layer = &list->hwLayers[i];
+                    layer->compositionType = HWC_NODRAW;
+                }
+                ALOGD_IF(log(HLLSIX),"Primary nodraw %s,%d",__FUNCTION__,__LINE__);
+                return true;
+            }
+            if(hdmi_noready && dpyID == HWCE) {
+                ALOGD_IF(log(HLLSIX),"Hotplug nodraw %s,%d",__FUNCTION__,__LINE__);
+                return true;
+            }
+        }
+#endif
         return false;
     }
 #endif
+#if DUAL_VIEW_MODE
+    if(ctxp->mIsDualViewMode) {
+        if(!hdmi_noready  && dpyID == HWCP && is_hotplug_connected()) {
+            for (unsigned int i = 0; i < (list->numHwLayers - 1); i++) {
+                hwc_layer_1_t * layer = &list->hwLayers[i];
+                layer->compositionType = HWC_NODRAW;
+            }
+            ALOGD_IF(log(HLLSIX),"Primary nodraw %s,%d",__FUNCTION__,__LINE__);
+            return true;
+        }
+        if(hdmi_noready && dpyID == HWCE) {
+            ALOGD_IF(log(HLLSIX),"Hotplug nodraw %s,%d",__FUNCTION__,__LINE__);
+            return true;
+        }
+    }
+#endif
 #if (defined(GPU_G6110) || defined(RK3288_BOX))
-    if((!hdmi_noready  && dpyID == HWCP
-        && (getHdmiMode() == 1 || _contextAnchor->mHdmiSI.CvbsOn))){
-        for (unsigned int i = 0; i < (list->numHwLayers - 1); i++){
+    if(!hdmi_noready  && dpyID == HWCP && is_hotplug_connected()) {
+        for (unsigned int i = 0; i < (list->numHwLayers - 1); i++) {
             hwc_layer_1_t * layer = &list->hwLayers[i];
             layer->compositionType = HWC_NODRAW;
         }
-        ALOGD_IF(mLogL&HLLSIX,"Primary nodraw %s,%d",__FUNCTION__,__LINE__);
+        ALOGD_IF(log(HLLSIX),"Primary nodraw %s,%d",__FUNCTION__,__LINE__);
         return true;
     }
-    if(hdmi_noready && dpyID == HWCE){
-        ALOGD_IF(mLogL&HLLSIX,"Hotplug nodraw %s,%d",__FUNCTION__,__LINE__);
+    if(hdmi_noready && dpyID == HWCE) {
+        ALOGD_IF(log(HLLSIX),"Hotplug nodraw %s,%d",__FUNCTION__,__LINE__);
         return true;
     }
 #endif
@@ -758,7 +813,7 @@ int initLayerCompositionType(hwcContext * Context,hwc_display_contents_1_t * lis
     for(unsigned int i=0;i < list->numHwLayers - 1;i++) {
         hwc_layer_1_t * layer = &list->hwLayers[i];
         layer->compositionType = HWC_LCDC;
-        ALOGD_IF(mLogL&HLLFOU,"layer[%d]=%d",i,layer->compositionType);
+        ALOGD_IF(log(HLLFOU),"layer[%d]=%d",i,layer->compositionType);
     }
     return 0;
 }
@@ -768,6 +823,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
     size_t i,j;
     int tsize = 0;
     int factor =1;
+    bool firsttfrmbyrga = true;
     Context->mMultiwindow = false;
 #if (defined(RK3368_BOX) || defined(RK3288_BOX))
     bool NeedScale = false;
@@ -852,10 +908,10 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
         }
         if(hfactor >= 8.0 || vfactor >= 8.0 || hfactor <= 0.125 || vfactor <= 0.125  ){
             Context->zone_manager.zone_info[j].scale_err = true;
-            ALOGD_IF(mLogL&HLLSIX,"stretch[%f,%f]not support!",hfactor,vfactor);
+            ALOGD_IF(log(HLLSIX),"stretch[%f,%f]not support!",hfactor,vfactor);
         } 
         is_stretch = (hfactor != 1.0) || (vfactor != 1.0);
-        if(Context == _contextAnchor1){
+        if(Context == _contextAnchor1) {
             is_stretch = is_stretch || _contextAnchor->mHdmiSI.NeedReDst;
         }
 #if ONLY_USE_ONE_VOP
@@ -904,13 +960,13 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
         rect_merge.right = right_max;
         rect_merge.bottom = bottom_max;
 
-        if(Region->numRects > 1 && i == 0 && !(mLogL & 65536)) {
-            ALOGD_IF(mLogL&HLLTHR,"Is in multiwindow");
+        if(Region->numRects > 1 && i == 0 && !log(65536)) {
+            ALOGD_IF(log(HLLTHR),"Is in multiwindow");
             Context->mMultiwindow = true;
         }
 
         if(!strcmp(PEN_LAYER_NAME,layer->LayerName)) {
-            ALOGD_IF(mLogL&HLLTHR,"Is in pendraw opt");
+            ALOGD_IF(log(HLLTHR),"Is in pendraw opt");
             Context->mMultiwindow = true;
         }
         overlayPixels = (DstRect->right-DstRect->left)*(DstRect->bottom-DstRect->top);
@@ -1026,9 +1082,12 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
         }
 
 #if USE_HWC_FENCE
-        Context->zone_manager.zone_info[j].acq_fence_fd =layer->acquireFenceFd;
+        Context->zone_manager.zone_info[j].acq_fence_fd = layer->acquireFenceFd;
+        Context->zone_manager.zone_info[j].pRelFenceFd = &(layer->releaseFenceFd);
 #endif
-        if(SrcHnd->format == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO || (trsfrmbyrga)){
+        //firsttfrmbyrga:every display only support one layer trfmbyrga for too slow
+        if((SrcHnd->format == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO || (trsfrmbyrga)) && firsttfrmbyrga){
+            firsttfrmbyrga = false;
             int w_valid = 0 ,h_valid = 0;
 #if USE_VIDEO_BACK_BUFFERS
             int index_v = Context->mCurVideoIndex%MaxVideoBackBuffers;
@@ -1040,7 +1099,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                 index_v = Context->mCurVideoIndex%MaxVideoBackBuffers;
                 video_fd = Context->fd_video_bk[index_v];
             }else{
-                video_fd= SrcHnd->share_fd;
+                video_fd = SrcHnd->share_fd;
             }
 #endif
 		    hwc_rect_t * psrc_rect = &(Context->zone_manager.zone_info[j].src_rect);
@@ -1200,17 +1259,17 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
                     Context->mRgaTBI.h_valid = h_valid;
                     Context->mRgaTBI.transform = layer->transform;
                     Context->mRgaTBI.trsfrmbyrga = trsfrmbyrga;
-                    Context->mRgaTBI.layer_fd = Context->zone_manager.zone_info[j].layer_fd;
 					Context->mRgaTBI.lastfd = SrcHnd->share_fd;
+                    Context->mRgaTBI.layer_fd = Context->zone_manager.zone_info[j].layer_fd;
                     Context->mNeedRgaTransform = true;
                 }
             }
 			psrc_rect->left = psrc_rect->left - psrc_rect->left%2;
 			psrc_rect->top = psrc_rect->top - psrc_rect->top%2;
 			psrc_rect->right = psrc_rect->right - psrc_rect->right%2;
-			psrc_rect->bottom = psrc_rect->bottom - psrc_rect->bottom%2;  
-		}
-        else{
+			psrc_rect->bottom = psrc_rect->bottom - psrc_rect->bottom%2;
+			Context->zone_manager.zone_info[j].pRelFenceFd = &(Context->relFenceFd[index_v]);
+		} else {
             Context->zone_manager.zone_info[j].src_rect.left   = hwcMAX ((SrcRect->left \
             - (int) ((DstRect->left   - dstRects[0].left)   * hfactor)),0);
             Context->zone_manager.zone_info[j].src_rect.top    = hwcMAX ((SrcRect->top \
@@ -1296,7 +1355,7 @@ int collect_all_zones( hwcContext * Context,hwc_display_contents_1_t * list)
     // query ddr is enough ,if dont enough back to gpu composer
     ALOGV("tsize=%dMB,Context->ddrFd=%d,RK_QUEDDR_FREQ",tsize,Context->ddrFd);
     for(i=0;i<j;i++){
-        ALOGD_IF(mLogL&HLLONE,"Zone[%d]->layer[%d],"
+        ALOGD_IF(log(HLLONE),"Zone[%d]->layer[%d],"
             "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
             "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],acq_fence_fd=%d,"
             "s_g_o[%d,%d,%d],layname=%s",
@@ -1336,13 +1395,13 @@ int try_wins_dispatch_hor(void * ctx,hwc_display_contents_1_t * list)
     int sort = 1;
     int cnt = 0;
     int srot_tal[4][2] = {0,};
-    int sort_stretch[4] = {0}; 
+    int sort_stretch[4] = {0};
     int sort_pre;
     float hfactor_max = 1.0;
     int large_cnt = 0;
     int bw = 0;
     bool isyuv = false;
-    BpVopInfo  bpvinfo;    
+    BpVopInfo  bpvinfo;
     int same_cnt = 0;
 
     hwcContext * Context = (hwcContext *)ctx;
@@ -1365,26 +1424,33 @@ int try_wins_dispatch_hor(void * ctx,hwc_display_contents_1_t * list)
             "win3_2",
             "win3_3",
             };
-    
+
 #if OPTIMIZATION_FOR_TRANSFORM_UI
     //ignore transform ui layer case.
     for(i=0;i<pzone_mag->zone_cnt;i++)
     {
         if((pzone_mag->zone_info[i].transform != 0) && Context->mtrsformcnt > 1
             && (pzone_mag->zone_info[i].format != HAL_PIXEL_FORMAT_YCrCb_NV12)) {
-            ALOGD_IF(mLogL&HLLFOU,"i = %d is transform");
+            ALOGD_IF(log(HLLFOU),"i = %d is transform");
             return -1;
         }
     }
 #endif
-
+#if DUAL_VIEW_MODE
+    if(Context != contextAh && Context->mIsDualViewMode) {
+        if(list->numHwLayers > 3) {
+            ALOGD_IF(log(HLLFOU),"Policy out:%s,%d",__FUNCTION__,__LINE__);
+            return -1;
+        }
+    }
+#endif
     if(Context->Is3D){
-        ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
+        ALOGD_IF(log(HLLFOU),"Policy out:%s,%d",__FUNCTION__,__LINE__);
         return -1;
     }
 
     if(Context->mAlphaError){
-        ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
+        ALOGD_IF(log(HLLFOU),"Policy out:%s,%d",__FUNCTION__,__LINE__);
         return -1;
     }
 
@@ -1392,7 +1458,7 @@ int try_wins_dispatch_hor(void * ctx,hwc_display_contents_1_t * list)
     {
         if(pzone_mag->zone_info[k].scale_err || pzone_mag->zone_info[k].toosmall
             || pzone_mag->zone_info[k].zone_err) {
-            ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
+            ALOGD_IF(log(HLLFOU),"Policy out:%s,%d",__FUNCTION__,__LINE__);
             return -1;
         }
     }
@@ -1461,7 +1527,7 @@ int try_wins_dispatch_hor(void * ctx,hwc_display_contents_1_t * list)
     }
     if(sort >4)  // lcdc dont support 5 wins
     {
-        ALOGD_IF(mLogL&HLLFOU,"try %s lcdc<5wins sort=%d,%d",__FUNCTION__,sort,__LINE__);
+        ALOGD_IF(log(HLLFOU),"try %s lcdc<5wins sort=%d,%d",__FUNCTION__,sort,__LINE__);
         return -1;
     }    
 	//pzone_mag->zone_info[i].sort: win type
@@ -1526,7 +1592,7 @@ int try_wins_dispatch_hor(void * ctx,hwc_display_contents_1_t * list)
             j++;
             if(j > 2)  // lcdc only has win2 and win3 supprot more zones
             {
-                ALOGD_IF(mLogL&HLLFOU,"lcdc only has win2 and win3 supprot more zones");
+                ALOGD_IF(log(HLLFOU),"lcdc only has win2 and win3 supprot more zones");
                 return -1;  
             }
         }
@@ -1543,7 +1609,7 @@ int try_wins_dispatch_hor(void * ctx,hwc_display_contents_1_t * list)
             j++;
             if(j > 2)  // lcdc only has win2 and win3 supprot more zones
             {
-                ALOGD_IF(mLogL&HLLFOU,"lcdc only has win0 and win1 supprot stretch");
+                ALOGD_IF(log(HLLFOU),"lcdc only has win0 and win1 supprot stretch");
                 return -1;  
             }
         }
@@ -1588,7 +1654,7 @@ int try_wins_dispatch_hor(void * ctx,hwc_display_contents_1_t * list)
                 ALOGE("try_wins_dispatch_hor sort err!");
                 return -1;
         }
-        ALOGD_IF(mLogL&HLLFIV,"zone[%d].dispatched[%d]=%s,sort=%d", \
+        ALOGD_IF(log(HLLFIV),"zone[%d].dispatched[%d]=%s,sort=%d", \
         i,pzone_mag->zone_info[i].dispatched,
         compositionTypeName[pzone_mag->zone_info[i].dispatched -1],
         pzone_mag->zone_info[i].sort);
@@ -1615,7 +1681,7 @@ int try_wins_dispatch_hor(void * ctx,hwc_display_contents_1_t * list)
         {
             int area_no = 0;
             int win_id = 0;
-            ALOGD_IF(mLogL&HLLFIV,"Zone[%d]->layer[%d],dispatched=%d,"
+            ALOGD_IF(log(HLLFIV),"Zone[%d]->layer[%d],dispatched=%d,"
             "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
             "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],"
             "layer_fd[%d],addr=%x,acq_fence_fd=%d"
@@ -1688,12 +1754,12 @@ int try_wins_dispatch_hor(void * ctx,hwc_display_contents_1_t * list)
         bpvinfo.bp_vop_size = Context->zone_manager.bp_size;    
         for(i= 0;i<4;i++)
         {
-            ALOGD_IF(mLogL&HLLFIV,"RK_QUEDDR_FREQ info win[%d] bo_size=%dMB,bp_vop_size=%dMB,state=%d,num=%d",
+            ALOGD_IF(log(HLLFIV),"RK_QUEDDR_FREQ info win[%d] bo_size=%dMB,bp_vop_size=%dMB,state=%d,num=%d",
                 i,bpvinfo.bp_size,bpvinfo.bp_vop_size,bpvinfo.vopinfo[i].state,bpvinfo.vopinfo[i].zone_num);
         }    
         if(ioctl(Context->ddrFd, RK_QUEDDR_FREQ, &bpvinfo))
         {
-            if(mLogL&HLLTHR)
+            if(log(HLLTHR))
             {
                 for(i= 0;i<4;i++)
                 {
@@ -1707,7 +1773,7 @@ int try_wins_dispatch_hor(void * ctx,hwc_display_contents_1_t * list)
 #endif    
     if((large_cnt + bw ) > 5 )
     {
-        ALOGD_IF(mLogL&HLLTHR,"data too large ,lcdc not support");
+        ALOGD_IF(log(HLLTHR),"data too large ,lcdc not support");
         return -1;
     }
     memcpy(&Context->zone_manager,&zone_m,sizeof(ZoneManager));
@@ -1769,29 +1835,29 @@ int try_wins_dispatch_mix_cross(void * ctx,hwc_display_contents_1_t * list)
         mix_index = 0;
     }
     if(list->numHwLayers - 1 < 5){
-        ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
+        ALOGD_IF(log(HLLFOU),"Policy out:%s,%d",__FUNCTION__,__LINE__);
         return -1;
     }
 
     if(Context->mAlphaError){
-        ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
+        ALOGD_IF(log(HLLFOU),"Policy out:%s,%d",__FUNCTION__,__LINE__);
         return -1;
     }
 
     if(contextAh->mHdmiSI.NeedReDst){
-        ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
+        ALOGD_IF(log(HLLFOU),"Policy out:%s,%d",__FUNCTION__,__LINE__);
         return -1;
     }
 
 #ifdef RK3288_BOX
     if(Context==_contextAnchor && Context->mResolutionChanged && Context->mLcdcNum==2){
-        ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
+        ALOGD_IF(log(HLLFOU),"Policy out:%s,%d",__FUNCTION__,__LINE__);
         return -1;
     }
 #endif
 
     if(Context->Is3D){
-        ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
+        ALOGD_IF(log(HLLFOU),"Policy out:%s,%d",__FUNCTION__,__LINE__);
         return -1;
     }
 
@@ -1804,7 +1870,7 @@ int try_wins_dispatch_mix_cross(void * ctx,hwc_display_contents_1_t * list)
     for(int k=foundLayer+1;k<pzone_mag->zone_cnt;k++){
         if(is_x_intersect(&(pzone_mag->zone_info[foundLayer].disp_rect),&(pzone_mag->zone_info[k].disp_rect))){
             intersect = true;
-            ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
+            ALOGD_IF(log(HLLFOU),"Policy out:%s,%d",__FUNCTION__,__LINE__);
             return -1;
         }
     }
@@ -1831,7 +1897,7 @@ int try_wins_dispatch_mix_cross(void * ctx,hwc_display_contents_1_t * list)
     pzone_mag->zone_cnt -= cntfb;
     for(i=0;i< pzone_mag->zone_cnt;i++)
     {
-        ALOGD_IF(mLogL&HLLFIV,"%s,%d:Zone[%d]->layer[%d],"
+        ALOGD_IF(log(HLLFIV),"%s,%d:Zone[%d]->layer[%d],"
             "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
             "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],acq_fence_fd=%d,"
             "layname=%s",__FUNCTION__,__LINE__,
@@ -1898,7 +1964,7 @@ int try_wins_dispatch_mix_cross(void * ctx,hwc_display_contents_1_t * list)
     }
     if(sort >3)  // lcdc dont support 5 wins
     {
-        ALOGD_IF(mLogL&HLLTHR,"lcdc dont support 5 wins sort=%d",sort);
+        ALOGD_IF(log(HLLTHR),"lcdc dont support 5 wins sort=%d",sort);
         return -1;
     }
     for(i=0;i<pzone_mag->zone_cnt;i++)
@@ -1965,7 +2031,7 @@ int try_wins_dispatch_mix_cross(void * ctx,hwc_display_contents_1_t * list)
             j++;
             if(j > 2)  // lcdc only has win0 and win1 supprot stretch
             {
-                ALOGD_IF(mLogL&HLLFIV,"lcdc only has win0 and win1 supprot stretch");
+                ALOGD_IF(log(HLLFIV),"lcdc only has win0 and win1 supprot stretch");
                 return -1;
             }
         }
@@ -2039,7 +2105,7 @@ int try_wins_dispatch_mix_cross(void * ctx,hwc_display_contents_1_t * list)
         {
             int area_no = 0;
             int win_id = 0;
-            ALOGD_IF(mLogL&HLLFIV,"Zone[%d]->layer[%d],dispatched=%d,"
+            ALOGD_IF(log(HLLFIV),"Zone[%d]->layer[%d],dispatched=%d,"
             "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
             "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],"
             "layer_fd[%d],addr=%x,acq_fence_fd=%d"
@@ -2102,12 +2168,12 @@ int try_wins_dispatch_mix_cross(void * ctx,hwc_display_contents_1_t * list)
         bpvinfo.bp_vop_size = tsize ;
         for(i= 0;i<4;i++)
         {
-            ALOGD_IF(mLogL&HLLTHR,"RK_QUEDDR_FREQ mixinfo win[%d] bo_size=%dMB,bp_vop_size=%dMB,state=%d,num=%d",
+            ALOGD_IF(log(HLLTHR),"RK_QUEDDR_FREQ mixinfo win[%d] bo_size=%dMB,bp_vop_size=%dMB,state=%d,num=%d",
                 i,bpvinfo.bp_size,bpvinfo.bp_vop_size,bpvinfo.vopinfo[i].state,bpvinfo.vopinfo[i].zone_num);
         }
         if(ioctl(Context->ddrFd, RK_QUEDDR_FREQ, &bpvinfo))
         {
-            if(mLogL&HLLTHR)
+            if(log(HLLTHR))
             {
                 for(i= 0;i<4;i++)
                 {
@@ -2183,31 +2249,42 @@ int try_wins_dispatch_mix_up(void * ctx,hwc_display_contents_1_t * list)
         mix_index = 0;
     }
     if(list->numHwLayers - 1 < 3){
-        ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
+        ALOGD_IF(log(HLLFOU),"Policy out:%s,%d",__FUNCTION__,__LINE__);
     	return -1;
     }
 
     if(Context->mAlphaError){
-        ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
+        ALOGD_IF(log(HLLFOU),"Policy out:%s,%d",__FUNCTION__,__LINE__);
         return -1;
     }
 
     if(contextAh->mHdmiSI.NeedReDst){
-        ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
+        ALOGD_IF(log(HLLFOU),"Policy out:%s,%d",__FUNCTION__,__LINE__);
         return -1;
     }
     
 #ifdef RK3288_BOX
     if(Context==_contextAnchor && Context->mResolutionChanged && Context->mLcdcNum==2){
-        ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
+        ALOGD_IF(log(HLLFOU),"Policy out:%s,%d",__FUNCTION__,__LINE__);
         return -1;
     }
 #endif
-
+#if DUAL_VIEW_MODE
+    if(Context != contextAh && Context->mIsDualViewMode) {
+        int dpyPw = contextAh->dpyAttr[0].xres;
+        int dpyPh = contextAh->dpyAttr[0].yres;
+        int dpyEw = Context->dpyAttr[1].xres;
+        int dpyEh = Context->dpyAttr[1].yres;
+        if(dpyPw != dpyEw || dpyPh != dpyEh) {
+            ALOGD_IF(log(HLLFOU),"Policy out:%s,%d",__FUNCTION__,__LINE__);
+            return -1;
+        }
+    }
+#endif
     if(Context->Is3D && 
     ((!pzone_mag->zone_info[0].alreadyStereo && pzone_mag->zone_info[0].displayStereo)||
     (!pzone_mag->zone_info[1].alreadyStereo && pzone_mag->zone_info[1].displayStereo))){
-        ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
+        ALOGD_IF(log(HLLFOU),"Policy out:%s,%d",__FUNCTION__,__LINE__);
         return -1;
     }
 
@@ -2217,7 +2294,7 @@ int try_wins_dispatch_mix_up(void * ctx,hwc_display_contents_1_t * list)
             || pzone_mag->zone_info[k].zone_err || (pzone_mag->zone_info[k].transform
                 && pzone_mag->zone_info[k].format != HAL_PIXEL_FORMAT_YCrCb_NV12 && 0==k)
                     || (pzone_mag->zone_info[k].transform && 1 == k)) {
-            ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
+            ALOGD_IF(log(HLLFOU),"Policy out:%s,%d",__FUNCTION__,__LINE__);
             return -1;
         }
     }
@@ -2266,7 +2343,7 @@ int try_wins_dispatch_mix_up(void * ctx,hwc_display_contents_1_t * list)
     pzone_mag->zone_cnt -= cntfb;
     for(i=0;i< pzone_mag->zone_cnt;i++)
     {
-        ALOGD_IF(mLogL&HLLFIV,"%s,%d:Zone[%d]->layer[%d],"
+        ALOGD_IF(log(HLLFIV),"%s,%d:Zone[%d]->layer[%d],"
             "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
             "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],acq_fence_fd=%d,"
             "layname=%s",__FUNCTION__,__LINE__,
@@ -2333,7 +2410,7 @@ int try_wins_dispatch_mix_up(void * ctx,hwc_display_contents_1_t * list)
     }
     if(sort >3)  // lcdc dont support 5 wins
     {
-        ALOGD_IF(mLogL&HLLTHR,"lcdc dont support 5 wins sort=%d",sort);
+        ALOGD_IF(log(HLLTHR),"lcdc dont support 5 wins sort=%d",sort);
         return -1;
     }    
     for(i=0;i<pzone_mag->zone_cnt;i++)
@@ -2400,7 +2477,7 @@ int try_wins_dispatch_mix_up(void * ctx,hwc_display_contents_1_t * list)
             j++;
             if(j > 2)  // lcdc only has win0 and win1 supprot stretch
             {
-                ALOGD_IF(mLogL&HLLFIV,"lcdc only has win0 and win1 supprot stretch");
+                ALOGD_IF(log(HLLFIV),"lcdc only has win0 and win1 supprot stretch");
                 return -1;  
             }
         }
@@ -2475,7 +2552,7 @@ int try_wins_dispatch_mix_up(void * ctx,hwc_display_contents_1_t * list)
         {
             int area_no = 0;
             int win_id = 0;
-            ALOGD_IF(mLogL&HLLFIV,"Zone[%d]->layer[%d],dispatched=%d,"
+            ALOGD_IF(log(HLLFIV),"Zone[%d]->layer[%d],dispatched=%d,"
             "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
             "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],"
             "layer_fd[%d],addr=%x,acq_fence_fd=%d"
@@ -2538,12 +2615,12 @@ int try_wins_dispatch_mix_up(void * ctx,hwc_display_contents_1_t * list)
         bpvinfo.bp_vop_size = tsize ;  
         for(i= 0;i<4;i++)
         {
-            ALOGD_IF(mLogL&HLLTHR,"RK_QUEDDR_FREQ mixinfo win[%d] bo_size=%dMB,bp_vop_size=%dMB,state=%d,num=%d",
+            ALOGD_IF(log(HLLTHR),"RK_QUEDDR_FREQ mixinfo win[%d] bo_size=%dMB,bp_vop_size=%dMB,state=%d,num=%d",
                 i,bpvinfo.bp_size,bpvinfo.bp_vop_size,bpvinfo.vopinfo[i].state,bpvinfo.vopinfo[i].zone_num);
         }    
         if(ioctl(Context->ddrFd, RK_QUEDDR_FREQ, &bpvinfo))
         {
-            if(mLogL&HLLTHR)
+            if(log(HLLTHR))
             {
                 for(i= 0;i<4;i++)
                 {
@@ -2612,7 +2689,7 @@ int try_wins_dispatch_mix_down(void * ctx,hwc_display_contents_1_t * list)
     hwcContext * contextAh = _contextAnchor;
     memset(&zone_info_ty,0,sizeof(zone_info_ty));
     if(pzone_mag->zone_cnt < 5 && !Context->mMultiwindow) {
-        ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
+        ALOGD_IF(log(HLLFOU),"Policy out:%s,%d",__FUNCTION__,__LINE__);
         return -1;
     }
     if(Context == _contextAnchor1) {
@@ -2632,19 +2709,30 @@ int try_wins_dispatch_mix_down(void * ctx,hwc_display_contents_1_t * list)
             || !strstr(pzone_mag->zone_info[i].LayerName,"Starting@# "))
 #endif
             ) {
-                ALOGD_IF(mLogL&HLLFOU,"Policy out %s,%d ",__FUNCTION__,__LINE__);
+                ALOGD_IF(log(HLLFOU),"Policy out %s,%d ",__FUNCTION__,__LINE__);
                 return -1;
             }
     }
 #endif
-
+#if DUAL_VIEW_MODE
+    if(Context != contextAh && Context->mIsDualViewMode) {
+        int dpyPw = contextAh->dpyAttr[0].xres;
+        int dpyPh = contextAh->dpyAttr[0].yres;
+        int dpyEw = Context->dpyAttr[1].xres;
+        int dpyEh = Context->dpyAttr[1].yres;
+        if(dpyPw != dpyEw || dpyPh != dpyEh) {
+            ALOGD_IF(log(HLLFOU),"Policy out:%s,%d",__FUNCTION__,__LINE__);
+            return -1;
+        }
+    }
+#endif
     if(Context->Is3D){
-        ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
+        ALOGD_IF(log(HLLFOU),"Policy out:%s,%d",__FUNCTION__,__LINE__);
         return -1;
     }
 
     if(contextAh->mHdmiSI.NeedReDst){
-        ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
+        ALOGD_IF(log(HLLFOU),"Policy out:%s,%d",__FUNCTION__,__LINE__);
         return -1;
     }
 
@@ -2653,7 +2741,7 @@ TryAgain:
     cntfb = 0;
     foundLayer++;
     if(!Context->mMultiwindow && foundLayer>2) {
-        ALOGD_IF(mLogL&HLLFOU,"Policy out %s,%d",__FUNCTION__,__LINE__);
+        ALOGD_IF(log(HLLFOU),"Policy out %s,%d",__FUNCTION__,__LINE__);
         return -1;
     } else if(Context->mMultiwindow) {
         bw = 0;
@@ -2666,14 +2754,14 @@ TryAgain:
         memcpy(&zone_m,&Context->zone_manager,sizeof(ZoneManager));
     }
     if(foundLayer > pzone_mag->zone_cnt - 1) {
-        ALOGD_IF(mLogL&HLLFOU,"Policy out %s,%d",__FUNCTION__,__LINE__);
+        ALOGD_IF(log(HLLFOU),"Policy out %s,%d",__FUNCTION__,__LINE__);
         return -1;
     }
 
     for(int k=foundLayer;k<pzone_mag->zone_cnt;k++) {
         if(pzone_mag->zone_info[k].scale_err || pzone_mag->zone_info[k].toosmall
             || pzone_mag->zone_info[k].zone_err || pzone_mag->zone_info[k].transform) {
-            ALOGD_IF(mLogL&HLLFOU,"Policy out %s,%d ",__FUNCTION__,__LINE__);
+            ALOGD_IF(log(HLLFOU),"Policy out %s,%d ",__FUNCTION__,__LINE__);
             goto TryAgain;
         }
     }
@@ -2683,7 +2771,7 @@ TryAgain:
         if(pzone_mag->zone_info[i].layer_index < foundLayer) {
             hwc_layer_1_t * layer = &list->hwLayers[pzone_mag->zone_info[i].layer_index];
             if(pzone_mag->zone_info[i].format == HAL_PIXEL_FORMAT_YCrCb_NV12) {
-                ALOGD_IF(mLogL&HLLFOU,"Policy out Donot support video ");
+                ALOGD_IF(log(HLLFOU),"Policy out Donot support video ");
                 return -1;
             }
             if(Context->mLastCompType != HWC_MIX_DOWN
@@ -2719,7 +2807,7 @@ TryAgain:
     memcpy(pzone_mag, &zone_info_ty,sizeof(zone_info_ty));
     pzone_mag->zone_cnt -= cntfb;
     for(i=0;i< pzone_mag->zone_cnt;i++) {
-        ALOGD_IF(mLogL&HLLFIV,"%s,%d:Zone[%d]->layer[%d],"
+        ALOGD_IF(log(HLLFIV),"%s,%d:Zone[%d]->layer[%d],"
             "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
             "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],acq_fence_fd=%d,"
             "layname=%s",__FUNCTION__,__LINE__,
@@ -2777,7 +2865,7 @@ TryAgain:
         i += cnt;  
     }
     if(sort >3) {
-        ALOGD_IF(mLogL&HLLTHR,"lcdc dont support 5 wins sort=%d",sort);
+        ALOGD_IF(log(HLLTHR),"lcdc dont support 5 wins sort=%d",sort);
         goto TryAgain;
     }
     int count = sort;
@@ -2821,7 +2909,7 @@ TryAgain:
             ALOGV("more twice zones srot_tal[%d][1]=%d",i,srot_tal[i][1]);
             j++;
             if(j > 1) {
-                ALOGD_IF(mLogL&HLLFOU,"Policy try again %s,%d ",__FUNCTION__,__LINE__);
+                ALOGD_IF(log(HLLFOU),"Policy try again %s,%d ",__FUNCTION__,__LINE__);
                 goto TryAgain; 
             }
         }
@@ -2834,7 +2922,7 @@ TryAgain:
             ALOGV("stretch zones srot_tal[%d][1]=%d",i,srot_tal[i][1]);
             j++;
             if(j > 2) {
-                ALOGD_IF(mLogL&HLLFOU,"Policy try again %s,%d ",__FUNCTION__,__LINE__);
+                ALOGD_IF(log(HLLFOU),"Policy try again %s,%d ",__FUNCTION__,__LINE__);
                 goto TryAgain;
             }
         }
@@ -2855,7 +2943,7 @@ TryAgain:
                     break;
             }  
             if(j>=count) {
-                ALOGD_IF(mLogL&HLLFOU,"Policy try again %s,%d ",__FUNCTION__,__LINE__);
+                ALOGD_IF(log(HLLFOU),"Policy try again %s,%d ",__FUNCTION__,__LINE__);
                 goto TryAgain;
             }    
             srot_tal[i][1] = win_disphed[j];
@@ -2889,7 +2977,7 @@ TryAgain:
         int disptched = pzone_mag->zone_info[i].dispatched;
         /*win2 win3 not support YUV*/
         if(disptched > win1 && is_yuv(pzone_mag->zone_info[i].format)){
-            ALOGD_IF(mLogL&HLLFOU,"Policy try again %s,%d ",__FUNCTION__,__LINE__);
+            ALOGD_IF(log(HLLFOU),"Policy try again %s,%d ",__FUNCTION__,__LINE__);
             goto TryAgain;
         }
     }
@@ -2901,7 +2989,7 @@ TryAgain:
         {
             int area_no = 0;
             int win_id = 0;
-            ALOGD_IF(mLogL&HLLFIV,"Zone[%d]->layer[%d],dispatched=%d,"
+            ALOGD_IF(log(HLLFIV),"Zone[%d]->layer[%d],dispatched=%d,"
             "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
             "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],"
             "layer_fd[%d],addr=%x,acq_fence_fd=%d"
@@ -2963,24 +3051,24 @@ TryAgain:
             tsize = tsize / (1024 *1024) * 60 ;// MB
         bpvinfo.bp_vop_size = tsize ;  
         for(i= 0;i<4;i++) {
-            ALOGD_IF(mLogL&HLLFIV,"RK_QUEDDR_FREQ mixinfo win[%d] bo_size=%dMB,bp_vop_size=%dMB,state=%d,num=%d",
+            ALOGD_IF(log(HLLFIV),"RK_QUEDDR_FREQ mixinfo win[%d] bo_size=%dMB,bp_vop_size=%dMB,state=%d,num=%d",
                 i,bpvinfo.bp_size,bpvinfo.bp_vop_size,bpvinfo.vopinfo[i].state,bpvinfo.vopinfo[i].zone_num);
         }
         if(ioctl(Context->ddrFd, RK_QUEDDR_FREQ, &bpvinfo)) {
-            if(mLogL&HLLTHR) {
+            if(log(HLLTHR)) {
                 for(i= 0;i<4;i++) {
                     ALOGW("RK_QUEDDR_FREQ mixinfo win[%d] bo_size=%dMB,bp_vop_size=%dMB,state=%d,num=%d",
                         i,bpvinfo.bp_size,bpvinfo.bp_vop_size,bpvinfo.vopinfo[i].state,bpvinfo.vopinfo[i].zone_num);
                 }
             }
-            ALOGD_IF(mLogL&HLLFOU,"Policy try again %s,%d ",__FUNCTION__,__LINE__);
+            ALOGD_IF(log(HLLFOU),"Policy try again %s,%d ",__FUNCTION__,__LINE__);
             memset(&bpvinfo,0,sizeof(BpVopInfo));
             goto TryAgain;
         }
     }
 #endif   
     if((large_cnt + bw) >= 5) { 
-        ALOGD_IF(mLogL&HLLFOU,"Policy try again %s,%d ",__FUNCTION__,__LINE__);
+        ALOGD_IF(log(HLLFOU),"Policy try again %s,%d ",__FUNCTION__,__LINE__);
         goto TryAgain;
     }
 
@@ -3053,7 +3141,7 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
         mix_index = 0;
     }
     if(pzone_mag->zone_cnt < 5) {
-		ALOGD_IF(mLogL&HLLFOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
+		ALOGD_IF(log(HLLFOU),"Policy out [%d][%s]",__LINE__,__FUNCTION__);
     	return -1;
     }
     //Find out which layer start transform.
@@ -3067,38 +3155,43 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
     }
 
     if(Context->mAlphaError){
-        ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
+        ALOGD_IF(log(HLLFOU),"Policy out:%s,%d",__FUNCTION__,__LINE__);
         return -1;
     }
 
     if(contextAh->mHdmiSI.NeedReDst){
-        ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
+        ALOGD_IF(log(HLLFOU),"Policy out:%s,%d",__FUNCTION__,__LINE__);
         return -1;
     }
 
     if(Context->Is3D){
-        ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
+        ALOGD_IF(log(HLLFOU),"Policy out:%s,%d",__FUNCTION__,__LINE__);
         return -1;
     }
 
 #ifdef RK3288_BOX
     if(Context==_contextAnchor && Context->mResolutionChanged && Context->mLcdcNum==2){
-        ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
+        ALOGD_IF(log(HLLFOU),"Policy out:%s,%d",__FUNCTION__,__LINE__);
         return -1;
     }
 #endif
-
+#if DUAL_VIEW_MODE
+    if(Context != contextAh && Context->mIsDualViewMode) {
+        ALOGD_IF(log(HLLFOU),"Policy out:%s,%d",__FUNCTION__,__LINE__);
+        return -1;
+    }
+#endif
     for(int k=0;k<mFtrfl;k++) {
         if(pzone_mag->zone_info[k].scale_err || pzone_mag->zone_info[k].toosmall
             || pzone_mag->zone_info[k].zone_err || pzone_mag->zone_info[k].transform) {
-            ALOGD_IF(mLogL&HLLFOU,"Policy out:%s,%d",__FUNCTION__,__LINE__);
+            ALOGD_IF(log(HLLFOU),"Policy out:%s,%d",__FUNCTION__,__LINE__);
             return -1;
         }
     }
 
     //If not exist transform layers,then return.
     if(!bTransform) {
-		ALOGD_IF(mLogL&HLLFOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
+		ALOGD_IF(log(HLLFOU),"Policy out [%d][%s]",__LINE__,__FUNCTION__);
 		return -1;
 	}
 
@@ -3108,7 +3201,7 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
         if(pzone_mag->zone_info[i].layer_index >= iFirstTransformLayer) {
             hwc_layer_1_t * layer = &list->hwLayers[pzone_mag->zone_info[i].layer_index];
             if(pzone_mag->zone_info[i].format == HAL_PIXEL_FORMAT_YCrCb_NV12) {
-                ALOGD_IF(mLogL&HLLTHR,"Donot support video[%d][%s]",__LINE__,__FUNCTION__);
+                ALOGD_IF(log(HLLTHR),"Donot support video[%d][%s]",__LINE__,__FUNCTION__);
                 return -1;
             }
             //Judge the current layer whether backup in gmixinfo[mix_index] or not.
@@ -3144,7 +3237,7 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
     pzone_mag->zone_cnt -= cntfb;
     for(i=0;i< pzone_mag->zone_cnt;i++)
     {
-        ALOGD_IF(mLogL&HLLFIV,"%s,%d:Zone[%d]->layer[%d],"
+        ALOGD_IF(log(HLLFIV),"%s,%d:Zone[%d]->layer[%d],"
             "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
             "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],acq_fence_fd=%d,"
             "layname=%s",__FUNCTION__,__LINE__,
@@ -3211,7 +3304,7 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
     }
     if(sort >3)  // lcdc dont support 5 wins
     {
-        ALOGD_IF(mLogL&HLLTHR,"lcdc dont support 5 wins");
+        ALOGD_IF(log(HLLTHR),"lcdc dont support 5 wins");
         return -1;
     }    
     for(i=0;i<pzone_mag->zone_cnt;i++)
@@ -3355,7 +3448,7 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
         {
             int area_no = 0;
             int win_id = 0;
-            ALOGD_IF(mLogL&HLLFIV,"Zone[%d]->layer[%d],dispatched=%d,"
+            ALOGD_IF(log(HLLFIV),"Zone[%d]->layer[%d],dispatched=%d,"
             "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
             "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],"
             "layer_fd[%d],addr=%x,acq_fence_fd=%d"
@@ -3418,12 +3511,12 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
         bpvinfo.bp_vop_size = tsize ;  
         for(i= 0;i<4;i++)
         {
-            ALOGD_IF(mLogL&HLLFIV,"RK_QUEDDR_FREQ mixinfo win[%d] bo_size=%dMB,bp_vop_size=%dMB,state=%d,num=%d",
+            ALOGD_IF(log(HLLFIV),"RK_QUEDDR_FREQ mixinfo win[%d] bo_size=%dMB,bp_vop_size=%dMB,state=%d,num=%d",
                 i,bpvinfo.bp_size,bpvinfo.bp_vop_size,bpvinfo.vopinfo[i].state,bpvinfo.vopinfo[i].zone_num);
         }    
         if(ioctl(Context->ddrFd, RK_QUEDDR_FREQ, &bpvinfo))
         {
-            if(mLogL&HLLTHR)
+            if(log(HLLTHR))
             {
                 for(i= 0;i<4;i++)
                 {
@@ -3436,7 +3529,7 @@ int try_wins_dispatch_mix_v2 (void * ctx,hwc_display_contents_1_t * list)
     }
 #endif   
     if((large_cnt + bw) >= 5) {       
-        ALOGD_IF(mLogL&HLLTHR,"lagre win > 2,and Scale-down 1.5 multiple,lcdc no support");
+        ALOGD_IF(log(HLLTHR),"lagre win > 2,and Scale-down 1.5 multiple,lcdc no support");
         return -1;
     }
     if(list) {
@@ -3505,7 +3598,12 @@ int try_wins_mix_fp_stereo (void * ctx,hwc_display_contents_1_t * list)
     }else if(Context == _contextAnchor){
         mix_index = 0;
     }
-
+#if DUAL_VIEW_MODE
+    if(Context != contextAh && Context->mIsDualViewMode) {
+        ALOGD_IF(log(HLLFOU),"Policy out:%s,%d",__FUNCTION__,__LINE__);
+        return -1;
+    }
+#endif
     if(pzone_mag->zone_info[0].scale_err || pzone_mag->zone_info[0].toosmall
         || pzone_mag->zone_info[0].zone_err || pzone_mag->zone_info[0].transform) {
         return -1;
@@ -3550,7 +3648,7 @@ int try_wins_mix_fp_stereo (void * ctx,hwc_display_contents_1_t * list)
     memcpy(pzone_mag, &zone_info_ty,sizeof(zone_info_ty));
     pzone_mag->zone_cnt -= cntfb;
     for(i=0;i< pzone_mag->zone_cnt;i++) {
-        ALOGD_IF(mLogL,"Zone[%d]->layer[%d],"
+        ALOGD_IF(log(HLLTWO),"Zone[%d]->layer[%d],"
             "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
             "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],acq_fence_fd=%d,"
             "layname=%s",
@@ -3617,7 +3715,7 @@ int try_wins_mix_fp_stereo (void * ctx,hwc_display_contents_1_t * list)
     }
     if(sort >3)  // lcdc dont support 5 wins
     {
-        ALOGD_IF(mLogL,"lcdc dont support 5 wins [%d]",__LINE__);
+        ALOGD_IF(log(HLLTWO),"lcdc dont support 5 wins [%d]",__LINE__);
         return -1;
     }
     for(i=0;i<pzone_mag->zone_cnt;i++)
@@ -3757,7 +3855,7 @@ int try_wins_mix_fp_stereo (void * ctx,hwc_display_contents_1_t * list)
         {
             int area_no = 0;
             int win_id = 0;
-            ALOGD_IF(mLogL,"Zone[%d]->layer[%d],dispatched=%d,"
+            ALOGD_IF(log(HLLTHR),"Zone[%d]->layer[%d],dispatched=%d,"
             "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
             "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],"
             "layer_fd[%d],addr=%x,acq_fence_fd=%d"
@@ -3820,7 +3918,7 @@ int try_wins_mix_fp_stereo (void * ctx,hwc_display_contents_1_t * list)
         bpvinfo.bp_vop_size = tsize ;
         for(i= 0;i<4;i++)
         {
-            ALOGD_IF(mLogL,"RK_QUEDDR_FREQ mixinfo win[%d] bo_size=%dMB,bp_vop_size=%dMB,state=%d,num=%d",
+            ALOGD_IF(log(HLLTHR),"RK_QUEDDR_FREQ mixinfo win[%d] bo_size=%dMB,bp_vop_size=%dMB,state=%d,num=%d",
                 i,bpvinfo.bp_size,bpvinfo.bp_vop_size,bpvinfo.vopinfo[i].state,bpvinfo.vopinfo[i].zone_num);
         }
         if(ioctl(Context->ddrFd, RK_QUEDDR_FREQ, &bpvinfo))
@@ -3958,7 +4056,7 @@ int try_wins_dispatch_mix_vh (void * ctx,hwc_display_contents_1_t * list)
     pzone_mag->zone_cnt -= cntfb;
     for(i=0;i< pzone_mag->zone_cnt;i++)
     {
-        ALOGD_IF(mLogL&HLLFIV,"%s,%d:Zone[%d]->layer[%d],"
+        ALOGD_IF(log(HLLFIV),"%s,%d:Zone[%d]->layer[%d],"
             "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
             "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],acq_fence_fd=%d,"
             "layname=%s",__FUNCTION__,__LINE__,
@@ -4025,7 +4123,7 @@ int try_wins_dispatch_mix_vh (void * ctx,hwc_display_contents_1_t * list)
     }
     if(sort >3)  // lcdc dont support 5 wins
     {
-        ALOGD_IF(mLogL&HLLTHR,"lcdc dont support 5 wins [%d]",__LINE__);
+        ALOGD_IF(log(HLLTHR),"lcdc dont support 5 wins [%d]",__LINE__);
         return -1;
     }    
     for(i=0;i<pzone_mag->zone_cnt;i++)
@@ -4167,7 +4265,7 @@ int try_wins_dispatch_mix_vh (void * ctx,hwc_display_contents_1_t * list)
         {
             int area_no = 0;
             int win_id = 0;
-            ALOGD_IF(mLogL&HLLFIV,"Zone[%d]->layer[%d],dispatched=%d,"
+            ALOGD_IF(log(HLLFIV),"Zone[%d]->layer[%d],dispatched=%d,"
             "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
             "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],"
             "layer_fd[%d],addr=%x,acq_fence_fd=%d"
@@ -4230,12 +4328,12 @@ int try_wins_dispatch_mix_vh (void * ctx,hwc_display_contents_1_t * list)
         bpvinfo.bp_vop_size = tsize ;  
         for(i= 0;i<4;i++)
         {
-            ALOGD_IF(mLogL&HLLFIV,"RK_QUEDDR_FREQ mixinfo win[%d] bo_size=%dMB,bp_vop_size=%dMB,state=%d,num=%d",
+            ALOGD_IF(log(HLLFIV),"RK_QUEDDR_FREQ mixinfo win[%d] bo_size=%dMB,bp_vop_size=%dMB,state=%d,num=%d",
                 i,bpvinfo.bp_size,bpvinfo.bp_vop_size,bpvinfo.vopinfo[i].state,bpvinfo.vopinfo[i].zone_num);
         }    
         if(ioctl(Context->ddrFd, RK_QUEDDR_FREQ, &bpvinfo))
         {
-            if(mLogL&HLLTHR)
+            if(log(HLLTHR))
             {
                 for(i= 0;i<4;i++)
                 {
@@ -4530,21 +4628,21 @@ check_layer(
     )
     {
         /* We are forbidden to handle this layer. */
-        if(mLogL&HLLTHR)
+        if(log(HLLTHR))
         {
             LOGD("%s(%d):Will not handle layer %s: SKIP_LAYER,Layer->transform=%d,Layer->flags=%d",
                 __FUNCTION__, __LINE__, Layer->LayerName,Layer->transform,Layer->flags);
             if(handle)   
             {
                 LOGD("Will not handle format=%x,handle_type=%d",GPU_FORMAT,handle->type);  
-            }    
+            }
         }        
         Layer->compositionType = HWC_FRAMEBUFFER;
         if (skip_count<10)
         {
         	skip_count++;
         }
-		ALOGD_IF(mLogL&HLLFOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
+		ALOGD_IF(log(HLLFOU),"Policy out [%d][%s]",__LINE__,__FUNCTION__);
         return HWC_FRAMEBUFFER;
     }
     // Force 4K transform video go into GPU
@@ -5606,7 +5704,7 @@ int hwc_control_3dmode(int num,int flag)
         int mode,hdmi3dmode;
         //ALOGI("line %d,buf[%s]",__LINE__,buf);
         sscanf(buf,"3dmodes=%d cur3dmode=%d",&mode,&hdmi3dmode);
-        ALOGI_IF(mLogL&HLLTWO,"hdmi3dmode=%d,mode=%d",hdmi3dmode,mode);
+        ALOGI_IF(log(HLLTWO),"hdmi3dmode=%d,mode=%d",hdmi3dmode,mode);
 
         if(8==hdmi3dmode)
             ret = 1;
@@ -5665,6 +5763,7 @@ int free_thread_pamaters(threadPamaters* mThreadPamaters)
 
 void* hwc_control_3dmode_thread(void *arg)
 {
+    int ret = -1;
     int needStereo = 0;
     hwcContext *contextp = _contextAnchor;
     ALOGD("hwc_control_3dmode_thread creat");
@@ -5673,10 +5772,12 @@ void* hwc_control_3dmode_thread(void *arg)
         pthread_mutex_lock(&contextp->mControlStereo.mlk);
         needStereo = contextp->mControlStereo.count;
         pthread_mutex_unlock(&contextp->mControlStereo.mlk);
-        if(needStereo != hwc_control_3dmode(2,0)) {
+        ret = hwc_control_3dmode(2,0);
+        if(needStereo != ret) {
             hwc_control_3dmode(needStereo,1);
+            ALOGI("change stereo mode %d to %d",ret,needStereo);
         }
-        ALOGD_IF(mLogL&HLLTWO,"mControlStereo.count=%d",needStereo);
+        ALOGD_IF(log(HLLTWO),"mControlStereo.count=%d",needStereo);
         pthread_cond_wait(&contextp->mControlStereo.cond,&contextp->mControlStereo.mtx);
     }
     ALOGD("hwc_control_3dmode_thread exit");
@@ -5686,7 +5787,7 @@ void* hwc_control_3dmode_thread(void *arg)
 
 int dump_prepare_info(hwc_display_contents_1_t** displays, int flag)
 {
-    if(!(mLogL&HLLONE))
+    if(!(log(HLLONE)))
         return 0;
 
     for(int i=0;i<2;i++) {
@@ -5696,9 +5797,9 @@ int dump_prepare_info(hwc_display_contents_1_t** displays, int flag)
                 hwc_layer_1_t* layer = &displays[i]->hwLayers[j];
                 if (layer != NULL) {
 #ifdef SUPPORT_STEREO
-                    ALOGD("dID=%d,num=%d,ardStereo=%d,dspStereo=%d,cmpType=%3d,tr_ble[%d,%10d],layername:[%s]",
+                    ALOGD("dID=%d,num=%d,ardStereo=%d,dspStereo=%d,cmpType=%3d,tr_ble[%d,%10d],layername:[%s],acqffd=%d",
                         i,num,layer->alreadyStereo,layer->displayStereo,layer->compositionType,
-                        layer->transform,layer->blending,layer->LayerName);
+                        layer->transform,layer->blending,layer->LayerName,layer->acquireFenceFd);
 #else
                     ALOGD("dID=%d,num=%d,layername=%s",i,num,layer->LayerName);
 #endif          
@@ -5714,7 +5815,7 @@ int dump_config_info(struct rk_fb_win_cfg_data fb_info ,hwcContext * context, in
     char poutbuf[20];
     char eoutbuf[20];
     bool isLogOut = flag == 3;
-    isLogOut = isLogOut || (mLogL&HLLONE);
+    isLogOut = isLogOut || (log(HLLONE));
 
     if(!isLogOut){
         return 0;
@@ -5799,13 +5900,13 @@ int hwc_add_fbinfo(hwcContext * context, hwc_display_contents_1_t *list,struct r
         return -1;
     }
 	sscanf(buf,"xres:%d yres:%d",&w_dst,&h_dst);
-    ALOGD_IF(mLogL,"width=%d,height=%d",w_dst,h_dst);
+    ALOGD_IF(log(HLLONE),"width=%d,height=%d",w_dst,h_dst);
     xres = contextp->dpyAttr[HWC_DISPLAY_EXTERNAL].xres;
     yres = contextp->dpyAttr[HWC_DISPLAY_EXTERNAL].yres;
 
     hoffset = h_dst - 2 * yres;
     if(hoffset < 0) {
-        ALOGW_IF(mLogL,"Is in frame package stereo %s,%d",__FUNCTION__,__LINE__);
+        ALOGW_IF(log(HLLTHR),"Is in frame package stereo %s,%d",__FUNCTION__,__LINE__);
         return -1;
     }
 
@@ -5840,7 +5941,7 @@ int hwc_add_fbinfo(hwcContext * context, hwc_display_contents_1_t *list,struct r
                 fbinfo->win_par[m].area_par[0].xvir          = fbinfo->win_par[i].area_par[j].xvir;
                 fbinfo->win_par[m].area_par[0].yvir          = fbinfo->win_par[i].area_par[j].yvir;
                 fbinfo->win_par[m].area_par[0].data_format   = fbinfo->win_par[i].area_par[j].data_format;
-                ALOGD_IF(mLogL,"Add new layer from[%d,%d,%d,%d]=>[%d,%d,%d,%d][m=%d]",
+                ALOGD_IF(log(HLLONE),"Add new layer from[%d,%d,%d,%d]=>[%d,%d,%d,%d][m=%d]",
                     fbinfo->win_par[i].area_par[j].xpos,fbinfo->win_par[i].area_par[j].ypos,
                     fbinfo->win_par[i].area_par[j].xsize,fbinfo->win_par[i].area_par[j].ysize,
                     fbinfo->win_par[m].area_par[0].xpos,fbinfo->win_par[m].area_par[0].ypos,
@@ -5914,7 +6015,7 @@ bool hwc_check_cfg(hwcContext * ctx,struct rk_fb_win_cfg_data fb_info)
     return ret;
 }
 
-int hwc_collect_cfg(hwcContext * context, hwc_display_contents_1_t *list,struct rk_fb_win_cfg_data *fbinfo,int mix_flag,bool mix_prepare)
+int hwc_collect_cfg(hwcContext * context, hwc_display_contents_1_t *list,struct hwc_fb_info *hfi,int mix_flag,bool mix_prepare)
 {
     ZoneManager* pzone_mag = &(context->zone_manager);
     int i,j;
@@ -5924,9 +6025,10 @@ int hwc_collect_cfg(hwcContext * context, hwc_display_contents_1_t *list,struct 
     int is_spewin = is_special_wins(context);
     struct rk_fb_win_cfg_data fb_info;
     int comType = pzone_mag->mCmpType;
-    memset(&fb_info,0,sizeof(fb_info));
+    memset((void*)&fb_info,0,sizeof(fb_info));
     fb_info.ret_fence_fd = -1;
     for(i=0;i<RK_MAX_BUF_NUM;i++) {
+        hfi->pRelFenceFd[i] = 0;
         fb_info.rel_fence_fd[i] = -1;
     }
 
@@ -6086,6 +6188,8 @@ int hwc_collect_cfg(hwcContext * context, hwc_display_contents_1_t *list,struct 
         fb_info.win_par[win_no-1].area_par[area_no].ypos = hwcMAX(pdisp_rect->top , 0);
         fb_info.win_par[win_no-1].area_par[area_no].xsize = pdisp_rect->right - pdisp_rect->left;
         fb_info.win_par[win_no-1].area_par[area_no].ysize = pdisp_rect->bottom - pdisp_rect->top;
+        hfi->pRelFenceFd[i] = pzone_mag->zone_info[i].pRelFenceFd;
+        strcpy(hfi->LayerName[i],pzone_mag->zone_info[i].LayerName);
         if(context->zone_manager.mCmpType == HWC_MIX_FPS) {
             if(pzone_mag->zone_info[i].alreadyStereo != 8) {
                 fb_info.win_par[win_no-1].area_par[area_no].reserved0 = HWCRFPS;
@@ -6233,7 +6337,7 @@ int hwc_collect_cfg(hwcContext * context, hwc_display_contents_1_t *list,struct 
         }
         struct private_handle_t*  handle = (struct private_handle_t*)fbLayer->handle;
         if (!handle){
-            ALOGD_IF(mLogL&HLLFOU,"hanndle=NULL at line %d",__LINE__);
+            ALOGD_IF(log(HLLFOU),"hanndle=NULL at line %d",__LINE__);
             return -1;
         }
 
@@ -6275,6 +6379,8 @@ int hwc_collect_cfg(hwcContext * context, hwc_display_contents_1_t *list,struct 
         fb_info.win_par[win_no-1].area_par[0].yact = handle->height;
         fb_info.win_par[win_no-1].area_par[0].xvir = handle->stride;
         fb_info.win_par[win_no-1].area_par[0].yvir = handle->height;
+        hfi->pRelFenceFd[pzone_mag->zone_cnt] = &(fbLayer->releaseFenceFd);
+        strcpy(hfi->LayerName[pzone_mag->zone_cnt],"FBTARGET_FRAMEBUFFER");
         if(comType == HWC_MIX_FPS) {
             fb_info.win_par[win_no-1].area_par[0].reserved0 = HWCRFPS;
         }
@@ -6287,13 +6393,12 @@ int hwc_collect_cfg(hwcContext * context, hwc_display_contents_1_t *list,struct 
         fb_info.wait_fs=0;
 #endif
     }
-    memcpy((void*)fbinfo,(void*)&fb_info,sizeof(rk_fb_win_cfg_data));
+    memcpy((void*)(&(hfi->fb_info)),(void*)&fb_info,sizeof(rk_fb_win_cfg_data));
     return 0;
 }
 
 int hwc_pre_prepare(hwc_display_contents_1_t** displays, int flag)
 {
-    mLogL = is_out_log();
     int forceStereop = 0;
     int forceStereoe = 0;
     hwcContext * contextp = _contextAnchor;
@@ -6367,7 +6472,7 @@ int hwc_pre_prepare(hwc_display_contents_1_t** displays, int flag)
             }
 
             if(1==i && numlayer > 1) {
-                ALOGD_IF(mLogL&HLLTWO,"Wake up hwc control stereo");
+                ALOGD_IF(log(HLLTWO),"Wake up hwc control stereo");
                 pthread_mutex_lock(&contextp->mControlStereo.mlk);
                 contextp->mControlStereo.count = needStereo;
                 pthread_mutex_unlock(&contextp->mControlStereo.mlk);
@@ -6450,7 +6555,7 @@ int hwc_prepare_virtual(hwc_composer_device_1_t * dev, hwc_display_contents_1_t 
 				GPU_BASE,GPU_WIDTH,GPU_HEIGHT);
 			if (context->wfdOptimize==0)
 			{
-				rga_video_copybit(handle,0,0,0,handle->share_fd,RK_FORMAT_YCbCr_420_SP,0,HWCV);
+				rga_video_copybit(handle,0,0,0,handle->share_fd,RK_FORMAT_YCbCr_420_SP,0,HWCV,false);
 			}
 		}
 	}
@@ -6530,7 +6635,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
 
     /* Check layer list. */
     if (list == NULL || (list->numHwLayers  == 0)/*||!(list->flags & HWC_GEOMETRY_CHANGED)*/){
-        ALOGD_IF(mLogL&HLLTWO,"dpyID=%d list null",dpyID);
+        ALOGD_IF(log(HLLTWO),"dpyID=%d list null",dpyID);
         return 0;
     }
     if(is_gpu_or_nodraw(list,dpyID)){
@@ -6569,7 +6674,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
         }
 #endif
         if(handle && GPU_FORMAT == HAL_PIXEL_FORMAT_YV12){
-            ALOGD_IF(mLogL&HLLFOU,"HAL_PIXEL_FORMAT_YV12 out");
+            ALOGD_IF(log(HLLFOU),"HAL_PIXEL_FORMAT_YV12 out");
             goto GpuComP;
         }
     }
@@ -6716,7 +6821,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
     if(video_cnt >1){
         // more videos goto gpu cmp
         ALOGW("more2 video=%d goto GpuComP",video_cnt);
-		ALOGD_IF(mLogL&HLLFOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
+		ALOGD_IF(log(HLLFOU),"Policy out [%d][%s]",__LINE__,__FUNCTION__);
         goto GpuComP;
     }          
     //Get gts staus,save in context->mGtsStatus
@@ -6743,12 +6848,12 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
     }
 
     if(hwc_get_int_property("sys.hwc.disable","0")== 1){
-		ALOGD_IF(mLogL&HLLFOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
+		ALOGD_IF(log(HLLFOU),"Policy out [%d][%s]",__LINE__,__FUNCTION__);
         goto GpuComP;
 	}
     /* Roll back to FRAMEBUFFER if any layer can not be handled. */
     if (i != (list->numHwLayers - 1) || (list->numHwLayers==1) /*|| context->mtrsformcnt > 1*/){
-		ALOGD_IF(mLogL&HLLFOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
+		ALOGD_IF(log(HLLFOU),"Policy out [%d][%s]",__LINE__,__FUNCTION__);
         goto GpuComP;
     }
 
@@ -6756,7 +6861,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
     if(!context->mGtsStatus){
         if(context->mVideoMode &&  !context->mNV12_VIDEO_VideoMode && context->mtrsformcnt>0){
             ALOGV("Go into GLES,in nv12 transform case");
-			ALOGD_IF(mLogL&HLLFOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
+			ALOGD_IF(log(HLLFOU),"Policy out [%d][%s]",__LINE__,__FUNCTION__);
             goto GpuComP;
         }
     }
@@ -6777,7 +6882,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
 
         //alloc video gralloc buffer in video mode
         if(context->fd_video_bk[0] == -1 && context->mTrsfrmbyrga){
-            ALOGD_IF(mLogL&HLLFOU,"mNV12_VIDEO_VideoMode=%d,mTrsfrmbyrga=%d,w=%d,h=%d",
+            ALOGD_IF(log(HLLFOU),"mNV12_VIDEO_VideoMode=%d,mTrsfrmbyrga=%d,w=%d,h=%d",
                 context->mNV12_VIDEO_VideoMode,context->mTrsfrmbyrga,video_w,video_h);
             for(j=0;j<MaxVideoBackBuffers;j++){
                 err = context->mAllocDev->alloc(context->mAllocDev, RWIDTH,RHEIGHT,HAL_PIXEL_FORMAT_YCrCb_NV12, \
@@ -6791,13 +6896,14 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
 #else
                     context->base_video_bk[j]= (int)(GPU_BASE);
 #endif
-                    ALOGD_IF(mLogL&HLLTWO,"video alloc fd [%dx%d,f=%d],fd=%d",
+                    context->relFenceFd[j] = -1;
+                    ALOGD_IF(log(HLLTWO),"video alloc fd [%dx%d,f=%d],fd=%d",
                         handle->width,handle->height,handle->format,handle->share_fd);
 
                 }else {
                     ALOGE("video alloc faild video(w=%d,h=%d,format=0x%x,error=%s)",handle->video_width,
                         handle->video_height,context->fbhandle.format,strerror(errno));
-					ALOGD_IF(mLogL&HLLFOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
+					ALOGD_IF(log(HLLFOU),"Policy out [%d][%s]",__LINE__,__FUNCTION__);
 					for(size_t k=0;k<j;k++){
 					    if(context->fd_video_bk[k] != -1){
                             err = context->mAllocDev->free(context->mAllocDev,context->pbvideo_bk[k]);
@@ -6824,7 +6930,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
         !context->mTrsfrmbyrga) || (video_cnt >1))){
         err = 0;
         for(i=0;i<MaxVideoBackBuffers;i++){
-            ALOGD_IF(mLogL&HLLTWO,"dpyID=%d,free video fd=%d,base=%p,%p",
+            ALOGD_IF(log(HLLTWO),"dpyID=%d,free video fd=%d,base=%p,%p",
                 dpyID,context->fd_video_bk[i],context->base_video_bk[i],context->pbvideo_bk[i]);
             if(context->pbvideo_bk[i] != NULL)
                 err = context->mAllocDev->free(context->mAllocDev, context->pbvideo_bk[i]);
@@ -6832,6 +6938,10 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
                 context->fd_video_bk[i] = -1;
                 context->base_video_bk[i] = 0;
                 context->pbvideo_bk[i] = NULL;
+            }
+            if(context->relFenceFd[i] > 0) {
+                close(context->relFenceFd[i]);
+                context->relFenceFd[i] = -1;
             }
             ALOGW_IF(err, "free(...) failed %d (%s)", err, strerror(-err));
         }
@@ -6847,15 +6957,15 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
     ret = collect_all_zones(context,list);
     hwc_sprite_replace(context,list);
     if(ret !=0 ){
-		ALOGD_IF(mLogL&HLLFOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
+		ALOGD_IF(log(HLLFOU),"Policy out [%d][%s]",__LINE__,__FUNCTION__);
         goto GpuComP;
     }
    
     //if(vertical == true)
     ret = hwc_try_policy(context,list,dpyID);
-    if(list->hwLayers[context->mRgaTBI.index].compositionType == HWC_FRAMEBUFFER){
+    if(list->hwLayers[context->mRgaTBI.index].compositionType == HWC_FRAMEBUFFER) {
         context->mNeedRgaTransform = false;
-    }else if(context->mNeedRgaTransform){
+    } else if(context->mNeedRgaTransform) {
         int w_valid = context->mRgaTBI.w_valid;
         int h_valid = context->mRgaTBI.h_valid;
         int layer_fd = context->mRgaTBI.layer_fd;
@@ -6864,24 +6974,19 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
         bool trsfrmbyrga = context->mRgaTBI.trsfrmbyrga;
         struct private_handle_t* hdl = context->mRgaTBI.hdl;
         int Dstfmt = trsfrmbyrga ? hwChangeRgaFormat(hdl->format) : RK_FORMAT_YCbCr_420_SP;
-        if(rga_video_copybit(hdl,transform,w_valid,h_valid,layer_fd,Dstfmt,trsfrmbyrga,dpyID)){
-            ALOGD_IF(mLogL&HLLONE,"T:RGA copyblit fail");
+        if(rga_video_copybit(hdl,transform,w_valid,h_valid,layer_fd,Dstfmt,trsfrmbyrga,dpyID,true)) {
+            ALOGD_IF(log(HLLONE),"T:RGA copyblit fail");
             context->mRgaTBI.lastfd = 0;
+            int index_v = context->mCurVideoIndex % MaxVideoBackBuffers;
+            close(context->relFenceFd[index_v]);
+            context->relFenceFd[index_v] = -1;
             goto GpuComP;
         }
-#if USE_VIDEO_BACK_BUFFERS
-        context->mCurVideoIndex++;  //update video buffer index
-#else
-        if(trsfrmbyrga)
-            context->mCurVideoIndex++;  //update video buffer index
-#endif
     }
-
     if(ret !=0 ){
-		ALOGD_IF(mLogL&HLLFOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
+		ALOGD_IF(log(HLLFOU),"Policy out [%d][%s]",__LINE__,__FUNCTION__);
         goto GpuComP;
     }
-
     if(context->zone_manager.composter_mode != HWC_MIX) {
         for(i = 0;i<GPUDRAWCNT;i++){
             gmixinfo[mix_index].gpu_draw_fd[i] = 0;
@@ -6889,25 +6994,25 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
     }
 
     if(check_zone(context) && dpyID == 0){
-        ALOGD_IF(mLogL&HLLFOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
+        ALOGD_IF(log(HLLFOU),"Policy out [%d][%s]",__LINE__,__FUNCTION__);
         goto GpuComP;
     }
     //before composition:do overlay no error???
-    struct rk_fb_win_cfg_data fbinfo;
+    struct hwc_fb_info hfi;
     if(context->zone_manager.composter_mode == HWC_LCDC){
-        err = hwc_collect_cfg(context,list,&fbinfo,0,true);
+        err = hwc_collect_cfg(context,list,&hfi,0,true);
     }else if(context->zone_manager.composter_mode == HWC_MIX){
-        err = hwc_collect_cfg(context,list,&fbinfo,1,true);
+        err = hwc_collect_cfg(context,list,&hfi,1,true);
     }else if(context->zone_manager.composter_mode == HWC_MIX_V2){
-        err = hwc_collect_cfg(context,list,&fbinfo,2,true);
+        err = hwc_collect_cfg(context,list,&hfi,2,true);
     }
     if(err){
-        ALOGD_IF(mLogL&HLLFOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
+        ALOGD_IF(log(HLLFOU),"Policy out [%d][%s]",__LINE__,__FUNCTION__);
         goto GpuComP;
     }else{
-        if(!hwc_check_cfg(context,fbinfo)){
-            ALOGD_IF(mLogL&HLLFOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
-            dump_config_info(fbinfo,context,3);
+        if(!hwc_check_cfg(context,hfi.fb_info)){
+            ALOGD_IF(log(HLLFOU),"Policy out [%d][%s]",__LINE__,__FUNCTION__);
+            dump_config_info(hfi.fb_info,context,3);
             goto GpuComP;
         }
     }
@@ -6917,7 +7022,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
 #endif
     {
         if(!hwcPrimaryToExternalCheckConfig(context,fbinfo)){
-            ALOGD_IF(mLogL&HLLONE,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
+            ALOGD_IF(log(HLLONE),"Policy out [%d][%s]",__LINE__,__FUNCTION__);
             goto GpuComP;
         }
     }
@@ -6941,7 +7046,7 @@ GpuComP   :
     {
         gmixinfo[mix_index].gpu_draw_fd[i] = 0;
     }
-
+    context->mNeedRgaTransform = false;
 #if USE_SPECIAL_COMPOSER
     hwc_LcdcToGpu(list);         //Dont remove
     bkupmanage.dstwinNo = 0xff;  // GPU handle
@@ -6957,7 +7062,7 @@ GpuComP   :
         {
             ALOGV("rga_video_copybit,handle=%x,base=%x,w=%d,h=%d,video(w=%d,h=%d)",\
                   handle,GPU_BASE,GPU_WIDTH,GPU_HEIGHT,handle->video_width,handle->video_height);
-            rga_video_copybit(handle,0,0,0,handle->share_fd,RK_FORMAT_YCbCr_420_SP,0,dpyID);
+            rga_video_copybit(handle,0,0,0,handle->share_fd,RK_FORMAT_YCbCr_420_SP,0,dpyID,false);
         }
     }
     context->zone_manager.composter_mode = HWC_FRAMEBUFFER;
@@ -6985,13 +7090,13 @@ hwc_prepare(
         return HWC_EGL_ERROR;
     }
 
+    init_log_level();
     hwc_pre_prepare(displays,0);
     dump_prepare_info(displays,0);
 
 #if hwcDumpSurface
     _DumpSurface(list);
 #endif
-
     void* zone_m = (void *)&context->zone_manager;
     memset(zone_m,0,sizeof(ZoneManager));
     context->zone_manager.composter_mode = HWC_FRAMEBUFFER;
@@ -7026,12 +7131,12 @@ hwc_prepare(
             }
         }
 #endif
-        ALOGD_IF(mLogL&HLLFOU,"Policy out [%d][%s]",__LINE__,__FUNCTION__);
+        ALOGD_IF(log(HLLFOU),"Policy out [%d][%s]",__LINE__,__FUNCTION__);
         return 0;
     }
 
 #if hwcDEBUG
-    if(mLogL&HLLEIG){
+    if(log(HLLEIG)){
         LOGD("%s(%d):Layers to set:", __FUNCTION__, __LINE__);
         _Dump(list);
     }
@@ -7045,7 +7150,7 @@ hwc_prepare(
                 ret = hwc_prepare_screen(dev, list, i);
                 break;
             case HWC_DISPLAY_VIRTUAL:
-                if(list){
+                if(list) {
                     ret = hwc_prepare_virtual(dev, list);
                 }
                 break;
@@ -7144,19 +7249,20 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
     if(context!=_contextAnchor){
         dpyID = 1;
     }
+
     if(!is_need_post(list,dpyID,1)){
         return -1;
     }
     //if (context->fbFd>0 && !context->fb_blanked)
 #if defined(RK3288_MID)
-    if(dpyID == 0 || (dpyID == 1 && !context->fb_blanked)){
+    if(dpyID == 0 || (dpyID == 1 && !context->fb_blanked)) {
 #else
 #ifdef RK3288_BOX
     int lcdcNum = _contextAnchor->mLcdcNum;
     bool isPost = dpyID == 0 || (dpyID == 1 && !context->fb_blanked);
-    if(lcdcNum==1 || (lcdcNum==2 && isPost)){
+    if(lcdcNum==1 || (lcdcNum==2 && isPost)) {
 #else
-    if(true){
+    if(true) {
 #endif
 #endif
         struct fb_var_screeninfo info;
@@ -7182,33 +7288,6 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
         }
 
         ALOGV("hwc_primary_Post num=%d,ion=%d",numLayers,handle->share_fd);
-        #if 0
-        unsigned int videodata[2];
-
-        videodata[0] = videodata[1] = context->fbPhysical;
-	    if(ioctl(context->fbFd, RK_FBIOSET_DMABUF_FD, &(handle->share_fd))== -1)
-	    {
-	        ALOGE("RK_FBIOSET_DMABUF_FD err");
-	        return -1;
-	    }
-        if (ioctl(context->fbFd, FB1_IOCTL_SET_YUV_ADDR, videodata) == -1)
-        {
-            ALOGE("FB1_IOCTL_SET_YUV_ADDR err");
-            return -1;
-        }
-
-        unsigned int offset = handle->offset;
-        info.yoffset = offset/context->fbStride;
-        if (ioctl(context->fbFd, FBIOPUT_VSCREENINFO, &info) == -1)
-        {
-            ALOGE("FBIOPUT_VSCREENINFO err!");
-        }
-        else
-        {
-            int sync = 0;
-            ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &sync);
-        }
-        #else
 
         unsigned int offset = handle->offset;        
         fb_info.win_par[0].area_par[0].data_format = context->fbhandle.format;
@@ -7264,6 +7343,12 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
             hotplug_reset_dstposition(&fb_info,2);
         }
 #endif
+#if DUAL_VIEW_MODE
+        if(context != _contextAnchor && context->mIsDualViewMode) {
+            dual_view_vop_config(&fb_info);
+            goto UseFence;
+        }
+#endif
         if(ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info)){
             ALOGE("ID=%d:ioctl fail:%s",context!=_contextAnchor,strerror(errno));
             dump_config_info(fb_info,context,3);
@@ -7276,9 +7361,12 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
                 memcpy(&_contextAnchor->fb_info,&fb_info,sizeof(rk_fb_win_cfg_data));
             }
 #endif
-            ALOGD_IF(mLogL&HLLONE,"ID=%d:",context!=_contextAnchor);
+            ALOGD_IF(log(HLLONE),"ID=%d:",context!=_contextAnchor);
         }
         dump_config_info(fb_info,context,2);
+#if DUAL_VIEW_MODE
+UseFence:
+#endif
 #if USE_HWC_FENCE
         for(int k=0;k<RK_MAX_BUF_NUM;k++)
         {
@@ -7301,8 +7389,6 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
         }
         list->retireFenceFd=-1;
 #endif
-
-        #endif
     }
     return 0;
 }
@@ -7310,26 +7396,29 @@ static int hwc_Post( hwcContext * context,hwc_display_contents_1_t* list)
 static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int mix_flag) 
 {
     ATRACE_CALL();
+    int fd1 = -1;
+    int fd2 = -1;
     int dpyID = 0;
     unsigned int j = 0;
-    if(context==_contextAnchor1){
+    if(context == _contextAnchor1) {
         dpyID = 1;
     }
-    if(!is_need_post(list,dpyID,2)){
+    if(!is_need_post(list,dpyID,2)) {
         return -1;
     }
-    struct rk_fb_win_cfg_data fb_info;
+    struct hwc_fb_info hfi;
+    //struct rk_fb_win_cfg_data fb_info;
     int comType = context->zone_manager.mCmpType;
-    hwc_collect_cfg(context,list,&fb_info,mix_flag,false);
+    hwc_collect_cfg(context,list,&hfi,mix_flag,false);
     if(comType == HWC_MIX_FPS) {
 #ifdef SUPPORT_STEREO
-        hwc_add_fbinfo(context,list,&fb_info);
+        hwc_add_fbinfo(context,list,&(hfi.fb_info));
 #endif
     }
     //if(!context->fb_blanked)
-    if(true){
+    if(true) {
 #ifndef GPU_G6110  //This will lead nenamark fps go down in rk3368.
-        if(context != _contextAnchor1){
+        if(context != _contextAnchor1) {
             hwc_display_t dpy = NULL;
             hwc_surface_t surf = NULL;
             dpy = eglGetCurrentDisplay();
@@ -7338,13 +7427,13 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
             eglSwapBuffers((EGLDisplay) dpy, (EGLSurface) surf);
         }
 #endif
-        if(context == _contextAnchor1){
-            if(_contextAnchor->mHdmiSI.NeedReDst){
-                if(hotplug_reset_dstposition(&fb_info,0)){
+        if(context == _contextAnchor1) {
+            if(_contextAnchor->mHdmiSI.NeedReDst) {
+                if(hotplug_reset_dstposition(&(hfi.fb_info),0)) {
                     ALOGW("reset_dst fail [%d]",__LINE__);
                 }
             }
-         }else{
+        } else {
 #if (defined(GPU_G6110) || defined(RK3288_BOX))
 #ifdef RK3288_BOX
             if(_contextAnchor->mLcdcNum==1)
@@ -7353,7 +7442,7 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
             if(context->mHdmiSI.CvbsOn || context->mHdmiSI.HdmiOn)
 #endif
             {
-                if(hotplug_reset_dstposition(&fb_info,1)){
+                if(hotplug_reset_dstposition(&(hfi.fb_info),1)){
                     ALOGW("reset_dst fail [%d]",__LINE__);
                 }
             }
@@ -7361,148 +7450,93 @@ static int hwc_set_lcdc(hwcContext * context, hwc_display_contents_1_t *list,int
         }
 
 #ifdef RK3288_BOX
-        if(context==_contextAnchor && context->mResolutionChanged && context->mLcdcNum==2){
-            hotplug_reset_dstposition(&fb_info,2);
+        if(context==_contextAnchor && context->mResolutionChanged && context->mLcdcNum==2) {
+            hotplug_reset_dstposition(&(hfi.fb_info),2);
         }
 #endif
-
-        if(ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info)){
+#if DUAL_VIEW_MODE
+        if(context != _contextAnchor && context->mIsDualViewMode) {
+            dual_view_vop_config(&hfi.fb_info);
+            goto UseFence;
+        }
+#endif
+        if(ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &(hfi.fb_info))) {
             ALOGE("ID=%d:ioctl fail:%s",dpyID,strerror(errno));
-            dump_config_info(fb_info,context,3);
-        }else{
-#if ONLY_USE_ONE_VOP
-#ifdef RK3288_BOX
-            if(_contextAnchor->mLcdcNum == 1)
-#endif
-            {
-                memcpy(&_contextAnchor->fb_info,&fb_info,sizeof(rk_fb_win_cfg_data));
-            }
-#endif
-            ALOGD_IF(mLogL&HLLONE,"ID=%d:",dpyID);
-        }
-        if(mix_flag){
-            dump_config_info(fb_info,context,1);
-        }else{
-            dump_config_info(fb_info,context,0);
-        }
-#if USE_HWC_FENCE
-#if 0
-        for(unsigned int i=0;i<RK_MAX_BUF_NUM;i++){
-            ALOGD_IF(mLogL&HLLSIX,"rel_fence_fd[%d] = %d", i, fb_info.rel_fence_fd[i]);
-            if(fb_info.rel_fence_fd[i] >= 0){
-                if(i< list->numHwLayers){
-                    if(fb_info.win_par[0].area_par[0].data_format == HAL_PIXEL_FORMAT_YCrCb_NV12_OLD
-                        &&list->hwLayers[0].transform != 0 && 0 == i){
-                        list->hwLayers[i].releaseFenceFd = -1;
-                        close(fb_info.rel_fence_fd[i]);
-                    }else{
-                        if(mix_flag == 1 && !context->mHdmiSI.mix_up){
-                            list->hwLayers[i+2].releaseFenceFd = fb_info.rel_fence_fd[i];
-                        }else if(mix_flag){
-                            if(i<1){
-                                list->hwLayers[list->numHwLayers -1].releaseFenceFd = fb_info.rel_fence_fd[i];
-                            }else{
-                                list->hwLayers[i-1].releaseFenceFd = fb_info.rel_fence_fd[i];
-                            }
-                        }else{
-                            list->hwLayers[i].releaseFenceFd = fb_info.rel_fence_fd[i];
-                        }
-                    }
-                }else{
-                    close(fb_info.rel_fence_fd[i]);
-                }
-             }
-    	}
-#else
-        if(HWC_MIX_FPS == comType) {
-#ifdef SUPPORT_STEREO
-            bool isFirstFPS = true;
-            for(unsigned int i=0;i<list->numHwLayers-1;i++) {
-                hwc_layer_1_t * layer = &list->hwLayers[i];
-                for(;i<list->numHwLayers-1;i++) {
-                    if(layer->alreadyStereo != 8 && isFirstFPS) {
-                        i++;
-                        break;
-                    } else {
-                        isFirstFPS = false;
-                        break;
-                    }
-                }
-                layer = &list->hwLayers[i];
-                if(layer->compositionType != HWC_NODRAW && layer->compositionType != HWC_FRAMEBUFFER) {
-                    layer->releaseFenceFd = fb_info.rel_fence_fd[j++];
-                }
-            }
-            for(unsigned int k=0;k<list->numHwLayers - 1;k++) {
-                hwc_layer_1_t * layer = &list->hwLayers[k];
-                if(layer->compositionType == HWC_FRAMEBUFFER) {
-                    list->hwLayers[list->numHwLayers-1].releaseFenceFd = fb_info.rel_fence_fd[j++];
-                    break;
-                }
-            }
-#endif
+            dump_config_info(hfi.fb_info,context,3);
         } else {
-            for(unsigned int i=0;i<list->numHwLayers-1;i++) {
-                hwc_layer_1_t * layer = &list->hwLayers[i];
-                if(layer->compositionType != HWC_NODRAW && layer->compositionType != HWC_FRAMEBUFFER) {
-                    if(fb_info.win_par[0].area_par[0].data_format == HAL_PIXEL_FORMAT_YCrCb_NV12_OLD
-                        &&list->hwLayers[0].transform != 0 && 0 == i){
-                        list->hwLayers[0].releaseFenceFd = -1;
-                        close(fb_info.rel_fence_fd[j]);
-                        fb_info.rel_fence_fd[j++] = -1;
-                    }else{
-                        layer->releaseFenceFd = fb_info.rel_fence_fd[j++];
+            ALOGD_IF(log(HLLONE),"ID=%d:",dpyID);
+        }
+        if (mix_flag) {
+            dump_config_info(hfi.fb_info,context,1);
+        } else {
+            dump_config_info(hfi.fb_info,context,0);
+        }
+#if DUAL_VIEW_MODE
+UseFence:
+#endif
+#if USE_HWC_FENCE
+        for(unsigned int i=0;i<RK_MAX_BUF_NUM;i++) {
+            ALOGD_IF(log(HLLSIX),"rel_fence_fd[%d] = %d", i, hfi.fb_info.rel_fence_fd[i]);
+            if(hfi.fb_info.rel_fence_fd[i] >= 0) {
+                if(hfi.pRelFenceFd[i]) {
+                    if(*(hfi.pRelFenceFd[i]) == 0) {
+                        *(hfi.pRelFenceFd[i]) = -1;
+                        ALOGW("bug:%s,%d,prff can not be 0",__func__,__LINE__);
                     }
+                    fd1 = *(hfi.pRelFenceFd[i]);
+                    fd2 = hfi.fb_info.rel_fence_fd[i];
+                    if(fd1 < 0)
+                        *(hfi.pRelFenceFd[i]) = fd2 = hfi.fb_info.rel_fence_fd[i];
+                    else
+                        *(hfi.pRelFenceFd[i]) = fence_merge(hfi.LayerName[i],fd1,fd2);
+                    if(*(hfi.pRelFenceFd[i]) < 0) {
+                        *(hfi.pRelFenceFd[i]) = -1;
+                    }
+                } else {
+                    ALOGW("bug:%s,%d",__func__,__LINE__);
+                    close(hfi.fb_info.rel_fence_fd[i]);
                 }
             }
-            if(mix_flag) {
-                list->hwLayers[list->numHwLayers-1].releaseFenceFd = fb_info.rel_fence_fd[j++];
-            }
         }
-
-        for(;j<RK_MAX_BUF_NUM;j++) {
-            if(fb_info.rel_fence_fd[j] >= 0) {
-                close(fb_info.rel_fence_fd[j]);
-                fb_info.rel_fence_fd[j] = -1;
-                ALOGW_IF(mLogL&HLLSIX,"fb_info.rel_fence_fd[%d]=%d",j,fb_info.rel_fence_fd[j]);
-            }
+        for(unsigned int i=0;i< (list->numHwLayers);i++) {
+            ALOGD_IF(log(HLLSIX),"Layer[%d].relFenceFd=%d",i,list->hwLayers[i].releaseFenceFd);
         }
-#endif
-        for(unsigned int i=0;i< (list->numHwLayers);i++){
-            ALOGD_IF(mLogL&HLLSIX,"Layer[%d].relFenceFd=%d",i,list->hwLayers[i].releaseFenceFd);
+        for(unsigned int i=0;i< MaxVideoBackBuffers;i++) {
+            ALOGD_IF(log(HLLSIX),"bk buffer[%d].relFenceFd=%d",i,context->relFenceFd[i]);
         }
-
-        if(list->retireFenceFd > 0){
+        if(list->retireFenceFd > 0) {
             close(list->retireFenceFd);
+            list->retireFenceFd = -1;
         }
-		if(fb_info.ret_fence_fd >= 0){
-        	list->retireFenceFd = fb_info.ret_fence_fd;
+		if(hfi.fb_info.ret_fence_fd >= 0) {
+            list->retireFenceFd = hfi.fb_info.ret_fence_fd;
         }
 #else
-    	for(i=0;i<RK_MAX_BUF_NUM;i++){
-            if(fb_info.rel_fence_fd[i] >= 0 ){
-                if(i< (int)(list->numHwLayers -1)){
+        for(int i=0;i<RK_MAX_BUF_NUM;i++) {
+            if(hfi.fb_info.rel_fence_fd[i] >= 0 ) {
+                if(i< (int)(list->numHwLayers -1)) {
                     list->hwLayers[i].releaseFenceFd = -1;
-                    close(fb_info.rel_fence_fd[i]);
-                }else{
-                    close(fb_info.rel_fence_fd[i]);
+                    close(hfi.fb_info.rel_fence_fd[i]);
+                } else {
+                    close(hfi.fb_info.rel_fence_fd[i]);
                 }
              }            
     	}
         list->retireFenceFd = -1;
-        if(fb_info.ret_fence_fd >= 0){
-            close(fb_info.ret_fence_fd);
+        if(hfi.fb_info.ret_fence_fd >= 0) {
+            close(hfi.fb_info.ret_fence_fd);
         }
         //list->retireFenceFd = fb_info.ret_fence_fd;        
 #endif
-    }else{
-        for(unsigned int i=0;i< (list->numHwLayers -1);i++){
+    } else {
+        for(unsigned int i=0;i< (list->numHwLayers -1);i++) {
             list->hwLayers[i].releaseFenceFd = -1;    	   
     	}
         list->retireFenceFd = -1;
     }
     return 0;
 }
+
 int hwc_rga_blit( hwcContext * context ,hwc_display_contents_1_t *list)
 {
 #if VIRTUAL_RGA_BLIT
@@ -7793,7 +7827,7 @@ int hwc_check_fencefd(size_t numDisplays,hwc_display_contents_1_t  ** displays)
                     layer->acquireFenceFd = -1;
                 }
                 if(layer){
-                    ALOGD_IF(mLogL&HLLSIX,"%d,%d,%d",i,j,layer->releaseFenceFd);
+                    ALOGD_IF(log(HLLSIX),"i=%d,j=%d,rff=%d",i,j,layer->releaseFenceFd);
                 }
             }
         }
@@ -7828,17 +7862,17 @@ static int hwc_set_screen(hwc_composer_device_1 *dev, hwc_display_contents_1_t *
 
     /* Check device handle. */
     if (dpyID == 0 && (context == NULL || 
-        &_contextAnchor->device.common != (hw_device_t *) dev)){
+        &_contextAnchor->device.common != (hw_device_t *) dev)) {
         LOGE("%s(%d): Invalid device!", __FUNCTION__, __LINE__);
         return HWC_EGL_ERROR;
     }
 
     /* Check layer list. */
-    if ((list == NULL  || list->numHwLayers == 0) && dpyID == 0){
+    if ((list == NULL  || list->numHwLayers == 0) && dpyID == 0) {
         LOGE("(%d):list=NULL,Layers =%d",__LINE__,list->numHwLayers);
         /* Reset swap rectangles. */
         return -1;
-    }else if(list == NULL){
+    } else if(list == NULL) {
         return -1;
     }
 
@@ -7848,7 +7882,7 @@ static int hwc_set_screen(hwc_composer_device_1 *dev, hwc_display_contents_1_t *
          list->numHwLayers,context->zone_manager.composter_mode);
 
 #if hwcDEBUG
-    if(mLogL&HLLEIG){
+    if(log(HLLEIG)){
         LOGD("%s(%d):Layers to set:", __FUNCTION__, __LINE__);
         _Dump(list);
     }
@@ -7857,13 +7891,30 @@ static int hwc_set_screen(hwc_composer_device_1 *dev, hwc_display_contents_1_t *
     gettimeofday(&tpend1,NULL);
 #endif
     int ret = -1;
+    if(context->mNeedRgaTransform) {
+        int w_valid = context->mRgaTBI.w_valid;
+        int h_valid = context->mRgaTBI.h_valid;
+        int layer_fd = context->mRgaTBI.layer_fd;
+        int lastfd = context->mRgaTBI.transform;
+        uint32_t transform = context->mRgaTBI.transform;
+        bool trsfrmbyrga = context->mRgaTBI.trsfrmbyrga;
+        struct private_handle_t* hdl = context->mRgaTBI.hdl;
+        int Dstfmt = trsfrmbyrga ? hwChangeRgaFormat(hdl->format) : RK_FORMAT_YCbCr_420_SP;
+        rga_video_copybit(hdl,transform,w_valid,h_valid,layer_fd,Dstfmt,trsfrmbyrga,dpyID,false);
+#if USE_VIDEO_BACK_BUFFERS
+        context->mCurVideoIndex++;  //update video buffer index
+#else
+        if(trsfrmbyrga)
+            context->mCurVideoIndex++;  //update video buffer index
+#endif
+    }
     if(context->zone_manager.composter_mode == HWC_LCDC) {
         ret = hwc_set_lcdc(context,list,0);
-    }else if(context->zone_manager.composter_mode == HWC_FRAMEBUFFER){
+    } else if (context->zone_manager.composter_mode == HWC_FRAMEBUFFER) {
         ret = hwc_Post(context,list);
-    }else if(context->zone_manager.composter_mode == HWC_MIX){
+    } else if (context->zone_manager.composter_mode == HWC_MIX) {
         ret = hwc_set_lcdc(context,list,1);
-    }else if(context->zone_manager.composter_mode == HWC_MIX_V2){
+    } else if (context->zone_manager.composter_mode == HWC_MIX_V2) {
         ret = hwc_set_lcdc(context,list,2);
     }
 
@@ -7989,15 +8040,15 @@ hwc_set(
     int ret[4] = {0,0,0,0};
 #if (defined(GPU_G6110) || defined(RK3288_BOX))
 #ifdef RK3288_BOX
-    if(_contextAnchor->mLcdcNum==1){
-        if(getHdmiMode() == 1 || _contextAnchor->mHdmiSI.CvbsOn){
+    if(_contextAnchor->mLcdcNum==1) {
+        if(getHdmiMode() == 1 || _contextAnchor->mHdmiSI.CvbsOn) {
             hotplug_set_overscan(0);
         }
     }else{
         hotplug_set_overscan(0);
     }
 #else
-    if(getHdmiMode() == 1 || _contextAnchor->mHdmiSI.CvbsOn){
+    if(getHdmiMode() == 1 || _contextAnchor->mHdmiSI.CvbsOn) {
         hotplug_set_overscan(0);
     }
 #endif
@@ -8028,8 +8079,8 @@ hwc_set(
     }
     hwc_check_fencefd(numDisplays,displays);
 #if ONLY_USE_ONE_VOP
-    if(ret[0] && ret[1]){
-        ALOGW_IF(mLogL&HLLONE,"%d,ret[%d,%d]",numDisplays,ret[0],ret[1]);
+    if(ret[0] && ret[1]) {
+        ALOGW_IF(log(HLLONE),"%d,ret[%d,%d]",numDisplays,ret[0],ret[1]);
     }
 #endif
     return 0;
@@ -8049,8 +8100,8 @@ static int hwc_event_control(struct hwc_composer_device_1* dev,
 {
 
     hwcContext * context = _contextAnchor;
-    bool log = mLogL & HLLFIV;
-    ALOGD_IF(log,"D_EN[%d,%d]",dpy,enabled);
+    bool isLog = log(HLLFIV);
+    ALOGD_IF(isLog,"D_EN[%d,%d]",dpy,enabled);
     if(dpy==1 && _contextAnchor1){
         context = _contextAnchor1;
         if(context->fbFd <= 0){
@@ -8153,7 +8204,7 @@ void hwc_change_config(){
 #if HTGFORCEREFRESH
         pthread_mutex_lock(&context->mRefresh.mlk);
         context->mRefresh.count = 0;
-        ALOGD_IF(mLogL&HLLTWO,"Htg:mRefresh.count=%d",context->mRefresh.count);
+        ALOGD_IF(log(HLLTWO),"Htg:mRefresh.count=%d",context->mRefresh.count);
         pthread_mutex_unlock(&context->mRefresh.mlk);
         pthread_cond_signal(&context->mRefresh.cond);
 #endif
@@ -8273,7 +8324,7 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
 #if HTGFORCEREFRESH
         pthread_mutex_lock(&context->mRefresh.mlk);
         context->mRefresh.count = 0;
-        ALOGD_IF(mLogL&HLLTWO,"Htg:mRefresh.count=%d",context->mRefresh.count);
+        ALOGD_IF(log(HLLTWO),"Htg:mRefresh.count=%d",context->mRefresh.count);
         pthread_mutex_unlock(&context->mRefresh.mlk);
         pthread_cond_signal(&context->mRefresh.cond);
 #endif
@@ -8591,7 +8642,7 @@ int hwc_copybit(struct hwc_composer_device_1 *dev,buffer_handle_t src_handle,
 #if 0
             memset((void*)(srcHandle->base),0x80,4*srcHandle->height*srcHandle->stride);
 #endif
-            rga_video_copybit(srcHandle,0,0,0,srcHandle->share_fd,RK_FORMAT_YCbCr_420_SP,0,0);
+            rga_video_copybit(srcHandle,0,0,0,srcHandle->share_fd,RK_FORMAT_YCbCr_420_SP,0,0,false);
         }
 
         //do nothing,or it will lead to clear srcHandle's base address.
@@ -8726,7 +8777,6 @@ hwc_device_open(
         refreshRate = 60*1000;
     }
 
-    
     vsync_period  = 1000000000 / refreshRate;
 
     context->fb_blanked = 1;
@@ -8744,10 +8794,10 @@ hwc_device_open(
     context->info = info;
 
     /* Initialize variables. */
-   
+
     context->device.common.tag = HARDWARE_DEVICE_TAG;
     context->device.common.version = HWC_DEVICE_API_VERSION_1_3;
-    
+
     context->device.common.module  = (hw_module_t *) module;
 
     /* initialize the procs */
@@ -8823,11 +8873,9 @@ hwc_device_open(
     }
 
     /* Initialize pmem and frameubffer stuff. */
-   // context->fbFd         = 0;
-   // context->fbPhysical   = ~0U;
-   // context->fbStride     = 0;
-
-
+    // context->fbFd         = 0;
+    // context->fbPhysical   = ~0U;
+    // context->fbStride     = 0;
 
     if ( info.pixclock > 0 )
     {
@@ -8877,6 +8925,10 @@ hwc_device_open(
     context->mHdmiSI.vh_flag = false;
     context->mIsBootanimExit = false;
     context->mIsFirstCallbackToHotplug = false;
+    context->mIsDualViewMode = false;
+#if DUAL_VIEW_MODE
+    context->mIsDualViewMode = true;
+#endif
 
 #if HTGFORCEREFRESH
     init_thread_pamaters(&context->mRefresh);
@@ -9669,13 +9721,11 @@ int hotplug_parse_mode(int *outX, int *outY)
    int fd = open("/sys/class/display/HDMI/mode", O_RDONLY);
    ALOGD("enter %s", __FUNCTION__);
 
-   if (fd > 0)
-   {
+   if (fd > 0) {
         char statebuf[100];
         memset(statebuf, 0, sizeof(statebuf));
         int err = read(fd, statebuf, sizeof(statebuf));
-        if (err < 0)
-        {
+        if (err < 0) {
             ALOGE("error reading hdmi mode: %s", strerror(errno));
             return -1;
         }
@@ -9686,28 +9736,20 @@ int hotplug_parse_mode(int *outX, int *outY)
         int temp = 0;
         memset(xres, 0, sizeof(xres));
         memset(yres, 0, sizeof(yres));
-        for (unsigned int i=0; i<strlen(statebuf); i++)
-        {
-            if (statebuf[i] >= '0' && statebuf[i] <= '9')
-            {
+        for (unsigned int i=0; i<strlen(statebuf); i++) {
+            if (statebuf[i] >= '0' && statebuf[i] <= '9') {
                 xres[i] = statebuf[i];
-            }
-            else
-            {
+            } else {
                 temp = i;
                 break;
             }
         }
         int m = 0;
-        for (unsigned int j=temp+1; j<strlen(statebuf);j++)
-        {
-            if (statebuf[j] >= '0' && statebuf[j] <= '9')
-            {
+        for (unsigned int j=temp+1; j<strlen(statebuf);j++) {
+            if (statebuf[j] >= '0' && statebuf[j] <= '9') {
                 yres[m] = statebuf[j];
                 m++;
-            }
-            else
-            {
+            } else {
                 break;
             }
         }
@@ -9715,48 +9757,51 @@ int hotplug_parse_mode(int *outX, int *outY)
         *outY = atoi(yres);
         close(fd);
         return 0;
-    }
-    else
-    {
+    } else {
         close(fd);
         ALOGE("Get HDMI mode fail");
         return -1;
     }
 }
 
-int hotplug_set_config(){
+int hotplug_set_config()
+{
     int dType = HWC_DISPLAY_EXTERNAL;
-    hwcContext * context = _contextAnchor;
-    hwcContext * context1 = _contextAnchor1;
-    if(context1 != NULL){
-        context->dpyAttr[dType].fd = context1->dpyAttr[dType].fd;
-        context->dpyAttr[dType].stride = context1->dpyAttr[dType].stride;
-        context->dpyAttr[dType].xres = context1->dpyAttr[dType].xres;
-        context->dpyAttr[dType].yres = context1->dpyAttr[dType].yres;
-        context->dpyAttr[dType].xdpi = context1->dpyAttr[dType].xdpi;
-        context->dpyAttr[dType].ydpi = context1->dpyAttr[dType].ydpi;
-        context->dpyAttr[dType].vsync_period = context1->dpyAttr[dType].vsync_period;
-        context->dpyAttr[dType].connected = true;
-#if 1//(defined(GPU_G6110) || defined(RK3288_BOX))
-        //box source can not be bigger than 1080p
-        if(context->dpyAttr[dType].yres > 1080){
-            context->dpyAttr[dType].xres = 1920;
-            context->dpyAttr[dType].yres = 1080;
-            context->mHdmiSI.NeedReDst = true;
+    hwcContext * ctxp = _contextAnchor;
+    hwcContext * ctxe = _contextAnchor1;
+    if(ctxe != NULL) {
+        ctxp->dpyAttr[dType].fd           = ctxe->dpyAttr[dType].fd;
+        ctxp->dpyAttr[dType].stride       = ctxe->dpyAttr[dType].stride;
+        ctxp->dpyAttr[dType].xres         = ctxe->dpyAttr[dType].xres;
+        ctxp->dpyAttr[dType].yres         = ctxe->dpyAttr[dType].yres;
+        ctxp->dpyAttr[dType].xdpi         = ctxe->dpyAttr[dType].xdpi;
+        ctxp->dpyAttr[dType].ydpi         = ctxe->dpyAttr[dType].ydpi;
+        ctxp->dpyAttr[dType].vsync_period = ctxe->dpyAttr[dType].vsync_period;
+        ctxp->dpyAttr[dType].connected    = true;
+        if(ctxp->mIsDualViewMode) {
+            ctxp->dpyAttr[dType].xres = ctxe->dpyAttr[dType].xres * 2;
+            ctxp->dpyAttr[dType].yres = ctxe->dpyAttr[dType].yres;
+            ctxe->mIsDualViewMode = true;
             LOGV("w_s,h_s,w_d,h_d = [%d,%d,%d,%d]",
-                context->dpyAttr[dType].xres,
-                context->dpyAttr[dType].yres,
-                context1->dpyAttr[dType].xres,
-                context1->dpyAttr[dType].yres);
-        }else{
-            context->mHdmiSI.NeedReDst = false;
+                ctxp->dpyAttr[dType].xres,ctxp->dpyAttr[dType].yres,
+                ctxe->dpyAttr[dType].xres,ctxe->dpyAttr[dType].yres);
+        } else if(ctxp->dpyAttr[dType].yres > 1080) {
+            ctxp->dpyAttr[dType].xres = 1920;
+            ctxp->dpyAttr[dType].yres = 1080;
+            ctxp->mHdmiSI.NeedReDst = true;
+            LOGV("w_s,h_s,w_d,h_d = [%d,%d,%d,%d]",
+                ctxp->dpyAttr[dType].xres,ctxp->dpyAttr[dType].yres,
+                ctxe->dpyAttr[dType].xres,ctxe->dpyAttr[dType].yres);
+        } else {
+            ctxp->mIsDualViewMode = false;
+            ctxp->mHdmiSI.NeedReDst = false;
         }
-#endif
-        return 1;
-    }else{
-        context->dpyAttr[dType].connected = false;
-        ALOGE("hotplug_set_config fail");
-        return -1;
+        return 0;
+    } else {
+        ctxp->dpyAttr[dType].connected = false;
+        ctxp->mIsDualViewMode = false;
+        ALOGE("hotplug_set_config fail,ctxe is null");
+        return -ENODEV;
     }
 }
 
@@ -9981,7 +10026,7 @@ int hotplug_reset_dstposition(struct rk_fb_win_cfg_data * fb_info,int flag)
             return -1;
         }
 		sscanf(buf,"xres:%d yres:%d",&w_dst,&h_dst);
-        ALOGD_IF(mLogL&HLLONE,"width=%d,height=%d",w_dst,h_dst);
+        ALOGD_IF(log(HLLONE),"width=%d,height=%d",w_dst,h_dst);
         break;
 
     case 2:
@@ -10013,7 +10058,7 @@ int hotplug_reset_dstposition(struct rk_fb_win_cfg_data * fb_info,int flag)
                         (unsigned short)(fb_info->win_par[i].area_par[j].xsize * w_scale);
                     fb_info->win_par[i].area_par[j].ysize =
                         (unsigned short)(fb_info->win_par[i].area_par[j].ysize * h_scale);
-                    ALOGD_IF(mLogL&HLLONE,"Adjust dst to => [%d,%d,%d,%d]",
+                    ALOGD_IF(log(HLLONE),"Adjust dst to => [%d,%d,%d,%d]",
                         fb_info->win_par[i].area_par[j].xpos,fb_info->win_par[i].area_par[j].ypos,
                         fb_info->win_par[i].area_par[j].xsize,fb_info->win_par[i].area_par[j].ysize);
                 }
@@ -10053,7 +10098,7 @@ int hotplug_set_frame(hwcContext* context,int flag)
     if(ioctl(_contextAnchor1->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info) == -1){
         ALOGE("%s,%d,RK_FBIOSET_CONFIG_DONE fail",__FUNCTION__,__LINE__);
     }else{
-        ALOGD_IF(mLogL&HLLONE,"hotplug_set_frame");
+        ALOGD_IF(log(HLLONE),"hotplug_set_frame");
     }
 
     for(int k=0;k<RK_MAX_BUF_NUM;k++){
@@ -10088,7 +10133,7 @@ void  *hotplug_invalidate_refresh(void *arg)
             pthread_mutex_lock(&contextp->mRefresh.mlk);
             count = contextp->mRefresh.count;
             contextp->mRefresh.count ++;
-            ALOGD_IF(mLogL&HLLTWO,"mRefresh.count=%d",contextp->mRefresh.count);
+            ALOGD_IF(log(HLLTWO),"mRefresh.count=%d",contextp->mRefresh.count);
             pthread_mutex_unlock(&contextp->mRefresh.mlk);
             contextp->procs->invalidate(contextp->procs);
         }
@@ -10216,7 +10261,7 @@ int hwc_sprite_replace(hwcContext * Context,hwc_display_contents_1_t * list)
         return -1;
     memcpy(&pzone_mag->zone_info[i],&mZoneInfo,sizeof(ZoneInfo));
     memset((void*)(Context->mSrBI.hd_base[Context->mSrBI.mCurIndex]),0x0,mSize*mSize*4);
-    ALOGD_IF(mLogL&HLLTWO,"Sprite Zone[%d]->layer[%d],"
+    ALOGD_IF(log(HLLTWO),"Sprite Zone[%d]->layer[%d],"
         "[%d,%d,%d,%d] =>[%d,%d,%d,%d],"
         "w_h_s_f[%d,%d,%d,%d],tr_rtr_bled[%d,%d,%d],acq_fence_fd=%d,"
         "layname=%s",
@@ -10247,9 +10292,9 @@ int hwc_sprite_replace(hwcContext * Context,hwc_display_contents_1_t * list)
     clip.ymin = 0;
     clip.ymax = mSize-1;
 
-    ALOGD_IF(mLogL&HLLTWO,"src addr=[%x],handle type=[%d],w-h[%d,%d],act[%d,%d],off[%d,%d][f=%d]",
+    ALOGD_IF(log(HLLTWO),"src addr=[%x],handle type=[%d],w-h[%d,%d],act[%d,%d],off[%d,%d][f=%d]",
         handle->share_fd,handle->type,SrcVirW, SrcVirH,SrcActW,SrcActH,x_offset,y_offset,hwChangeRgaFormat(handle->format));
-    ALOGD_IF(mLogL&HLLTWO,"dst fd=[%x],w-h[%d,%d],act[%d,%d],off[%d,%d][f=%d],rot=%d,rot_mod=%d",
+    ALOGD_IF(log(HLLTWO),"dst fd=[%x],w-h[%d,%d],act[%d,%d],off[%d,%d][f=%d],rot=%d,rot_mod=%d",
         fd_dst, DstVirW, DstVirH,DstActW,DstActH,xoffset,yoffset,Dstfmt,Rotation,RotateMode);
 
     RGA_set_src_vir_info(&Rga_Request, handle->share_fd, 0, 0,SrcVirW, SrcVirH, hwChangeRgaFormat(handle->format), 0);    
@@ -10296,43 +10341,6 @@ bool hotplug_free_dimbuffer()
 	}
 #endif
     return true;
-}
-
-int hwc_repet_last()
-{
-#if ONLY_USE_ONE_VOP
-    int ret = 0;
-    hwcContext * context = _contextAnchor;
-#ifdef RK3288_BOX
-    if(context->mLcdcNum == 2){
-        return 0;
-    }
-#endif
-    struct rk_fb_win_cfg_data fb_info;
-    memcpy(&fb_info,&context->fb_info,sizeof(rk_fb_win_cfg_data));
-    fb_info.ret_fence_fd = -1;
-    for(int i=0;i<RK_MAX_BUF_NUM;i++) {
-        fb_info.rel_fence_fd[i] = -1;
-    }
-    if(ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info) == -1){
-        ALOGE("%s,%d,RK_FBIOSET_CONFIG_DONE fail",__FUNCTION__,__LINE__);
-    }else{
-        ALOGD_IF(mLogL&HLLONE,"hwc_repet_last");
-    }
-    dump_config_info(fb_info,context,4);
-    for(int k=0;k<RK_MAX_BUF_NUM;k++){
-        if(fb_info.rel_fence_fd[k] >=0 ){
-            ret = 1;
-            close(fb_info.rel_fence_fd[k]);
-        }
-    }
-    if(fb_info.ret_fence_fd >= 0){
-        ret = 1;
-        close(fb_info.ret_fence_fd);
-    }
-    return ret;
-#endif
-    return 0;
 }
 
 bool hwcPrimaryToExternalCheckConfig(hwcContext * ctx,struct rk_fb_win_cfg_data fb_info)
@@ -10404,4 +10412,170 @@ static void initCrcTable(void)
 		}
 		crcTable[i] = c;
 	}
+}
+
+static int fence_merge(char* value,int fd1,int fd2)
+{
+    int ret = -1;
+    if(fd1 >= 0 && fd2 >= 0) {
+        ret = sync_merge(value, fd1, fd2);
+        close(fd1);close(fd2);
+    } else if (fd1 >= 0) {
+        ret = sync_merge(value, fd1, fd1);
+        close(fd1);
+    } else if (fd2 >= 0) {
+        ret = sync_merge(value, fd2, fd2);
+        close(fd2);
+    }
+    if(ret < 0) {
+        ALOGW("%s:merge[%d,%d]:%s",value,fd1,fd2,strerror(errno));
+    }
+    ALOGD_IF(log(HLLSIX),"merge fd[%d,%d] to fd=%d",fd1,fd2,ret);
+    return ret;
+}
+
+static int dual_view_vop_config(struct rk_fb_win_cfg_data * fbinfo)
+{
+    int ret = -1;
+    int xvir = 0;
+    int yvir = 0;
+    int xact = 0;
+    int yact = 0;
+    int xpos = 0;
+    int ypos = 0;
+    int xsize = 0;
+    int ysize = 0;
+    int x_offset = 0;
+    int y_offset = 0;
+    struct rk_fb_win_cfg_data fbpinfo;
+    memset(&fbpinfo,0,sizeof(fbpinfo));
+    fbpinfo.ret_fence_fd = -1;
+    for(size_t i=0;i<RK_MAX_BUF_NUM;i++) {
+        fbpinfo.rel_fence_fd[i] = -1;
+    }
+    struct rk_fb_win_cfg_data fbeinfo = fbpinfo;
+    hwcContext * ctxp = _contextAnchor;
+    hwcContext * ctxe = _contextAnchor1;
+    if(!ctxe) {
+        return false;
+    }
+    int dpyPw = ctxp->dpyAttr[0].xres;
+    int dpyPh = ctxp->dpyAttr[0].yres;
+    int dpyEw = ctxe->dpyAttr[1].xres;
+    int dpyEh = ctxe->dpyAttr[1].yres;
+    int width = ctxp->dpyAttr[1].xres;
+    int height= ctxp->dpyAttr[1].yres;
+    float w_scale = (float)dpyPw / dpyEw;
+    float h_scale = (float)dpyPh / dpyEh;
+    dump_config_info(*fbinfo,ctxp,3);
+    ALOGD_IF(log(HLLONE),"pri[%d,%d],ext[%d,%d],dpy[%d,%d]",dpyPw,dpyPh,dpyEw,dpyEh,width,height);
+    for(int i = 0;i < 4;i++) {
+        for(int j = 0;j < 4;j++) {
+            if(fbinfo->win_par[i].area_par[j].phy_addr || fbinfo->win_par[i].area_par[j].ion_fd) {
+                x_offset    = fbinfo->win_par[i].area_par[j].x_offset;
+                y_offset    = fbinfo->win_par[i].area_par[j].y_offset;
+                xact        = fbinfo->win_par[i].area_par[j].xact;
+                yact        = fbinfo->win_par[i].area_par[j].yact;
+                xpos        = fbinfo->win_par[i].area_par[j].xpos;
+                ypos        = fbinfo->win_par[i].area_par[j].ypos;
+                xsize       = fbinfo->win_par[i].area_par[j].xsize;
+                ysize       = fbinfo->win_par[i].area_par[j].ysize;
+                xvir        = fbinfo->win_par[i].area_par[j].xvir;
+                yvir        = fbinfo->win_par[i].area_par[j].yvir;
+
+
+                fbpinfo.win_par[i].win_id                    = fbinfo->win_par[i].win_id;
+                fbpinfo.win_par[i].z_order                   = fbinfo->win_par[i].z_order;
+                fbpinfo.win_par[i].area_par[j].ion_fd        = fbinfo->win_par[i].area_par[j].ion_fd;
+                fbpinfo.win_par[i].area_par[j].xvir          = xvir;
+                fbpinfo.win_par[i].area_par[j].yvir          = yvir;
+                fbpinfo.win_par[i].area_par[j].yact          = yact;
+                fbpinfo.win_par[i].area_par[j].ysize         = ysize;
+                fbpinfo.win_par[i].area_par[j].acq_fence_fd  = fbinfo->win_par[i].area_par[j].acq_fence_fd;
+                fbpinfo.win_par[i].area_par[j].data_format   = fbinfo->win_par[i].area_par[j].data_format;
+
+                fbeinfo.win_par[i].win_id                    = fbinfo->win_par[i].win_id;
+                fbeinfo.win_par[i].z_order                   = fbinfo->win_par[i].z_order;
+                fbeinfo.win_par[i].area_par[j].ion_fd        = fbinfo->win_par[i].area_par[j].ion_fd;
+                fbeinfo.win_par[i].area_par[j].xvir          = xvir;
+                fbeinfo.win_par[i].area_par[j].yvir          = yvir;
+                fbeinfo.win_par[i].area_par[j].yact          = yact;
+                fbeinfo.win_par[i].area_par[j].ysize         = ysize;
+                fbeinfo.win_par[i].area_par[j].acq_fence_fd  = fbinfo->win_par[i].area_par[j].acq_fence_fd;
+                fbeinfo.win_par[i].area_par[j].data_format   = fbinfo->win_par[i].area_par[j].data_format;
+
+                fbpinfo.win_par[i].area_par[j].x_offset      = x_offset;
+                fbpinfo.win_par[i].area_par[j].y_offset      = y_offset;
+                fbpinfo.win_par[i].area_par[j].xact          = xact * (dpyEw - xpos) / xsize;
+                fbpinfo.win_par[i].area_par[j].xpos          = xpos;
+                fbpinfo.win_par[i].area_par[j].ypos          = ypos;
+                fbpinfo.win_par[i].area_par[j].xsize         = dpyEw - xpos;
+
+                fbeinfo.win_par[i].area_par[j].x_offset      = x_offset + fbpinfo.win_par[i].area_par[j].xact;
+                fbeinfo.win_par[i].area_par[j].y_offset      = y_offset;
+                fbeinfo.win_par[i].area_par[j].xact          = xact - fbpinfo.win_par[i].area_par[j].xact;
+                fbeinfo.win_par[i].area_par[j].xpos          = 0;
+                fbeinfo.win_par[i].area_par[j].ypos          = y_offset;
+                fbeinfo.win_par[i].area_par[j].xsize         = xsize - dpyEw + xpos;
+
+                if(dpyPw != dpyEw || dpyPh != dpyEh) {
+                    fbpinfo.win_par[i].area_par[j].xpos  = w_scale * xpos;
+                    fbpinfo.win_par[i].area_par[j].ypos  = h_scale * ypos;
+                    fbpinfo.win_par[i].area_par[j].xsize = w_scale * (dpyEw - xpos);
+                    fbpinfo.win_par[i].area_par[j].ysize = h_scale * ysize;
+                }
+            }
+        }
+    }
+    dump_config_info(fbpinfo,ctxp,10);
+    dump_config_info(fbeinfo,ctxp,10);
+    if(ioctl(ctxp->fbFd, RK_FBIOSET_CONFIG_DONE, &fbpinfo)){
+        ALOGE("dual view p:ioctl fail:%s",strerror(errno));
+        dump_config_info(fbpinfo,ctxp,3);
+    }else{
+        ALOGD_IF(log(HLLONE),"ID=dual view p");
+    }
+    if(ioctl(ctxe->fbFd, RK_FBIOSET_CONFIG_DONE, &fbeinfo)){
+        ALOGE("dual view e:ioctl fail:%s",strerror(errno));
+        dump_config_info(fbeinfo,ctxp,3);
+    }else{
+        ALOGD_IF(log(HLLONE),"ID=dual view e");
+    }
+	for(size_t i=0;i<RK_MAX_BUF_NUM;i++) {
+        if(fbinfo->rel_fence_fd[i] > -1) {
+            close(fbinfo->rel_fence_fd[i]);
+            fbinfo->rel_fence_fd[i] = -1;
+        }
+    }
+    if(fbinfo->ret_fence_fd > -1) {
+        close(fbinfo->ret_fence_fd);
+        fbinfo->ret_fence_fd = -1;
+    }
+	for(size_t i=0;i<RK_MAX_BUF_NUM;i++) {
+	    char value[20] = "dual-view-rel";
+        if(fbpinfo.rel_fence_fd[i] >= 0 || fbeinfo.rel_fence_fd[i] >= 0) {
+            ret = fence_merge(value,fbpinfo.rel_fence_fd[i],fbeinfo.rel_fence_fd[i]);
+            if(ret >= 0) {
+                fbinfo->rel_fence_fd[i] = ret;
+            } else {
+                fbinfo->rel_fence_fd[i] = -1;
+                ALOGE("dual-view-ret merge fail [%d,%d]",fbpinfo.rel_fence_fd[i],fbpinfo.rel_fence_fd[i]);
+            }
+        } else {
+            fbinfo->rel_fence_fd[i] = -1;
+        }
+    }
+    if(fbpinfo.ret_fence_fd >= 0 || fbeinfo.ret_fence_fd >= 0) {
+        char value[20] = "dual-view-ret";
+        ret = fence_merge(value,fbpinfo.ret_fence_fd,fbeinfo.ret_fence_fd);
+        if(ret >= 0) {
+            fbinfo->ret_fence_fd = ret;
+        } else {
+            fbinfo->ret_fence_fd = -1;
+            ALOGE("dual-view-ret merge fail [%d,%d]",fbpinfo.ret_fence_fd,fbpinfo.ret_fence_fd);
+        }
+    } else {
+        fbinfo->ret_fence_fd = -1;
+    }
+    return 0;
 }

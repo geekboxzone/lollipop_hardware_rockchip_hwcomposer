@@ -56,7 +56,7 @@
 #define SUPPORTFORCE3D                  1           //1:can be force 3D,but android 4.4
 #define USE_WM_SIZE                     0           //1:use wm command,now bootanimation source error sometimes
 #define VIDEO_UI_OPTIMATION             1           //1:support,so we can reduce the bandwidth
-#define HTGFORCEREFRESH                 0           //1:some customer not use rk's setting apk,hwc need refesh 
+#define HTGFORCEREFRESH                 0           //1:some customer not use rk's setting apk,hwc need refesh
 
 #ifdef GPU_G6110
 #define G6110_SUPPORT_FBDC              0
@@ -68,10 +68,12 @@
 #endif
 
 #ifdef RK3288_MID
+#define DUAL_VIEW_MODE                  0           //1:support dual view
 #define ONLY_USE_ONE_VOP                0
 #else
 #define ONLY_USE_ONE_VOP                1           //1:use one vop,rk3288 box depend on BOX_USE_TWO_VOP
 #endif
+
 //Command macro
 #define FB1_IOCTL_SET_YUV_ADDR	        0x5002
 #define RK_FBIOSET_VSYNC_ENABLE         0x4629
@@ -116,8 +118,8 @@
 #define HWCE                            1           //HWC_DISPLAY_EXTERNAL
 #define HWCV                            2           //HWC_DISPLAY_VIRTUAL
 
-#define GHWC_VERSION                    "2.065"
-#define HWC_VERSION                     "HWC_VERSION Author:wzq Version:2.063"
+#define GHWC_VERSION                    "2.066"
+#define HWC_VERSION                     "HWC_VERSION Author:wzq Version:2.066"
 
 #ifdef GPU_G6110
 #if G6110_SUPPORT_FBDC
@@ -320,6 +322,7 @@ typedef struct _ZoneInfo
     unsigned int zoneCrc;
 	char        LayerName[LayerNameLength + 1];   
 #ifdef USE_HWC_FENCE
+    int*        pRelFenceFd;
     int         acq_fence_fd;
 #endif
 }
@@ -461,7 +464,12 @@ struct tVPU_FRAME_v2
     uint32_t         format;        // 16 aligned frame height
 };
 
-
+struct hwc_fb_info
+{
+    int* pRelFenceFd[RK_MAX_BUF_NUM];
+    struct rk_fb_win_cfg_data fb_info;
+    char LayerName[RK_MAX_BUF_NUM][LayerNameLength + 1];
+};
 
 typedef struct 
 {
@@ -537,120 +545,124 @@ typedef struct _threadPamaters
 
 typedef struct _hwcContext
 {
-    hwc_composer_device_1_t device;
+    hwc_composer_device_1_t         device;
 
-    /* Reference count. Normally: 1. */
-    unsigned int reference;
+    /*********** Reference count. Normally:  1. ************/
+    unsigned int                    reference;
 
 
-    /* Raster engine */
-    int   engine_fd;
-    /* Feature: 2D PE 2.0. */
-    /* Base address. */
-    unsigned int baseAddress;
+    /******************* Raster engine *********************/
+    int                             engine_fd;
+    /***************** Feature: 2D PE 2.0. *****************/
+    /***************** Base address.       *****************/
+    unsigned int                    baseAddress;
 
-    /* Framebuffer stuff. */
-    int       fbFd;
-    int       fbFd1;
-    int       vsync_fd;
-    int       ddrFd;
-    int       screenFd;
-    uint64_t  timestamp;
-    videoCacheInfo video_info[MAX_VIDEO_SOURCE];
-    int vui_fd;
-    int vui_hide;
+    /****************** Framebuffer stuff. ******************/
+    int                             fbFd;
+    int                             fbFd1;
+    int                             vsync_fd;
+    int                             ddrFd;
+    int                             screenFd;
+    uint64_t                        timestamp;
+    videoCacheInfo                  video_info[MAX_VIDEO_SOURCE];
+    int                             vui_fd;
+    int                             vui_hide;
+    int                             mLogL;
+    int                             video_fmt;
+    struct private_handle_t         fbhandle;
+    bool                            fb1_cflag;
+    char                            cupcore_string[16];
+    DisplayAttributes               dpyAttr[HWC_NUM_DISPLAY_TYPES];
+    struct                          fb_var_screeninfo info;
 
-    int video_fmt;
-    struct private_handle_t fbhandle ;    
-    bool      fb1_cflag;
-    char      cupcore_string[16];
-    DisplayAttributes              dpyAttr[HWC_NUM_DISPLAY_TYPES];
-    struct                         fb_var_screeninfo info;
-
-    hwc_procs_t *procs;
-    pthread_t hdmi_thread;
-    pthread_mutex_t lock;
-    nsecs_t         mNextFakeVSync;
-    float           fb_fps;
-    unsigned int fbPhysical;
-    unsigned int fbStride;
-	int          wfdOptimize;
-	bool         wfdRgaBlit;
-    /* PMEM stuff. */
-    unsigned int pmemPhysical;
-    unsigned int pmemLength;
-	vpu_frame_t  video_frame;
-	unsigned int fbSize;
-	unsigned int lcdSize;
-	int           iommuEn;
-    alloc_device_t  *mAllocDev;	
-	ZoneManager  zone_manager;
+    hwc_procs_t                     *procs;
+    pthread_t                       hdmi_thread;
+    pthread_mutex_t                 lock;
+    nsecs_t                         mNextFakeVSync;
+    float                           fb_fps;
+    unsigned int                    fbPhysical;
+    unsigned int                    fbStride;
+    int                             wfdOptimize;
+    bool                            wfdRgaBlit;
+    /***************** PMEM stuff. *************************/
+    unsigned int                    pmemPhysical;
+    unsigned int                    pmemLength;
+    vpu_frame_t                     video_frame;
+    unsigned int                    fbSize;
+    unsigned int                    lcdSize;
+    int                             iommuEn;
+    alloc_device_t                  *mAllocDev;
+    ZoneManager                     zone_manager;
 #if ONLY_USE_ONE_VOP
-    struct rk_fb_win_cfg_data fb_info;
+    struct rk_fb_win_cfg_data       fb_info;
 #endif
-    /* skip flag */
-     int      mSkipFlag;
-     int      flag;
-     int      fb_blanked;
-     int      mAlphaError;
+    /***************** skip flag ***************************/
+    int                            mSkipFlag;
+    int                            flag;
+    int                            fb_blanked;
+    int                            mAlphaError;
 
-    /* video flag */
-     bool      mVideoMode;
-     bool      mNV12_VIDEO_VideoMode;
-     bool      mIsMediaView;
-     bool      mVideoRotate;
-     bool      mGtsStatus;
-     bool      mTrsfrmbyrga;
-     int       mtrsformcnt;
+    /***************** video flag **************************/
+    bool                           mVideoMode;
+    bool                           mNV12_VIDEO_VideoMode;
+    bool                           mIsMediaView;
+    bool                           mVideoRotate;
+    bool                           mGtsStatus;
+    bool                           mTrsfrmbyrga;
+    int                            mtrsformcnt;
 
-     /*dual display */
-     int       mLcdcNum;
-     bool      mIsFirstCallbackToHotplug;
-     bool      mIsBootanimExit;
-     bool      mResolutionChanged;
-     hdmiStateInfo mHdmiSI;
+    /*****************dual display ***********************/
+    int                            mLcdcNum;
+    bool                           mIsFirstCallbackToHotplug;
+    bool                           mIsBootanimExit;
+    bool                           mResolutionChanged;
+    bool                           mIsDualViewMode;
+    hdmiStateInfo                  mHdmiSI;
 
-     /*policy */
-     bool      mMultiwindow;
-     int       mLastCompType;
-     int (*fun_policy[HWC_POLICY_NUM])(void * ,hwc_display_contents_1_t*);
+    /*****************policy *****************************/
+    bool                           mMultiwindow;
+    int                            mLastCompType;
 
-     /*hdmi 3d detech*/
-     int fd_3d;
-     bool Is3D;
+    int (*fun_policy[HWC_POLICY_NUM])(void * ,hwc_display_contents_1_t*);
 
-     /*rrg tramsform*/
-     RgaTBI   mRgaTBI;
-     bool     mNeedRgaTransform;
+    /*****************hdmi 3d detech*********************/
+    int                            fd_3d;
+    bool                           Is3D;
+
+    /*****************rrg tramsform**********************/
+    RgaTBI                         mRgaTBI;
+    bool                           mNeedRgaTransform;
 
 #if SPRITEOPTIMATION
-     /*sprite*/
-     bufferInfo mSrBI;
+    /*****************sprite*****************************/
+    bufferInfo                     mSrBI;
 #endif
 
 #if HTGFORCEREFRESH
-     threadPamaters mRefresh;
+    threadPamaters                 mRefresh;
 #endif
-     threadPamaters mControlStereo;
-     /* The index of video buffer will be used */
-     int      mCurVideoIndex;
-     int      fd_video_bk[MaxVideoBackBuffers];
+    threadPamaters                 mControlStereo;
+
+    /************The index of video buffer will be used */
+    int                            mCurVideoIndex;
+    int                            fd_video_bk[MaxVideoBackBuffers];
+    int                            relFenceFd[MaxVideoBackBuffers];
 #if defined(__arm64__) || defined(__aarch64__)
-     long     base_video_bk[MaxVideoBackBuffers];
+    long                           base_video_bk[MaxVideoBackBuffers];
 #else
-     int      base_video_bk[MaxVideoBackBuffers];
+    int                            base_video_bk[MaxVideoBackBuffers];
 #endif
-     buffer_handle_t pbvideo_bk[MaxVideoBackBuffers];
+    buffer_handle_t                pbvideo_bk[MaxVideoBackBuffers];
 
 #if OPTIMIZATION_FOR_DIMLAYER
-     bool     bHasDimLayer;
-     int      mDimFd;
+    bool                           bHasDimLayer;
+    int                            mDimFd;
 #if defined(__arm64__) || defined(__aarch64__)
-     long      mDimBase;
+    long                           mDimBase;
 #else
-     int       mDimBase;
+    int                            mDimBase;
 #endif
-     buffer_handle_t      mDimHandle;
+    buffer_handle_t                mDimHandle;
 #endif
 }
 hwcContext;
