@@ -244,7 +244,7 @@ int hwc_init_version()
     strcat(acVersion,"-3368MID");
 #endif
     property_set("sys.ghwc.version", acVersion);
-    LOGD(acVersion);
+    ALOGD(RK_GRAPHICS_VER);
     return 0;
 }
 
