@@ -247,7 +247,7 @@ int hwc_init_version()
 #endif
     property_set("sys.ghwc.version", acVersion);
 #ifdef SUPPORT_STEREO
-    LOGD(acVersion);
+    LOGD(RK_GRAPHICS_VER);
 #endif
     return 0;
 }
