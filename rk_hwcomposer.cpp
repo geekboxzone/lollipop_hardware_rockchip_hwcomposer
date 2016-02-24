@@ -225,6 +225,7 @@ int HALPixelFormatSetCompression(int iFormat, int iCompression)
 int hwc_init_version()
 {
     char acVersion[50];
+    ALOGD(RK_GRAPHICS_VER);
     memset(acVersion,0,sizeof(acVersion));
     if(sizeof(GHWC_VERSION) > 12) {
         strncpy(acVersion,GHWC_VERSION,12);
@@ -244,7 +245,6 @@ int hwc_init_version()
     strcat(acVersion,"-3368MID");
 #endif
     property_set("sys.ghwc.version", acVersion);
-    ALOGD(RK_GRAPHICS_VER);
     return 0;
 }
 
