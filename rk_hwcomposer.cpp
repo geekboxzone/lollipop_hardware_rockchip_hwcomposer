@@ -7025,7 +7025,7 @@ static int hwc_prepare_screen(hwc_composer_device_1 *dev, hwc_display_contents_1
 	if(_contextAnchor->mLcdcNum == 1)
 #endif
     {
-        if(!hwcPrimaryToExternalCheckConfig(context,fbinfo)){
+        if(!hwcPrimaryToExternalCheckConfig(context,hfi.fbinfo)){
             ALOGD_IF(log(HLLONE),"Policy out [%d][%s]",__LINE__,__FUNCTION__);
             goto GpuComP;
         }
@@ -9473,6 +9473,7 @@ int hotplug_get_config(int flag){
     if(_contextAnchor->mLcdcNum == 2){
         info.reserved[3] |= 1;
 #endif
+	info.reserved[3] |= 1;
     	if (ioctl(fd, FBIOPUT_VSCREENINFO, &info)){
     	    ALOGE("hotplug_get_config:FBIOPUT_VSCREENINFO error,hdmifd=%d",fd);
             return -errno;
